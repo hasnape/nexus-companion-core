@@ -76,7 +76,7 @@ export default function App() {
         <div className="panel panel-chat">
           <h3>Live channel</h3>
           {!isOnline ? (
-            <p className="offline-banner">You are offline. Messages will queue locally and send when connection returns.</p>
+            <p className="offline-banner">Mode hors ligne léger — vos messages sont gardés localement.</p>
           ) : null}
           <div className="history">
             {snapshot.conversation.map((line, index) => <p key={`${line.from}-${index}`}><strong>{line.from}:</strong> {line.text}</p>)}
@@ -110,8 +110,12 @@ export default function App() {
             <p className="voice-status">Companion state: {snapshot.state.mode} / mood {snapshot.state.mood}</p>
             <p className="voice-status">Current action: {snapshot.action.name}</p>
             <p className="voice-status">Memories: {memoryCount} entries</p>
-            <p className="voice-status">Connectivity: {isOnline ? 'online' : 'offline'}{wasOffline && isOnline ? ' (Connexion rétablie)' : ''}</p>
-            <p className="voice-status">Queued offline messages: {offlineQueue.length}</p>
+            <p className="voice-status">Connectivité : {isOnline ? 'en ligne' : 'hors ligne'}</p>
+            {isOnline && wasOffline ? (
+              <p className="voice-status">Connexion rétablie — cliquez sur “Envoyer les messages en attente” pour les transmettre.</p>
+            ) : null}
+            <p className="voice-status">Messages en attente : {offlineQueue.length}</p>
+            {offlineQueue.length === 0 ? <p className="voice-status">Aucun message en attente.</p> : null}
           </div>
           {isOnline && offlineQueue.length > 0 ? (
             <button className="accent" onClick={flushOfflineQueue} disabled={isFlushingOfflineQueue}>

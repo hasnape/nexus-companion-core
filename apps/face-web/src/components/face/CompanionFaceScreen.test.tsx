@@ -126,14 +126,19 @@ describe('CompanionFaceScreen', () => {
     const screen = findFirstByClass(ui, 'face-screen');
     const face = findFirstByClass(ui, 'face ');
     expect(screen?.props.className).toContain('visual-waiting_for_wake_phrase');
+    expect(screen?.props.className).toContain('state-wake');
     expect(face?.props.className).toContain('visual-waiting_for_wake_phrase');
+    expect(face?.props.className).toContain('state-wake');
     expect(toText(ui)).toContain('En attente de “Nexus”');
   });
 
   it('activates listening indicator when isListening is true', () => {
     const ui = renderFace({ isListening: true, companionVisualState: 'listening_for_command', companionVisualStateLabel: 'Je vous écoute' });
+    const screen = findFirstByClass(ui, 'face-screen');
     expect(toText(ui)).toContain('Je vous écoute');
     expect(toText(ui)).toContain('Micro actif');
+    expect(screen?.props.className).toContain('visual-listening_for_command');
+    expect(screen?.props.className).toContain('state-listening');
   });
 
   it('does not show false listening or speaking feedback while idle', () => {

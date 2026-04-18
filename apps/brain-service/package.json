@@ -1,0 +1,20 @@
+{
+  "name": "@nexus/brain-service",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@nexus/decision": "0.1.0",
+    "@nexus/memory": "0.1.0",
+    "@nexus/shared": "0.1.0"
+  },
+  "scripts": {
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2"
+  }
+}

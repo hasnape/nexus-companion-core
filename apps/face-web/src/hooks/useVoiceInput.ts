@@ -40,6 +40,8 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [wakeState, setWakeState] = useState<WakeListeningState>('inactive');
   const wakeStateRef = useRef<WakeListeningState>('inactive');
+  const onCommandRef = useRef(onCommand);
+  const onWakeRef = useRef(onWake);
   const [usesFrenchVoice, setUsesFrenchVoice] = useState(false);
 
   const speechRecognitionCtor = useMemo(() => getSpeechRecognitionCtor(), []);
@@ -67,6 +69,14 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
   useEffect(() => {
     wakeStateRef.current = wakeState;
   }, [wakeState]);
+
+  useEffect(() => {
+    onCommandRef.current = onCommand;
+  }, [onCommand]);
+
+  useEffect(() => {
+    onWakeRef.current = onWake;
+  }, [onWake]);
 
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
@@ -128,7 +138,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
 
     if (currentWakeState === 'waiting_for_wake_phrase' && isWakePhrase(nextTranscript)) {
       setWakeListeningState('awake_listening_for_command');
-      onWake();
+      onWakeRef.current();
       speakAcknowledgement();
       return;
     }
@@ -136,14 +146,14 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     if (currentWakeState === 'awake_listening_for_command') {
       setWakeListeningState('processing_command');
       try {
-        await onCommand(nextTranscript);
+        await onCommandRef.current(nextTranscript);
         if (sessionEnabledRef.current) setWakeListeningState('waiting_for_wake_phrase');
       } catch {
         setWakeListeningState('error');
         setListenerError('Erreur micro');
       }
     }
-  }, [onCommand, onWake, setWakeListeningState, speakAcknowledgement]);
+  }, [setWakeListeningState, speakAcknowledgement]);
 
   const startListeningSession = useCallback(() => {
     setListenerError(null);

@@ -48,6 +48,9 @@ const findElements = (node: React.ReactNode, predicate: (element: React.ReactEle
   return matches;
 };
 
+const findFirstByClass = (node: React.ReactNode, classFragment: string): React.ReactElement | undefined =>
+  findElements(node, (element) => typeof element.props.className === 'string' && element.props.className.includes(classFragment))[0];
+
 const renderFace = (overrides?: {
   state?: InternalState;
   action?: CompanionAction;
@@ -105,9 +108,26 @@ describe('CompanionFaceScreen', () => {
 
   it('activates speaking visual indicator when mode is speaking', () => {
     const ui = renderFace({ state: { ...baseState, mode: 'speaking' }, companionVisualState: 'speaking', companionVisualStateLabel: 'Je réponds' });
-    const mouth = findElements(ui, (element) => element.props.className?.includes('mouth'))[0];
-    expect(mouth.props.className).toContain('is-speaking');
+    const mouth = findFirstByClass(ui, 'mouth');
+    const screen = findFirstByClass(ui, 'face-screen');
+    const face = findFirstByClass(ui, 'face ');
+    expect(mouth).toBeDefined();
+    expect(screen?.props.className).toContain('visual-speaking');
+    expect(face?.props.className).toContain('visual-speaking');
+    expect(mouth?.props.className).toContain('is-speaking');
     expect(toText(ui)).toContain('Je réponds');
+  });
+
+  it('applies waiting visual classes and keeps wake phrase label', () => {
+    const ui = renderFace({
+      companionVisualState: 'waiting_for_wake_phrase',
+      companionVisualStateLabel: 'En attente de “Nexus”'
+    });
+    const screen = findFirstByClass(ui, 'face-screen');
+    const face = findFirstByClass(ui, 'face ');
+    expect(screen?.props.className).toContain('visual-waiting_for_wake_phrase');
+    expect(face?.props.className).toContain('visual-waiting_for_wake_phrase');
+    expect(toText(ui)).toContain('En attente de “Nexus”');
   });
 
   it('activates listening indicator when isListening is true', () => {
@@ -126,7 +146,27 @@ describe('CompanionFaceScreen', () => {
   });
 
   it('shows offline indicator when connectivity is unavailable', () => {
-    const ui = renderFace({ isOnline: false });
+    const ui = renderFace({ isOnline: false, companionVisualState: 'offline', companionVisualStateLabel: 'Mode hors ligne' });
+    const screen = findFirstByClass(ui, 'face-screen');
+    const face = findFirstByClass(ui, 'face ');
+    expect(screen?.props.className).toContain('visual-offline');
+    expect(face?.props.className).toContain('visual-offline');
+    expect(toText(ui)).toContain('Mode hors ligne');
     expect(toText(ui)).toContain('Hors ligne');
+  });
+
+  it('applies error visual classes and keeps error label', () => {
+    const ui = renderFace({ companionVisualState: 'error', companionVisualStateLabel: 'Erreur d’écoute' });
+    const screen = findFirstByClass(ui, 'face-screen');
+    const face = findFirstByClass(ui, 'face ');
+    expect(screen?.props.className).toContain('visual-error');
+    expect(face?.props.className).toContain('visual-error');
+    expect(toText(ui)).toContain('Erreur d’écoute');
+  });
+
+  it('keeps attention target eye offset via css variable', () => {
+    const ui = renderFace({ state: { ...baseState, attentionTarget: 'screen' } });
+    const eyes = findFirstByClass(ui, 'eyes');
+    expect(eyes?.props.style?.['--eye-offset-x']).toBe('-7px');
   });
 });

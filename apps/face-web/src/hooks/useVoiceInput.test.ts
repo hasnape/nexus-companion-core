@@ -115,12 +115,14 @@ const createHookHarness = async () => {
 
   const module = await import('./useVoiceInput');
 
-  const onWake = vi.fn();
-  const onCommand = vi.fn(async () => {});
+  const callbacks = {
+    onWake: vi.fn(),
+    onCommand: vi.fn(async () => {})
+  };
 
   const render = () => {
     hookIndex = 0;
-    return module.useVoiceInput({ onCommand, onWake });
+    return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake });
   };
 
   const emitFinal = (recognition: MockRecognition, transcript: string) => {
@@ -130,7 +132,7 @@ const createHookHarness = async () => {
     });
   };
 
-  return { render, onWake, onCommand, recognitionInstances, emitFinal };
+  return { render, callbacks, recognitionInstances, emitFinal };
 };
 
 describe('useVoiceInput reliability', () => {
@@ -140,7 +142,7 @@ describe('useVoiceInput reliability', () => {
   });
 
   it('uses latest wake state for final transcripts (no stale inactive closure)', async () => {
-    const { render, onWake, onCommand, recognitionInstances, emitFinal } = await createHookHarness();
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
     let hook = render();
     hook.startListeningSession();
@@ -149,18 +151,65 @@ describe('useVoiceInput reliability', () => {
     const recognition = recognitionInstances[0];
     emitFinal(recognition, 'Nexus');
     hook = render();
-    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
     expect(hook.wakeState).toBe('awake_listening_for_command');
 
     emitFinal(recognition, 'Quelle heure est-il ?');
     await Promise.resolve();
     hook = render();
-    expect(onCommand).toHaveBeenCalledWith('Quelle heure est-il ?');
+    expect(callbacks.onCommand).toHaveBeenCalledWith('Quelle heure est-il ?');
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('uses latest onCommand callback after rerender', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+    const firstOnCommand = callbacks.onCommand;
+
+    let hook = render();
+    hook.startListeningSession();
+    hook = render();
+    const recognition = recognitionInstances[0];
+
+    emitFinal(recognition, 'Nexus');
+    hook = render();
+    expect(hook.wakeState).toBe('awake_listening_for_command');
+
+    const latestOnCommand = vi.fn(async () => {});
+    callbacks.onCommand = latestOnCommand;
+    hook = render();
+
+    emitFinal(recognition, 'ouvre le mode présence');
+    await Promise.resolve();
+    hook = render();
+
+    expect(firstOnCommand).not.toHaveBeenCalled();
+    expect(latestOnCommand).toHaveBeenCalledWith('ouvre le mode présence');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+  });
+
+  it('uses latest onWake callback after rerender', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+    const firstOnWake = callbacks.onWake;
+
+    let hook = render();
+    hook.startListeningSession();
+    hook = render();
+    const recognition = recognitionInstances[0];
+
+    const latestOnWake = vi.fn();
+    callbacks.onWake = latestOnWake;
+    hook = render();
+
+    emitFinal(recognition, 'Nexus');
+    hook = render();
+
+    expect(firstOnWake).not.toHaveBeenCalled();
+    expect(latestOnWake).toHaveBeenCalledTimes(1);
+    expect(hook.wakeState).toBe('awake_listening_for_command');
+  });
+
   it('returns to waiting_for_wake_phrase after recoverable error restart and still processes transcripts', async () => {
-    const { render, onWake, onCommand, recognitionInstances, emitFinal } = await createHookHarness();
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
     let hook = render();
     hook.startListeningSession();
@@ -178,12 +227,12 @@ describe('useVoiceInput reliability', () => {
 
     emitFinal(recognition, 'Hey Nexus');
     hook = render();
-    expect(onWake).toHaveBeenCalledTimes(1);
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
 
     emitFinal(recognition, 'lance le mode présence');
     await Promise.resolve();
     hook = render();
-    expect(onCommand).toHaveBeenCalledWith('lance le mode présence');
+    expect(callbacks.onCommand).toHaveBeenCalledWith('lance le mode présence');
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 

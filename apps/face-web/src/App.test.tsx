@@ -212,6 +212,7 @@ describe('App voice and layout flows', () => {
     mockVoiceInput.wakeState = 'inactive';
     mockVoiceInput.wakeStatus = 'Micro désactivé';
     mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
+    mockCompanion.snapshot.state.lastInteractionAt = 0;
     mockConnectivity.isOnline = true;
     mockConnectivity.wasOffline = false;
     mockOfflineQueue = [];
@@ -284,6 +285,17 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('État vocal : Traitement de la demande…');
     expect(textOf(ui)).toContain('Connexion : En ligne');
     expect(textOf(ui)).toContain('État du compagnon : Je réfléchis');
+  });
+
+  it('shows Aucune interaction when there are no local messages', () => {
+    mockCompanion.snapshot.conversation = [];
+    mockCompanion.snapshot.state.lastInteractionAt = Date.now();
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Mémoire locale du compagnon');
+    expect(textOf(ui)).toContain('Messages locaux : 0');
+    expect(textOf(ui)).toContain('Dernière interaction : Aucune interaction');
   });
 
   it('does not auto-send queued messages when back online', () => {

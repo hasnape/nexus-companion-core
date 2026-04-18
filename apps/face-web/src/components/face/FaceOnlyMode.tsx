@@ -1,10 +1,13 @@
 import { useRef } from 'react';
 import type { CompanionAction, InternalState } from '@nexus/shared';
 import { CompanionFaceScreen } from './CompanionFaceScreen';
+import type { CompanionVisualState } from './companionVisualState';
 
 type FaceOnlyModeProps = {
   state: InternalState;
   action: CompanionAction;
+  companionVisualState: CompanionVisualState;
+  companionVisualStateLabel: string;
   subtitle?: string;
   transcript?: string;
   isListening: boolean;
@@ -13,7 +16,18 @@ type FaceOnlyModeProps = {
   onEnter?: (container: HTMLElement | null) => void;
 };
 
-export function FaceOnlyMode({ state, action, subtitle, transcript, isListening, isOnline, onExit, onEnter }: FaceOnlyModeProps) {
+export function FaceOnlyMode({
+  state,
+  action,
+  companionVisualState,
+  companionVisualStateLabel,
+  subtitle,
+  transcript,
+  isListening,
+  isOnline,
+  onExit,
+  onEnter
+}: FaceOnlyModeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   return (
@@ -30,6 +44,8 @@ export function FaceOnlyMode({ state, action, subtitle, transcript, isListening,
         <CompanionFaceScreen
           state={state}
           action={action}
+          companionVisualState={companionVisualState}
+          companionVisualStateLabel={companionVisualStateLabel}
           subtitle={subtitle}
           isListening={isListening}
           transcript={transcript}

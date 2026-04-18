@@ -14,6 +14,7 @@ type CompanionChatPanelProps = {
   wakeStatus: string;
   voiceProfileName: string;
   voiceProfileLabel: string;
+  companionVisualStateLabel: string;
   isOnline: boolean;
   wasOffline: boolean;
   offlineQueueLength: number;
@@ -42,6 +43,7 @@ export function CompanionChatPanel({
   wakeStatus,
   voiceProfileName,
   voiceProfileLabel,
+  companionVisualStateLabel,
   isOnline,
   wasOffline,
   offlineQueueLength,
@@ -79,11 +81,12 @@ export function CompanionChatPanel({
       <div className="status-grid">
         <p className="voice-status">Entrée vocale : {voiceInputAvailable ? (isListening ? 'Écoute activée — dites “Nexus” pour parler.' : 'Micro désactivé') : 'La reconnaissance vocale n’est pas disponible sur ce navigateur.'}</p>
         <p className="voice-status">Phrase de réveil : Dites “Nexus” pour parler</p>
-        <p className="voice-status">Statut écoute : {wakeStatus}</p>
+        <p className="voice-status">État vocal : {wakeStatus}</p>
         <p className="voice-status">Voix du compagnon</p>
         <p className="voice-status">Style : {voiceProfileName}</p>
         <p className="voice-status">{voiceProfileLabel}</p>
-        <p className="voice-status">État du compagnon : {companionMode} / mood {companionMood}</p>
+        <p className="voice-status">État du compagnon : {companionVisualStateLabel}</p>
+        <p className="voice-status">Mode interne : {companionMode} / humeur {companionMood}</p>
         <p className="voice-status">Action en cours : {currentActionName}</p>
         <p className="voice-status">Souvenirs : {memoryCount} entrées</p>
         <OfflineStatusPanel

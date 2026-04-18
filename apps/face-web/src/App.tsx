@@ -9,6 +9,7 @@ import { usePwaShell } from './hooks/usePwaShell';
 import { enqueueOfflineMessage, loadOfflineNote, loadOfflineQueue, saveOfflineNote, saveOfflineQueue } from './services/offline/persistence';
 import { getOfflineFallbackReply } from './services/offline/offlineResponses';
 import type { TrainingConfig } from '@nexus/shared';
+import type { OfflineQueueEntry } from './services/offline/persistence';
 
 const defaultTraining: TrainingConfig = {
   proactivity: 0.5,
@@ -27,6 +28,18 @@ type SubmitMessageParams = {
   onQueueUpdate: (queueText: string) => void;
   onOfflineConversation: (lines: ConversationLine[]) => void;
   onMessageCleared: () => void;
+};
+
+type FlushOfflineQueueParams = {
+  isOnline: boolean;
+  isFlushingOfflineQueue: boolean;
+  offlineQueue: OfflineQueueEntry[];
+  sendMessage: (text: string) => Promise<unknown>;
+  onQueueUpdated: (queue: OfflineQueueEntry[]) => void;
+  onQueuePersisted: (queue: OfflineQueueEntry[]) => void;
+  onStatusUpdated: (status: string) => void;
+  onFlushingUpdated: (isFlushing: boolean) => void;
+  onOfflineConversationCleared: () => void;
 };
 
 export const submitMessage = async ({
@@ -55,6 +68,49 @@ export const submitMessage = async ({
   onMessageCleared();
 };
 
+export const flushOfflineQueueManually = async ({
+  isOnline,
+  isFlushingOfflineQueue,
+  offlineQueue,
+  sendMessage,
+  onQueueUpdated,
+  onQueuePersisted,
+  onStatusUpdated,
+  onFlushingUpdated,
+  onOfflineConversationCleared
+}: FlushOfflineQueueParams): Promise<void> => {
+  if (!isOnline || isFlushingOfflineQueue || offlineQueue.length === 0) return;
+  onFlushingUpdated(true);
+  onStatusUpdated('');
+
+  const remainingQueue = [...offlineQueue];
+  let sentCount = 0;
+
+  try {
+    for (const item of offlineQueue) {
+      await sendMessage(item.text);
+      sentCount += 1;
+      remainingQueue.shift();
+    }
+    onQueueUpdated(remainingQueue);
+    onQueuePersisted(remainingQueue);
+    onStatusUpdated('Tous les messages en attente ont été envoyés.');
+    if (remainingQueue.length === 0) {
+      onOfflineConversationCleared();
+    }
+  } catch {
+    onQueueUpdated(remainingQueue);
+    onQueuePersisted(remainingQueue);
+    onStatusUpdated(
+      sentCount > 0
+        ? 'Envoi interrompu. Les messages restants sont conservés.'
+        : 'Impossible d’envoyer les messages en attente. Réessayez.'
+    );
+  } finally {
+    onFlushingUpdated(false);
+  }
+};
+
 export default function App() {
   const {
     snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory,
@@ -75,33 +131,17 @@ export default function App() {
     : [...snapshot.conversation, ...offlineConversation];
 
   const flushOfflineQueue = async () => {
-    if (!isOnline || isFlushingOfflineQueue || offlineQueue.length === 0) return;
-    setIsFlushingOfflineQueue(true);
-    setOfflineFlushStatus('');
-
-    const remainingQueue = [...offlineQueue];
-    let sentCount = 0;
-
-    try {
-      for (const item of offlineQueue) {
-        await sendMessage(item.text);
-        sentCount += 1;
-        remainingQueue.shift();
-      }
-      setOfflineQueue(remainingQueue);
-      saveOfflineQueue(remainingQueue);
-      setOfflineFlushStatus('Tous les messages en attente ont été envoyés.');
-    } catch {
-      setOfflineQueue(remainingQueue);
-      saveOfflineQueue(remainingQueue);
-      setOfflineFlushStatus(
-        sentCount > 0
-          ? 'Envoi interrompu. Les messages restants sont conservés.'
-          : 'Impossible d’envoyer les messages en attente. Réessayez.'
-      );
-    } finally {
-      setIsFlushingOfflineQueue(false);
-    }
+    await flushOfflineQueueManually({
+      isOnline,
+      isFlushingOfflineQueue,
+      offlineQueue,
+      sendMessage,
+      onQueueUpdated: (queue) => setOfflineQueue(queue),
+      onQueuePersisted: (queue) => saveOfflineQueue(queue),
+      onStatusUpdated: (status) => setOfflineFlushStatus(status),
+      onFlushingUpdated: (isFlushing) => setIsFlushingOfflineQueue(isFlushing),
+      onOfflineConversationCleared: () => setOfflineConversation([])
+    });
   };
 
   return (

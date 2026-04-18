@@ -136,7 +136,7 @@ vi.mock('./components/training-panel/TrainingPanel', () => ({
     )
 }));
 
-const { default: App, submitMessage } = await import('./App');
+const { default: App, submitMessage, flushOfflineQueueManually } = await import('./App');
 
 const findElements = (node: React.ReactNode, predicate: (element: React.ReactElement) => boolean): React.ReactElement[] => {
   const matches: React.ReactElement[] = [];
@@ -175,6 +175,7 @@ describe('App voice and layout flows', () => {
     mockCompanion.isListening = false;
     mockCompanion.transcript = '';
     mockCompanion.listenerError = null;
+    mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
     mockConnectivity.isOnline = true;
     mockConnectivity.wasOffline = false;
     mockOfflineQueue = [];
@@ -340,5 +341,73 @@ describe('App voice and layout flows', () => {
       { from: 'assistant', text: 'Réponse locale hors ligne', localReply: true }
     ]);
     expect(onMessageCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels local offline fallback replies in conversation rendering', () => {
+    mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Réponse locale hors ligne', localReply: true } as never];
+    const ui = App();
+
+    expect(textOf(ui)).toContain('(Réponse locale hors ligne)');
+  });
+
+  it('clears stale offline fallback lines after full successful manual flush', async () => {
+    const onQueueUpdated = vi.fn();
+    const onQueuePersisted = vi.fn();
+    const onStatusUpdated = vi.fn();
+    const onFlushingUpdated = vi.fn();
+    const onOfflineConversationCleared = vi.fn();
+
+    await flushOfflineQueueManually({
+      isOnline: true,
+      isFlushingOfflineQueue: false,
+      offlineQueue: [
+        { id: 'q1', text: 'queued-1', createdAt: 1 },
+        { id: 'q2', text: 'queued-2', createdAt: 2 }
+      ],
+      sendMessage,
+      onQueueUpdated,
+      onQueuePersisted,
+      onStatusUpdated,
+      onFlushingUpdated,
+      onOfflineConversationCleared
+    });
+
+    expect(onQueueUpdated).toHaveBeenCalledWith([]);
+    expect(onQueuePersisted).toHaveBeenCalledWith([]);
+    expect(onOfflineConversationCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear offline fallback lines when manual flush fails', async () => {
+    sendMessage.mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {
+        throw new Error('network');
+      });
+    const onQueueUpdated = vi.fn();
+    const onQueuePersisted = vi.fn();
+    const onStatusUpdated = vi.fn();
+    const onFlushingUpdated = vi.fn();
+    const onOfflineConversationCleared = vi.fn();
+
+    await flushOfflineQueueManually({
+      isOnline: true,
+      isFlushingOfflineQueue: false,
+      offlineQueue: [
+        { id: 'q1', text: 'queued-1', createdAt: 1 },
+        { id: 'q2', text: 'queued-2', createdAt: 2 },
+        { id: 'q3', text: 'queued-3', createdAt: 3 }
+      ],
+      sendMessage,
+      onQueueUpdated,
+      onQueuePersisted,
+      onStatusUpdated,
+      onFlushingUpdated,
+      onOfflineConversationCleared
+    });
+
+    expect(onQueueUpdated).toHaveBeenCalledWith([
+      { id: 'q2', text: 'queued-2', createdAt: 2 },
+      { id: 'q3', text: 'queued-3', createdAt: 3 }
+    ]);
+    expect(onOfflineConversationCleared).not.toHaveBeenCalled();
   });
 });

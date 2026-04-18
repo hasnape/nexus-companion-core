@@ -39,10 +39,16 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
   const [transcript, setTranscript] = useState('');
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [wakeState, setWakeState] = useState<WakeListeningState>('inactive');
+  const wakeStateRef = useRef<WakeListeningState>('inactive');
   const [usesFrenchVoice, setUsesFrenchVoice] = useState(false);
 
   const speechRecognitionCtor = useMemo(() => getSpeechRecognitionCtor(), []);
   const voiceInputAvailable = Boolean(speechRecognitionCtor);
+
+  const setWakeListeningState = useCallback((next: WakeListeningState) => {
+    wakeStateRef.current = next;
+    setWakeState(next);
+  }, []);
 
   const speakAcknowledgement = useCallback(() => {
     if (!('speechSynthesis' in window)) return;
@@ -56,6 +62,11 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     utterance.volume = defaultCompanionVoiceProfile.volume;
     window.speechSynthesis.speak(utterance);
   }, []);
+
+
+  useEffect(() => {
+    wakeStateRef.current = wakeState;
+  }, [wakeState]);
 
   useEffect(() => {
     if (!('speechSynthesis' in window)) return;
@@ -81,7 +92,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     clearRestartTimer();
     if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
     if (restartCountRef.current >= 5) {
-      setWakeState('error');
+      setWakeListeningState('error');
       setListenerError('Erreur micro');
       sessionEnabledRef.current = false;
       setSessionActive(false);
@@ -91,44 +102,48 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     restartTimerRef.current = window.setTimeout(() => {
       if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
       try {
+        setListenerError(null);
+        setWakeListeningState('waiting_for_wake_phrase');
         recognitionRef.current.start();
       } catch {
-        setWakeState('error');
+        setWakeListeningState('error');
         setListenerError('Erreur micro');
       }
     }, 550);
-  }, []);
+  }, [setWakeListeningState]);
 
   const stopListeningSession = useCallback(() => {
     sessionEnabledRef.current = false;
     setSessionActive(false);
-    setWakeState('inactive');
+    setWakeListeningState('inactive');
     restartCountRef.current = 0;
     clearRestartTimer();
     recognitionRef.current?.stop();
-  }, []);
+  }, [setWakeListeningState]);
 
   const handleFinalTranscript = useCallback(async (nextTranscript: string) => {
     if (!nextTranscript || !sessionEnabledRef.current) return;
 
-    if (wakeState === 'waiting_for_wake_phrase' && isWakePhrase(nextTranscript)) {
-      setWakeState('awake_listening_for_command');
+    const currentWakeState = wakeStateRef.current;
+
+    if (currentWakeState === 'waiting_for_wake_phrase' && isWakePhrase(nextTranscript)) {
+      setWakeListeningState('awake_listening_for_command');
       onWake();
       speakAcknowledgement();
       return;
     }
 
-    if (wakeState === 'awake_listening_for_command') {
-      setWakeState('processing_command');
+    if (currentWakeState === 'awake_listening_for_command') {
+      setWakeListeningState('processing_command');
       try {
         await onCommand(nextTranscript);
-        if (sessionEnabledRef.current) setWakeState('waiting_for_wake_phrase');
+        if (sessionEnabledRef.current) setWakeListeningState('waiting_for_wake_phrase');
       } catch {
-        setWakeState('error');
+        setWakeListeningState('error');
         setListenerError('Erreur micro');
       }
     }
-  }, [onCommand, onWake, speakAcknowledgement, wakeState]);
+  }, [onCommand, onWake, setWakeListeningState, speakAcknowledgement]);
 
   const startListeningSession = useCallback(() => {
     setListenerError(null);
@@ -137,7 +152,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     restartCountRef.current = 0;
 
     if (!speechRecognitionCtor) {
-      setWakeState('error');
+      setWakeListeningState('error');
       setListenerError('La reconnaissance vocale n’est pas disponible sur ce navigateur.');
       return;
     }
@@ -163,11 +178,11 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
           fatalErrorRef.current = true;
           sessionEnabledRef.current = false;
           setSessionActive(false);
-          setWakeState('error');
+          setWakeListeningState('error');
           setListenerError('Autorisation micro refusée.');
           return;
         }
-        setWakeState('error');
+        setWakeListeningState('error');
         setListenerError('Erreur micro');
       };
 
@@ -180,14 +195,14 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
 
     sessionEnabledRef.current = true;
     setSessionActive(true);
-    setWakeState('waiting_for_wake_phrase');
+    setWakeListeningState('waiting_for_wake_phrase');
     try {
       recognitionRef.current.start();
     } catch {
-      setWakeState('error');
+      setWakeListeningState('error');
       setListenerError('Erreur micro');
     }
-  }, [handleFinalTranscript, scheduleRestart, speechRecognitionCtor]);
+  }, [handleFinalTranscript, scheduleRestart, setWakeListeningState, speechRecognitionCtor]);
 
   useEffect(() => () => {
     stopListeningSession();

@@ -3,6 +3,7 @@ import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
 import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
+import { companionVisualStateLabel, deriveCompanionVisualState } from './components/face/companionVisualState';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
 import { usePwaShell } from './hooks/usePwaShell';
@@ -158,6 +159,7 @@ export default function App() {
     stopListeningSession,
     transcript,
     listenerError,
+    wakeState,
     wakeStatus,
     voiceProfile,
     voiceProfileLabel
@@ -180,11 +182,22 @@ export default function App() {
     });
   };
 
+  const visualState = deriveCompanionVisualState({
+    isOnline,
+    wakeState,
+    isListening: isSessionActive,
+    listenerError,
+    companionMode: snapshot.state.mode
+  });
+  const visualStateLabel = companionVisualStateLabel(visualState, listenerError);
+
   if (isFaceOnlyMode) {
     return (
       <FaceOnlyMode
         state={snapshot.state}
         action={snapshot.action}
+        companionVisualState={visualState}
+        companionVisualStateLabel={visualStateLabel}
         subtitle={visibleConversation.at(-1)?.text}
         isListening={isSessionActive}
         transcript={transcript}
@@ -206,6 +219,8 @@ export default function App() {
         <CompanionFaceScreen
           state={snapshot.state}
           action={snapshot.action}
+          companionVisualState={visualState}
+          companionVisualStateLabel={visualStateLabel}
           subtitle={visibleConversation.at(-1)?.text}
           isListening={isSessionActive}
           transcript={transcript}
@@ -244,6 +259,7 @@ export default function App() {
           wakeStatus={wakeStatus}
           voiceProfileName={voiceProfile.name}
           voiceProfileLabel={voiceProfileLabel}
+          companionVisualStateLabel={visualStateLabel}
           isOnline={isOnline}
           wasOffline={wasOffline}
           offlineQueueLength={offlineQueue.length}
@@ -271,6 +287,12 @@ export default function App() {
           memory={memory}
           onAddPreference={addPreference}
           onRemoveMemory={removeMemory}
+          localMessagesCount={visibleConversation.length}
+          queuedMessagesCount={offlineQueue.length}
+          lastInteractionAt={snapshot.state.lastInteractionAt}
+          wakeStatus={wakeStatus}
+          isOnline={isOnline}
+          companionVisualStateLabel={visualStateLabel}
         />
       </section>
     </main>

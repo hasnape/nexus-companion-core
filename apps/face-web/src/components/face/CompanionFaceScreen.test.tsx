@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { CompanionFaceScreen } from './CompanionFaceScreen';
 import type { CompanionAction, InternalState } from '@nexus/shared';
+import type { CompanionVisualState } from './companionVisualState';
 
 const baseState: InternalState = {
   mode: 'idle',
@@ -54,9 +55,13 @@ const renderFace = (overrides?: {
   transcript?: string;
   subtitle?: string;
   isOnline?: boolean;
+  companionVisualState?: CompanionVisualState;
+  companionVisualStateLabel?: string;
 }) => CompanionFaceScreen({
   state: overrides?.state ?? baseState,
   action: overrides?.action ?? baseAction,
+  companionVisualState: overrides?.companionVisualState ?? 'idle',
+  companionVisualStateLabel: overrides?.companionVisualStateLabel ?? 'Au repos',
   subtitle: overrides?.subtitle,
   isListening: overrides?.isListening ?? false,
   transcript: overrides?.transcript,
@@ -66,12 +71,12 @@ const renderFace = (overrides?: {
 describe('CompanionFaceScreen', () => {
   it('renders safely with minimal required props', () => {
     const ui = renderFace();
-    expect(toText(ui)).toContain('idle • idle_happy');
+    expect(toText(ui)).toContain('Au repos • idle_happy');
   });
 
   it('renders safely when listening with an empty transcript', () => {
-    const ui = renderFace({ isListening: true, transcript: '' });
-    expect(toText(ui)).toContain('Écoute active');
+    const ui = renderFace({ isListening: true, transcript: '', companionVisualState: 'listening_for_command', companionVisualStateLabel: 'Je vous écoute' });
+    expect(toText(ui)).toContain('Je vous écoute');
     expect(toText(ui)).not.toContain('“”');
   });
 
@@ -95,28 +100,28 @@ describe('CompanionFaceScreen', () => {
     } as unknown as InternalState;
 
     const ui = renderFace({ state: weirdState });
-    expect(toText(ui)).toContain('mystery-mode');
+    expect(toText(ui)).toContain('Au repos');
   });
 
   it('activates speaking visual indicator when mode is speaking', () => {
-    const ui = renderFace({ state: { ...baseState, mode: 'speaking' } });
+    const ui = renderFace({ state: { ...baseState, mode: 'speaking' }, companionVisualState: 'speaking', companionVisualStateLabel: 'Je réponds' });
     const mouth = findElements(ui, (element) => element.props.className?.includes('mouth'))[0];
     expect(mouth.props.className).toContain('is-speaking');
-    expect(toText(ui)).toContain('Parole');
+    expect(toText(ui)).toContain('Je réponds');
   });
 
   it('activates listening indicator when isListening is true', () => {
-    const ui = renderFace({ isListening: true });
-    expect(toText(ui)).toContain('Écoute active');
+    const ui = renderFace({ isListening: true, companionVisualState: 'listening_for_command', companionVisualStateLabel: 'Je vous écoute' });
+    expect(toText(ui)).toContain('Je vous écoute');
     expect(toText(ui)).toContain('Micro actif');
   });
 
   it('does not show false listening or speaking feedback while idle', () => {
     const ui = renderFace({ state: { ...baseState, mode: 'idle' }, isListening: false });
     const mouth = findElements(ui, (element) => element.props.className?.includes('mouth'))[0];
-    expect(toText(ui)).toContain('idle');
+    expect(toText(ui)).toContain('Au repos');
     expect(toText(ui)).not.toContain('Micro actif');
-    expect(toText(ui)).not.toContain('Écoute active');
+    expect(toText(ui)).not.toContain('Je vous écoute');
     expect(mouth.props.className).not.toContain('is-speaking');
   });
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanionAction, InternalState, TrainingConfig } from '@nexus/shared';
 import type { OfflineQueueEntry } from './services/offline/persistence';
+import type { WakeListeningState } from './hooks/useWakePhrase';
 
 const triggerAction = vi.fn();
 const setTraining = vi.fn();
@@ -77,6 +78,7 @@ const mockVoiceInput = {
   stopListeningSession: vi.fn(),
   transcript: '',
   listenerError: null as string | null,
+  wakeState: 'inactive' as WakeListeningState,
   wakeStatus: 'Micro désactivé',
   voiceProfile: { name: 'Compagnon Nexus' },
   voiceProfileLabel: 'Voix française détectée'
@@ -207,6 +209,7 @@ describe('App voice and layout flows', () => {
     mockVoiceInput.isSessionActive = false;
     mockVoiceInput.transcript = '';
     mockVoiceInput.listenerError = null;
+    mockVoiceInput.wakeState = 'inactive';
     mockVoiceInput.wakeStatus = 'Micro désactivé';
     mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
     mockConnectivity.isOnline = true;
@@ -237,12 +240,15 @@ describe('App voice and layout flows', () => {
   });
 
   it('shows French-first voice labels and wake hints', () => {
+    mockVoiceInput.wakeState = 'waiting_for_wake_phrase';
+    mockVoiceInput.wakeStatus = 'En attente de la phrase “Nexus”';
     const ui = App();
     expect(textOf(ui)).toContain('Entrée vocale');
     expect(textOf(ui)).toContain('Phrase de réveil');
     expect(textOf(ui)).toContain('Dites “Nexus” pour parler');
     expect(textOf(ui)).toContain('Voix du compagnon');
     expect(textOf(ui)).toContain('Style : Compagnon Nexus');
+    expect(textOf(ui)).toContain('État du compagnon : En attente de “Nexus”');
   });
 
   it('shows unavailable recognition message', () => {
@@ -258,11 +264,26 @@ describe('App voice and layout flows', () => {
 
   it('renders immersive face-only mode when active and allows quitter', () => {
     forceFaceOnlyMode = true;
+    mockVoiceInput.wakeState = 'awake_listening_for_command';
     stateCallCounter = 0;
     const ui = App();
     expect(textOf(ui)).toContain('Quitter');
     expect(textOf(ui)).toContain('Plein écran');
+    expect(textOf(ui)).toContain('Je vous écoute');
     expect(textOf(ui)).not.toContain('Conversation');
+  });
+
+  it('renders local memory summary with safe local stats', () => {
+    mockVoiceInput.wakeState = 'processing_command';
+    mockVoiceInput.wakeStatus = 'Traitement de la demande…';
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Mémoire locale du compagnon');
+    expect(textOf(ui)).toContain('Messages locaux : 1');
+    expect(textOf(ui)).toContain('Messages en attente : 0');
+    expect(textOf(ui)).toContain('État vocal : Traitement de la demande…');
+    expect(textOf(ui)).toContain('Connexion : En ligne');
+    expect(textOf(ui)).toContain('État du compagnon : Je réfléchis');
   });
 
   it('does not auto-send queued messages when back online', () => {

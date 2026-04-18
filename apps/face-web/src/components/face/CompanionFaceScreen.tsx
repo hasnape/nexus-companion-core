@@ -1,24 +1,36 @@
 import type { CompanionAction, InternalState } from '@nexus/shared';
+import type { CompanionVisualState } from './companionVisualState';
 
 type CompanionFaceScreenProps = {
   state: InternalState;
   action: CompanionAction;
+  companionVisualState: CompanionVisualState;
+  companionVisualStateLabel: string;
   subtitle?: string;
   isListening: boolean;
   transcript?: string;
   isOnline?: boolean;
 };
 
-export function CompanionFaceScreen({ state, action, subtitle, isListening, transcript, isOnline = true }: CompanionFaceScreenProps) {
+export function CompanionFaceScreen({
+  state,
+  action,
+  companionVisualState,
+  companionVisualStateLabel,
+  subtitle,
+  isListening,
+  transcript,
+  isOnline = true
+}: CompanionFaceScreenProps) {
   const eyeOffset = state.attentionTarget === 'user' ? '0px' : state.attentionTarget === 'screen' ? '-7px' : '7px';
   const expression = state.mood === 'happy' || state.mood === 'curious' ? state.mood : state.mode;
-  const statusLabel = isListening ? 'Écoute active' : state.mode === 'speaking' ? 'Parole' : state.mode;
+  const fallbackSubtitle = `${companionVisualStateLabel} • ${action.name}`;
 
   return (
-    <section className="face-screen">
+    <section className="face-screen" aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
       <div className="ambient-grid" />
       <div className={`halo mood-${state.mood}`} />
-      <div className={`face mode-${state.mode} expression-${expression}`}>
+      <div className={`face mode-${state.mode} visual-${companionVisualState} expression-${expression}`}>
         <div className="brow" />
         <div className="eyes gaze-float" style={{ transform: `translateX(${eyeOffset})` }}>
           <span className="eye eye-left" />
@@ -27,13 +39,13 @@ export function CompanionFaceScreen({ state, action, subtitle, isListening, tran
         <div className={`mouth action-${action.name} ${state.mode === 'speaking' ? 'is-speaking' : ''}`} />
       </div>
       <div className="presence-indicators">
-        <span className={`state-pill mode-${state.mode}`}>{statusLabel}</span>
+        <span className={`state-pill visual-${companionVisualState}`} aria-live="polite">{companionVisualStateLabel}</span>
         <span className={`state-pill mood-${state.mood}`}>{state.mood}</span>
         {!isOnline ? <span className="state-pill state-offline">Hors ligne</span> : null}
         {isListening ? <span className="state-pill state-live">Micro actif</span> : null}
         {transcript ? <span className="state-pill transcript-pill">“{transcript}”</span> : null}
       </div>
-      <p className="subtitle">{subtitle ?? `${state.mode} • ${action.name}`}</p>
+      <p className="subtitle">{subtitle ?? fallbackSubtitle}</p>
     </section>
   );
 }

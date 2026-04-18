@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
+import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
 import { usePwaShell } from './hooks/usePwaShell';
+import { useVoiceInput } from './hooks/useVoiceInput';
+import { useFullscreenMode } from './hooks/useFullscreenMode';
 import { enqueueOfflineMessage, loadOfflineNote, loadOfflineQueue, saveOfflineNote, saveOfflineQueue } from './services/offline/persistence';
 import { getOfflineFallbackReply } from './services/offline/offlineResponses';
 import type { TrainingConfig } from '@nexus/shared';
@@ -112,10 +115,10 @@ export const flushOfflineQueueManually = async ({
 
 export default function App() {
   const {
-    snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory,
-    voiceInputAvailable, isListening, startVoiceInput, stopVoiceInput, transcript, listenerError
+    snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory
   } = useCompanion();
   const { isOnline, wasOffline } = useConnectivity();
+  const { enterFullscreen, exitFullscreen } = useFullscreenMode();
   usePwaShell();
 
   const [message, setMessage] = useState('');
@@ -125,10 +128,43 @@ export default function App() {
   const [offlineFlushStatus, setOfflineFlushStatus] = useState('');
   const [isFlushingOfflineQueue, setIsFlushingOfflineQueue] = useState(false);
   const [offlineConversation, setOfflineConversation] = useState<CompanionConversationLine[]>([]);
+  const [isFaceOnlyMode, setIsFaceOnlyMode] = useState(false);
+
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
     ? snapshot.conversation
     : [...snapshot.conversation, ...offlineConversation];
+
+  const submitRecognizedMessage = async (recognizedMessage: string) => {
+    await submitMessage({
+      isOnline,
+      message: recognizedMessage,
+      sendMessage,
+      onQueueUpdate: (queueText) => {
+        const nextQueue = enqueueOfflineMessage(queueText);
+        setOfflineQueue(nextQueue);
+      },
+      onOfflineConversation: (lines) => {
+        setOfflineConversation((previous) => [...previous, ...lines]);
+      },
+      onMessageCleared: () => setMessage('')
+    });
+  };
+
+  const {
+    voiceInputAvailable,
+    isSessionActive,
+    startListeningSession,
+    stopListeningSession,
+    transcript,
+    listenerError,
+    wakeStatus,
+    voiceProfile,
+    voiceProfileLabel
+  } = useVoiceInput({
+    onCommand: submitRecognizedMessage,
+    onWake: () => triggerAction('listen_attentive')
+  });
 
   const flushOfflineQueue = async () => {
     await flushOfflineQueueManually({
@@ -144,6 +180,26 @@ export default function App() {
     });
   };
 
+  if (isFaceOnlyMode) {
+    return (
+      <FaceOnlyMode
+        state={snapshot.state}
+        action={snapshot.action}
+        subtitle={visibleConversation.at(-1)?.text}
+        isListening={isSessionActive}
+        transcript={transcript}
+        isOnline={isOnline}
+        onEnter={(container) => {
+          void enterFullscreen(container);
+        }}
+        onExit={() => {
+          setIsFaceOnlyMode(false);
+          void exitFullscreen();
+        }}
+      />
+    );
+  }
+
   return (
     <main className="layout">
       <section className="immersive-stage">
@@ -151,12 +207,15 @@ export default function App() {
           state={snapshot.state}
           action={snapshot.action}
           subtitle={visibleConversation.at(-1)?.text}
-          isListening={isListening}
+          isListening={isSessionActive}
           transcript={transcript}
           isOnline={isOnline}
         />
       </section>
       <section className="sidebar">
+        <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>
+          Mode visage
+        </button>
         <CompanionChatPanel
           visibleConversation={visibleConversation}
           message={message}
@@ -177,11 +236,14 @@ export default function App() {
             });
           }}
           voiceInputAvailable={voiceInputAvailable}
-          isListening={isListening}
-          startVoiceInput={startVoiceInput}
-          stopVoiceInput={stopVoiceInput}
+          isListening={isSessionActive}
+          startVoiceInput={startListeningSession}
+          stopVoiceInput={stopListeningSession}
           transcript={transcript}
           listenerError={listenerError}
+          wakeStatus={wakeStatus}
+          voiceProfileName={voiceProfile.name}
+          voiceProfileLabel={voiceProfileLabel}
           isOnline={isOnline}
           wasOffline={wasOffline}
           offlineQueueLength={offlineQueue.length}

@@ -485,3 +485,56 @@ label {
     font-size: 0.72rem;
   }
 }
+
+.face-mode-toggle {
+  width: 100%;
+  background: linear-gradient(130deg, rgba(92, 119, 255, 0.7), rgba(61, 86, 172, 0.9));
+}
+
+.face-only-shell {
+  min-height: 100vh;
+  height: 100vh;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(117, 172, 255, 0.24), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(95, 83, 255, 0.25), transparent 45%),
+    #050914;
+}
+
+.face-only-stage {
+  min-height: 0;
+}
+
+.face-only-stage .face-screen {
+  min-height: 100%;
+  height: 100%;
+  border-radius: 20px;
+}
+
+.face-only-shell .face {
+  width: min(78vw, 450px);
+}
+
+.face-only-enter,
+.face-only-exit {
+  justify-self: end;
+  width: fit-content;
+  padding: 7px 12px;
+}
+
+.face-only-enter {
+  opacity: 0.84;
+}
+
+@media (max-width: 640px) {
+  .face-only-shell {
+    gap: 8px;
+  }
+
+  .face-only-shell .face {
+    width: min(86vw, 420px);
+  }
+}

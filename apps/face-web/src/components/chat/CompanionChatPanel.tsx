@@ -11,6 +11,9 @@ type CompanionChatPanelProps = {
   stopVoiceInput: () => void;
   transcript: string;
   listenerError: string | null;
+  wakeStatus: string;
+  voiceProfileName: string;
+  voiceProfileLabel: string;
   isOnline: boolean;
   wasOffline: boolean;
   offlineQueueLength: number;
@@ -36,6 +39,9 @@ export function CompanionChatPanel({
   stopVoiceInput,
   transcript,
   listenerError,
+  wakeStatus,
+  voiceProfileName,
+  voiceProfileLabel,
   isOnline,
   wasOffline,
   offlineQueueLength,
@@ -66,14 +72,17 @@ export function CompanionChatPanel({
       <div className="row">
         <input value={message} onChange={(event) => onMessageChange(event.target.value)} placeholder="Écrire un message…" />
         <button className="accent" onClick={onSubmitMessage}>Envoyer</button>
-        <button className={isListening ? 'mic-live' : ''} onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())} disabled={!voiceInputAvailable}>
-          {isListening ? 'Arrêter le micro' : 'Démarrer le micro'}
+        <button className={isListening ? 'mic-live' : ''} onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())}>
+          {isListening ? 'Arrêter l’écoute' : 'Activer l’écoute'}
         </button>
       </div>
       <div className="status-grid">
-        <p className="voice-status">
-          Entrée vocale : {voiceInputAvailable ? (isListening ? 'écoute…' : 'prête') : 'indisponible dans ce navigateur'}
-        </p>
+        <p className="voice-status">Entrée vocale : {voiceInputAvailable ? (isListening ? 'Écoute activée — dites “Nexus” pour parler.' : 'Micro désactivé') : 'La reconnaissance vocale n’est pas disponible sur ce navigateur.'}</p>
+        <p className="voice-status">Phrase de réveil : Dites “Nexus” pour parler</p>
+        <p className="voice-status">Statut écoute : {wakeStatus}</p>
+        <p className="voice-status">Voix du compagnon</p>
+        <p className="voice-status">Style : {voiceProfileName}</p>
+        <p className="voice-status">{voiceProfileLabel}</p>
         <p className="voice-status">État du compagnon : {companionMode} / mood {companionMood}</p>
         <p className="voice-status">Action en cours : {currentActionName}</p>
         <p className="voice-status">Souvenirs : {memoryCount} entrées</p>

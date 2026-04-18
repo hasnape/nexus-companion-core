@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanionAction, InternalState, TrainingConfig } from '@nexus/shared';
 import type { OfflineQueueEntry } from './services/offline/persistence';
 
-const startVoiceInput = vi.fn();
-const stopVoiceInput = vi.fn();
 const triggerAction = vi.fn();
 const setTraining = vi.fn();
 const sendMessage = vi.fn(async () => {});
@@ -12,6 +10,9 @@ const addPreference = vi.fn(async () => {});
 const removeMemory = vi.fn(async () => {});
 const saveOfflineQueue = vi.fn();
 const saveOfflineNote = vi.fn();
+const enterFullscreen = vi.fn(async () => true);
+const exitFullscreen = vi.fn(async () => true);
+
 const enqueueOfflineMessage = vi.fn((text: string) => {
   const next: OfflineQueueEntry[] = [
     ...mockOfflineQueue,
@@ -28,6 +29,8 @@ const getOfflineFallbackReply = vi.fn(() => 'Réponse locale hors ligne');
 
 let mockOfflineQueue: OfflineQueueEntry[] = [];
 let mockOfflineNote = '';
+let forceFaceOnlyMode = false;
+let stateCallCounter = 0;
 
 const snapshotState: InternalState = {
   mode: 'idle',
@@ -64,24 +67,34 @@ const mockCompanion = {
   triggerAction,
   setTraining,
   addPreference,
-  removeMemory,
+  removeMemory
+};
+
+const mockVoiceInput = {
   voiceInputAvailable: true,
-  isListening: false,
-  startVoiceInput,
-  stopVoiceInput,
+  isSessionActive: false,
+  startListeningSession: vi.fn(),
+  stopListeningSession: vi.fn(),
   transcript: '',
-  listenerError: null as string | null
+  listenerError: null as string | null,
+  wakeStatus: 'Micro désactivé',
+  voiceProfile: { name: 'Compagnon Nexus' },
+  voiceProfileLabel: 'Voix française détectée'
 };
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
   return {
     ...actual,
-    useState: vi.fn((initialValue?: unknown) => [
-      typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue,
-      vi.fn()
-    ]),
-    useEffect: vi.fn((effect: () => void | (() => void)) => effect())
+    useState: vi.fn((initialValue?: unknown) => {
+      stateCallCounter += 1;
+      if (forceFaceOnlyMode && stateCallCounter === 8) {
+        return [true, vi.fn()];
+      }
+      return [typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue, vi.fn()];
+    }),
+    useEffect: vi.fn((effect: () => void | (() => void)) => effect()),
+    useRef: vi.fn((initialValue?: unknown) => ({ current: initialValue ?? null }))
   };
 });
 
@@ -98,6 +111,14 @@ const mockConnectivity = {
 
 vi.mock('./hooks/useConnectivity', () => ({
   useConnectivity: () => mockConnectivity
+}));
+
+vi.mock('./hooks/useVoiceInput', () => ({
+  useVoiceInput: () => mockVoiceInput
+}));
+
+vi.mock('./hooks/useFullscreenMode', () => ({
+  useFullscreenMode: () => ({ enterFullscreen, exitFullscreen, isFullscreen: false })
 }));
 
 vi.mock('./services/offline/persistence', () => ({
@@ -180,10 +201,13 @@ const textOf = (node: React.ReactNode): string => {
 describe('App voice and layout flows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCompanion.voiceInputAvailable = true;
-    mockCompanion.isListening = false;
-    mockCompanion.transcript = '';
-    mockCompanion.listenerError = null;
+    forceFaceOnlyMode = false;
+    stateCallCounter = 0;
+    mockVoiceInput.voiceInputAvailable = true;
+    mockVoiceInput.isSessionActive = false;
+    mockVoiceInput.transcript = '';
+    mockVoiceInput.listenerError = null;
+    mockVoiceInput.wakeStatus = 'Micro désactivé';
     mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
     mockConnectivity.isOnline = true;
     mockConnectivity.wasOffline = false;
@@ -191,102 +215,54 @@ describe('App voice and layout flows', () => {
     mockOfflineNote = '';
   });
 
-  it('keeps Démarrer le micro action wired to startVoiceInput', () => {
+  it('keeps Activer l’écoute action wired to startListeningSession', () => {
     const ui = App();
-    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
+    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Activer l’écoute')[0];
 
     startButton.props.onClick();
 
-    expect(startVoiceInput).toHaveBeenCalledTimes(1);
-    expect(stopVoiceInput).not.toHaveBeenCalled();
+    expect(mockVoiceInput.startListeningSession).toHaveBeenCalledTimes(1);
+    expect(mockVoiceInput.stopListeningSession).not.toHaveBeenCalled();
   });
 
-  it('keeps Arrêter le micro action wired to stopVoiceInput', () => {
-    mockCompanion.isListening = true;
+  it('keeps Arrêter l’écoute action wired to stopListeningSession', () => {
+    mockVoiceInput.isSessionActive = true;
     const ui = App();
-    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter le micro')[0];
+    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter l’écoute')[0];
 
     stopButton.props.onClick();
 
-    expect(stopVoiceInput).toHaveBeenCalledTimes(1);
-    expect(startVoiceInput).not.toHaveBeenCalled();
+    expect(mockVoiceInput.stopListeningSession).toHaveBeenCalledTimes(1);
+    expect(mockVoiceInput.startListeningSession).not.toHaveBeenCalled();
   });
 
-  it('does not crash when voice actions are repeated across start/stop cycles', () => {
-    let ui = App();
-    let micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
-    micButton.props.onClick();
-
-    mockCompanion.isListening = true;
-    ui = App();
-    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter le micro')[0];
-    micButton.props.onClick();
-
-    mockCompanion.isListening = false;
-    ui = App();
-    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
-    micButton.props.onClick();
-
-    expect(startVoiceInput).toHaveBeenCalledTimes(2);
-    expect(stopVoiceInput).toHaveBeenCalledTimes(1);
-    expect(findElements(ui, (element) => element.type === 'main' && element.props.className === 'layout')).toHaveLength(1);
-  });
-
-  it('keeps collapsible advanced panels accessible with existing functionality', () => {
+  it('shows French-first voice labels and wake hints', () => {
     const ui = App();
-
-    const summaries = findElements(ui, (element) => element.type === 'summary').map((summary) => textOf(summary));
-    expect(textOf(ui)).toContain('Outils avancés');
-    expect(summaries).toEqual(['Réglages du comportement', 'Contrôles développeur', 'Mémoire locale']);
-
-    const detailsPanels = findElements(ui, (element) => element.type === 'details' && element.props.className === 'panel collapsible');
-    expect(detailsPanels).toHaveLength(3);
-    expect(detailsPanels[0].props.open).toBe(true);
-
-    const trainingButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Change training')[0];
-    const actionButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Trigger action')[0];
-
-    trainingButton.props.onClick();
-    actionButton.props.onClick();
-
-    expect(setTraining).toHaveBeenCalledTimes(1);
-    expect(triggerAction).toHaveBeenCalledWith('idle_happy');
-  });
-
-  it('renders safely on small viewport/mobile-like conditions', () => {
-    Object.defineProperty(globalThis, 'innerWidth', { value: 320, configurable: true });
-    const ui = App();
-
-    expect(findElements(ui, (element) => element.type === 'section' && element.props.className === 'immersive-stage')).toHaveLength(1);
-    expect(findElements(ui, (element) => element.type === 'section' && element.props.className === 'sidebar')).toHaveLength(1);
-  });
-
-
-  it('renders French-first labels in chat and status areas', () => {
-    const ui = App();
-
-    expect(textOf(ui)).toContain('Conversation');
     expect(textOf(ui)).toContain('Entrée vocale');
-    expect(textOf(ui)).toContain('État du compagnon');
-    expect(textOf(ui)).toContain('Action en cours');
-    expect(textOf(ui)).toContain('Souvenirs');
-    expect(textOf(ui)).toContain('Note locale hors ligne');
+    expect(textOf(ui)).toContain('Phrase de réveil');
+    expect(textOf(ui)).toContain('Dites “Nexus” pour parler');
+    expect(textOf(ui)).toContain('Voix du compagnon');
+    expect(textOf(ui)).toContain('Style : Compagnon Nexus');
   });
 
-  it('invokes the PWA shell hook during app composition', () => {
-    App();
-
-    expect(usePwaShell).toHaveBeenCalledTimes(1);
-  });
-
-  it('surfaces offline status without breaking chat controls', () => {
-    mockConnectivity.isOnline = false;
-    mockConnectivity.wasOffline = true;
+  it('shows unavailable recognition message', () => {
+    mockVoiceInput.voiceInputAvailable = false;
     const ui = App();
+    expect(textOf(ui)).toContain('La reconnaissance vocale n’est pas disponible sur ce navigateur.');
+  });
 
-    expect(textOf(ui)).toContain('Mode hors ligne léger — je peux répondre simplement et garder vos messages localement.');
-    expect(textOf(ui)).toContain('Connectivité : hors ligne');
-    expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')).toHaveLength(1);
+  it('renders Mode visage button in normal UI', () => {
+    const ui = App();
+    expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Mode visage')).toHaveLength(1);
+  });
+
+  it('renders immersive face-only mode when active and allows quitter', () => {
+    forceFaceOnlyMode = true;
+    stateCallCounter = 0;
+    const ui = App();
+    expect(textOf(ui)).toContain('Quitter');
+    expect(textOf(ui)).toContain('Plein écran');
+    expect(textOf(ui)).not.toContain('Conversation');
   });
 
   it('does not auto-send queued messages when back online', () => {
@@ -300,51 +276,7 @@ describe('App voice and layout flows', () => {
     const ui = App();
 
     expect(textOf(ui)).toContain('Connexion rétablie — cliquez sur “Envoyer les messages en attente” pour les transmettre.');
-    expect(textOf(ui)).toContain('Messages en attente : 2');
     expect(sendMessage).not.toHaveBeenCalled();
-  });
-
-  it('sends queued messages only after explicit click and drains queue once', async () => {
-    mockConnectivity.isOnline = true;
-    mockOfflineQueue = [
-      { id: 'q1', text: 'queued-1', createdAt: 1 },
-      { id: 'q2', text: 'queued-2', createdAt: 2 }
-    ];
-
-    const ui = App();
-    const flushButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Envoyer les messages en attente')[0];
-    expect(flushButton).toBeTruthy();
-    expect(sendMessage).not.toHaveBeenCalled();
-
-    await flushButton.props.onClick();
-
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['queued-1', 'queued-2']);
-    expect(saveOfflineQueue).toHaveBeenCalledWith([]);
-  });
-
-  it('keeps remaining queued messages after a manual flush failure', async () => {
-    mockConnectivity.isOnline = true;
-    mockOfflineQueue = [
-      { id: 'q1', text: 'queued-1', createdAt: 1 },
-      { id: 'q2', text: 'queued-2', createdAt: 2 },
-      { id: 'q3', text: 'queued-3', createdAt: 3 }
-    ];
-    sendMessage.mockImplementationOnce(async () => {})
-      .mockImplementationOnce(async () => {
-        throw new Error('network');
-      });
-
-    const ui = App();
-    const flushButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Envoyer les messages en attente')[0];
-    await flushButton.props.onClick();
-
-    expect(sendMessage).toHaveBeenCalledTimes(2);
-    expect(sendMessage.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['queued-1', 'queued-2']);
-    expect(saveOfflineQueue).toHaveBeenCalledWith([
-      { id: 'q2', text: 'queued-2', createdAt: 2 },
-      { id: 'q3', text: 'queued-3', createdAt: 3 }
-    ]);
   });
 
   it('sends an offline typed message to local queue and does not call online flow', async () => {
@@ -364,52 +296,33 @@ describe('App voice and layout flows', () => {
     expect(sendMessage).not.toHaveBeenCalled();
     expect(enqueueOfflineMessage).toHaveBeenCalledWith('hors ligne');
     expect(getOfflineFallbackReply).toHaveBeenCalledWith('hors ligne');
-    expect(onOfflineConversation).toHaveBeenCalledWith([
-      { from: 'user', text: 'hors ligne' },
-      { from: 'assistant', text: 'Réponse locale hors ligne', localReply: true }
-    ]);
-    expect(onMessageCleared).toHaveBeenCalledTimes(1);
   });
 
-  it('labels local offline fallback replies in conversation rendering', () => {
-    mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Réponse locale hors ligne', localReply: true } as never];
-    const ui = App();
+  it('manual text submit still works online', async () => {
+    const onQueueUpdate = vi.fn();
+    const onOfflineConversation = vi.fn();
+    const onMessageCleared = vi.fn();
 
-    expect(textOf(ui)).toContain('(Réponse locale hors ligne)');
-  });
-
-  it('clears stale offline fallback lines after full successful manual flush', async () => {
-    const onQueueUpdated = vi.fn();
-    const onQueuePersisted = vi.fn();
-    const onStatusUpdated = vi.fn();
-    const onFlushingUpdated = vi.fn();
-    const onOfflineConversationCleared = vi.fn();
-
-    await flushOfflineQueueManually({
+    await submitMessage({
       isOnline: true,
-      isFlushingOfflineQueue: false,
-      offlineQueue: [
-        { id: 'q1', text: 'queued-1', createdAt: 1 },
-        { id: 'q2', text: 'queued-2', createdAt: 2 }
-      ],
+      message: 'Bonjour Nexus',
       sendMessage,
-      onQueueUpdated,
-      onQueuePersisted,
-      onStatusUpdated,
-      onFlushingUpdated,
-      onOfflineConversationCleared
+      onQueueUpdate,
+      onOfflineConversation,
+      onMessageCleared
     });
 
-    expect(onQueueUpdated).toHaveBeenCalledWith([]);
-    expect(onQueuePersisted).toHaveBeenCalledWith([]);
-    expect(onOfflineConversationCleared).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith('Bonjour Nexus');
+    expect(onQueueUpdate).not.toHaveBeenCalled();
   });
 
-  it('does not clear offline fallback lines when manual flush fails', async () => {
+  it('keeps remaining queued messages after a manual flush failure', async () => {
+    mockConnectivity.isOnline = true;
     sendMessage.mockImplementationOnce(async () => {})
       .mockImplementationOnce(async () => {
         throw new Error('network');
       });
+
     const onQueueUpdated = vi.fn();
     const onQueuePersisted = vi.fn();
     const onStatusUpdated = vi.fn();

@@ -60,11 +60,13 @@ const renderFace = (overrides?: {
   isOnline?: boolean;
   companionVisualState?: CompanionVisualState;
   companionVisualStateLabel?: string;
+  voiceSessionStatusLabel?: string;
 }) => CompanionFaceScreen({
   state: overrides?.state ?? baseState,
   action: overrides?.action ?? baseAction,
   companionVisualState: overrides?.companionVisualState ?? 'idle',
   companionVisualStateLabel: overrides?.companionVisualStateLabel ?? 'Au repos',
+  voiceSessionStatusLabel: overrides?.voiceSessionStatusLabel ?? 'Micro désactivé',
   subtitle: overrides?.subtitle,
   isListening: overrides?.isListening ?? false,
   transcript: overrides?.transcript,
@@ -75,6 +77,8 @@ describe('CompanionFaceScreen', () => {
   it('renders safely with minimal required props', () => {
     const ui = renderFace();
     expect(toText(ui)).toContain('Au repos • idle_happy');
+    expect(toText(ui)).toContain('Session vocale');
+    expect(toText(ui)).toContain('Micro désactivé');
   });
 
   it('renders safely when listening with an empty transcript', () => {
@@ -133,10 +137,16 @@ describe('CompanionFaceScreen', () => {
   });
 
   it('activates listening indicator when isListening is true', () => {
-    const ui = renderFace({ isListening: true, companionVisualState: 'listening_for_command', companionVisualStateLabel: 'Je vous écoute' });
+    const ui = renderFace({
+      isListening: true,
+      companionVisualState: 'listening_for_command',
+      companionVisualStateLabel: 'Je vous écoute',
+      voiceSessionStatusLabel: 'Réveil détecté — je vous écoute'
+    });
     const screen = findFirstByClass(ui, 'face-screen');
     expect(toText(ui)).toContain('Je vous écoute');
     expect(toText(ui)).toContain('Micro actif');
+    expect(toText(ui)).toContain('Réveil détecté — je vous écoute');
     expect(screen?.props.className).toContain('visual-listening_for_command');
     expect(screen?.props.className).toContain('state-listening');
   });

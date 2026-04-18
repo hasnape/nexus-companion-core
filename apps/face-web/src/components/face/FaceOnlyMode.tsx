@@ -8,6 +8,7 @@ type FaceOnlyModeProps = {
   action: CompanionAction;
   companionVisualState: CompanionVisualState;
   companionVisualStateLabel: string;
+  voiceSessionStatusLabel: string;
   subtitle?: string;
   transcript?: string;
   isListening: boolean;
@@ -21,6 +22,7 @@ export function FaceOnlyMode({
   action,
   companionVisualState,
   companionVisualStateLabel,
+  voiceSessionStatusLabel,
   subtitle,
   transcript,
   isListening,
@@ -46,6 +48,7 @@ export function FaceOnlyMode({
           action={action}
           companionVisualState={companionVisualState}
           companionVisualStateLabel={companionVisualStateLabel}
+          voiceSessionStatusLabel={voiceSessionStatusLabel}
           subtitle={subtitle}
           isListening={isListening}
           transcript={transcript}

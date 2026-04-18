@@ -7,6 +7,7 @@ type CompanionFaceScreenProps = {
   action: CompanionAction;
   companionVisualState: CompanionVisualState;
   companionVisualStateLabel: string;
+  voiceSessionStatusLabel: string;
   subtitle?: string;
   isListening: boolean;
   transcript?: string;
@@ -18,6 +19,7 @@ export function CompanionFaceScreen({
   action,
   companionVisualState,
   companionVisualStateLabel,
+  voiceSessionStatusLabel,
   subtitle,
   isListening,
   transcript,
@@ -55,6 +57,13 @@ export function CompanionFaceScreen({
         {isListening ? <span className="state-pill state-live">Micro actif</span> : null}
         {transcript ? <span className="state-pill transcript-pill">“{transcript}”</span> : null}
       </div>
+      <aside className={`voice-status-panel ${semanticStateClass}`} aria-live="polite" aria-label="État de la session vocale">
+        <span className="voice-status-dot" aria-hidden="true" />
+        <div className="voice-status-content">
+          <p className="voice-status-title">Session vocale</p>
+          <p className="voice-status-label">{voiceSessionStatusLabel}</p>
+        </div>
+      </aside>
       <p className="subtitle">{subtitle ?? fallbackSubtitle}</p>
     </section>
   );

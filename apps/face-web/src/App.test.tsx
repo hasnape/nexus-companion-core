@@ -247,8 +247,8 @@ describe('App voice and layout flows', () => {
     mockConnectivity.wasOffline = true;
     const ui = App();
 
-    expect(textOf(ui)).toContain('You are offline');
-    expect(textOf(ui)).toContain('Connectivity: offline');
+    expect(textOf(ui)).toContain('Mode hors ligne léger — vos messages sont gardés localement.');
+    expect(textOf(ui)).toContain('Connectivité : hors ligne');
     expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')).toHaveLength(1);
   });
 
@@ -262,7 +262,8 @@ describe('App voice and layout flows', () => {
 
     const ui = App();
 
-    expect(textOf(ui)).toContain('Connexion rétablie');
+    expect(textOf(ui)).toContain('Connexion rétablie — cliquez sur “Envoyer les messages en attente” pour les transmettre.');
+    expect(textOf(ui)).toContain('Messages en attente : 2');
     expect(sendMessage).not.toHaveBeenCalled();
   });
 

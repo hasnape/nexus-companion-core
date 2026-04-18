@@ -41,6 +41,31 @@ describe('companionVisualState', () => {
     expect(companionVisualStateLabel(state, null)).toBe('Je réfléchis');
   });
 
+  it('returns speaking and "Je réponds" when speaking overlaps processing_command', () => {
+    const state = deriveCompanionVisualState({
+      isOnline: true,
+      wakeState: 'processing_command',
+      isListening: true,
+      listenerError: null,
+      companionMode: 'speaking'
+    });
+
+    expect(state).toBe('speaking');
+    expect(companionVisualStateLabel(state, null)).toBe('Je réponds');
+  });
+
+  it('keeps thinking when processing_command and companion is not speaking', () => {
+    const state = deriveCompanionVisualState({
+      isOnline: true,
+      wakeState: 'processing_command',
+      isListening: false,
+      listenerError: null,
+      companionMode: 'listening'
+    });
+
+    expect(state).toBe('thinking');
+  });
+
   it('returns offline label when disconnected', () => {
     const state = deriveCompanionVisualState({
       isOnline: false,

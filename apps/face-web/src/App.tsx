@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
-import { CompanionControlPanel } from './components/control-panel/CompanionControlPanel';
-import { MemoryConsole } from './components/memory-console/MemoryConsole';
-import { TrainingPanel } from './components/training-panel/TrainingPanel';
+import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
+import { DeveloperPanels } from './components/dev/DeveloperPanels';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
 import { usePwaShell } from './hooks/usePwaShell';
@@ -19,14 +18,14 @@ const defaultTraining: TrainingConfig = {
   chatterCooldownMs: 20000
 };
 
-type ConversationLine = { from: 'user' | 'assistant'; text: string; localReply?: boolean };
+export type CompanionConversationLine = { from: 'user' | 'companion' | 'assistant'; text: string; localReply?: boolean };
 
 type SubmitMessageParams = {
   isOnline: boolean;
   message: string;
   sendMessage: (text: string) => Promise<unknown>;
   onQueueUpdate: (queueText: string) => void;
-  onOfflineConversation: (lines: ConversationLine[]) => void;
+  onOfflineConversation: (lines: CompanionConversationLine[]) => void;
   onMessageCleared: () => void;
 };
 
@@ -118,13 +117,14 @@ export default function App() {
   } = useCompanion();
   const { isOnline, wasOffline } = useConnectivity();
   usePwaShell();
+
   const [message, setMessage] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
   const [offlineQueue, setOfflineQueue] = useState(loadOfflineQueue);
   const [offlineNote, setOfflineNote] = useState(loadOfflineNote);
   const [offlineFlushStatus, setOfflineFlushStatus] = useState('');
   const [isFlushingOfflineQueue, setIsFlushingOfflineQueue] = useState(false);
-  const [offlineConversation, setOfflineConversation] = useState<ConversationLine[]>([]);
+  const [offlineConversation, setOfflineConversation] = useState<CompanionConversationLine[]>([]);
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
     ? snapshot.conversation
@@ -157,92 +157,59 @@ export default function App() {
         />
       </section>
       <section className="sidebar">
-        <div className="panel panel-chat">
-          <h3>Live channel</h3>
-          {!isOnline ? (
-            <p className="offline-banner">Mode hors ligne léger — je peux répondre simplement et garder vos messages localement.</p>
-          ) : null}
-          <div className="history">
-            {visibleConversation.map((line, index) => (
-              <p key={`${line.from}-${index}-${line.text.slice(0, 12)}`}>
-                <strong>{line.from}:</strong> {line.text}
-                {'localReply' in line && line.localReply ? ' (Réponse locale hors ligne)' : null}
-              </p>
-            ))}
-          </div>
-          <div className="row">
-            <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type fallback message" />
-            <button
-              className="accent"
-              onClick={async () => {
-                await submitMessage({
-                  isOnline,
-                  message,
-                  sendMessage,
-                  onQueueUpdate: (queueText) => {
-                    const nextQueue = enqueueOfflineMessage(queueText);
-                    setOfflineQueue(nextQueue);
-                  },
-                  onOfflineConversation: (lines) => {
-                    setOfflineConversation((previous) => [...previous, ...lines]);
-                  },
-                  onMessageCleared: () => setMessage('')
-                });
-              }}
-            >
-              Send
-            </button>
-            <button className={isListening ? 'mic-live' : ''} onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())} disabled={!voiceInputAvailable}>
-              {isListening ? 'Stop mic' : 'Start mic'}
-            </button>
-          </div>
-          <div className="status-grid">
-            <p className="voice-status">
-              Voice input: {voiceInputAvailable ? (isListening ? 'listening…' : 'ready') : 'unavailable in this browser'}
-            </p>
-            <p className="voice-status">Companion state: {snapshot.state.mode} / mood {snapshot.state.mood}</p>
-            <p className="voice-status">Current action: {snapshot.action.name}</p>
-            <p className="voice-status">Memories: {memoryCount} entries</p>
-            <p className="voice-status">Connectivité : {isOnline ? 'en ligne' : 'hors ligne'}</p>
-            {isOnline && wasOffline ? (
-              <p className="voice-status">Connexion rétablie — cliquez sur “Envoyer les messages en attente” pour les transmettre.</p>
-            ) : null}
-            <p className="voice-status">Messages en attente : {offlineQueue.length}</p>
-            {offlineQueue.length === 0 ? <p className="voice-status">Aucun message en attente.</p> : null}
-          </div>
-          {isOnline && offlineQueue.length > 0 ? (
-            <button className="accent" onClick={flushOfflineQueue} disabled={isFlushingOfflineQueue}>
-              {isFlushingOfflineQueue ? 'Envoi en cours…' : 'Envoyer les messages en attente'}
-            </button>
-          ) : null}
-          {offlineFlushStatus ? <p className="voice-status">{offlineFlushStatus}</p> : null}
-          <label className="offline-note-label">
-            Offline quick note
-            <textarea
-              className="offline-note"
-              value={offlineNote}
-              onChange={(event) => {
-                setOfflineNote(event.target.value);
-                saveOfflineNote(event.target.value);
-              }}
-              placeholder="Capture a reminder while offline…"
-            />
-          </label>
-          {transcript ? <p className="voice-status transcript-line">Transcript: “{transcript}”</p> : null}
-          {listenerError ? <p className="voice-error">Voice error: {listenerError}</p> : null}
-        </div>
-        <details className="panel collapsible" open>
-          <summary>Behavior tuning</summary>
-          <TrainingPanel config={training} onChange={(next) => { updateTraining(next); setTraining(next); }} />
-        </details>
-        <details className="panel collapsible">
-          <summary>Action controls</summary>
-          <CompanionControlPanel snapshot={snapshot} onTrigger={triggerAction} />
-        </details>
-        <details className="panel collapsible">
-          <summary>Memory console</summary>
-          <MemoryConsole memory={memory} onAddPreference={addPreference} onRemove={removeMemory} />
-        </details>
+        <CompanionChatPanel
+          visibleConversation={visibleConversation}
+          message={message}
+          onMessageChange={setMessage}
+          onSubmitMessage={async () => {
+            await submitMessage({
+              isOnline,
+              message,
+              sendMessage,
+              onQueueUpdate: (queueText) => {
+                const nextQueue = enqueueOfflineMessage(queueText);
+                setOfflineQueue(nextQueue);
+              },
+              onOfflineConversation: (lines) => {
+                setOfflineConversation((previous) => [...previous, ...lines]);
+              },
+              onMessageCleared: () => setMessage('')
+            });
+          }}
+          voiceInputAvailable={voiceInputAvailable}
+          isListening={isListening}
+          startVoiceInput={startVoiceInput}
+          stopVoiceInput={stopVoiceInput}
+          transcript={transcript}
+          listenerError={listenerError}
+          isOnline={isOnline}
+          wasOffline={wasOffline}
+          offlineQueueLength={offlineQueue.length}
+          isFlushingOfflineQueue={isFlushingOfflineQueue}
+          onFlushOfflineQueue={flushOfflineQueue}
+          offlineFlushStatus={offlineFlushStatus}
+          offlineNote={offlineNote}
+          onOfflineNoteChange={(value) => {
+            setOfflineNote(value);
+            saveOfflineNote(value);
+          }}
+          companionMode={snapshot.state.mode}
+          companionMood={snapshot.state.mood}
+          currentActionName={snapshot.action.name}
+          memoryCount={memoryCount}
+        />
+        <DeveloperPanels
+          training={training}
+          onTrainingChange={(next) => {
+            updateTraining(next);
+            setTraining(next);
+          }}
+          snapshot={snapshot}
+          onTriggerAction={triggerAction}
+          memory={memory}
+          onAddPreference={addPreference}
+          onRemoveMemory={removeMemory}
+        />
       </section>
     </main>
   );

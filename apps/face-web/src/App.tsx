@@ -5,7 +5,9 @@ import { MemoryConsole } from './components/memory-console/MemoryConsole';
 import { TrainingPanel } from './components/training-panel/TrainingPanel';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
+import { usePwaShell } from './hooks/usePwaShell';
 import { enqueueOfflineMessage, loadOfflineNote, loadOfflineQueue, saveOfflineNote, saveOfflineQueue } from './services/offline/persistence';
+import { getOfflineFallbackReply } from './services/offline/offlineResponses';
 import type { TrainingConfig } from '@nexus/shared';
 
 const defaultTraining: TrainingConfig = {
@@ -16,19 +18,61 @@ const defaultTraining: TrainingConfig = {
   chatterCooldownMs: 20000
 };
 
+type ConversationLine = { from: 'user' | 'assistant'; text: string; localReply?: boolean };
+
+type SubmitMessageParams = {
+  isOnline: boolean;
+  message: string;
+  sendMessage: (text: string) => Promise<unknown>;
+  onQueueUpdate: (queueText: string) => void;
+  onOfflineConversation: (lines: ConversationLine[]) => void;
+  onMessageCleared: () => void;
+};
+
+export const submitMessage = async ({
+  isOnline,
+  message,
+  sendMessage,
+  onQueueUpdate,
+  onOfflineConversation,
+  onMessageCleared
+}: SubmitMessageParams): Promise<void> => {
+  const normalizedMessage = message.trim();
+  if (!normalizedMessage) return;
+
+  if (!isOnline) {
+    onQueueUpdate(normalizedMessage);
+    const fallbackReply = getOfflineFallbackReply(normalizedMessage);
+    onOfflineConversation([
+      { from: 'user', text: normalizedMessage },
+      { from: 'assistant', text: fallbackReply, localReply: true }
+    ]);
+    onMessageCleared();
+    return;
+  }
+
+  await sendMessage(normalizedMessage);
+  onMessageCleared();
+};
+
 export default function App() {
   const {
     snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory,
     voiceInputAvailable, isListening, startVoiceInput, stopVoiceInput, transcript, listenerError
   } = useCompanion();
   const { isOnline, wasOffline } = useConnectivity();
+  usePwaShell();
   const [message, setMessage] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
   const [offlineQueue, setOfflineQueue] = useState(loadOfflineQueue);
   const [offlineNote, setOfflineNote] = useState(loadOfflineNote);
   const [offlineFlushStatus, setOfflineFlushStatus] = useState('');
   const [isFlushingOfflineQueue, setIsFlushingOfflineQueue] = useState(false);
+  const [offlineConversation, setOfflineConversation] = useState<ConversationLine[]>([]);
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
+  const visibleConversation = isOnline
+    ? snapshot.conversation
+    : [...snapshot.conversation, ...offlineConversation];
 
   const flushOfflineQueue = async () => {
     if (!isOnline || isFlushingOfflineQueue || offlineQueue.length === 0) return;
@@ -66,7 +110,7 @@ export default function App() {
         <CompanionFaceScreen
           state={snapshot.state}
           action={snapshot.action}
-          subtitle={snapshot.conversation.at(-1)?.text}
+          subtitle={visibleConversation.at(-1)?.text}
           isListening={isListening}
           transcript={transcript}
           isOnline={isOnline}
@@ -76,25 +120,34 @@ export default function App() {
         <div className="panel panel-chat">
           <h3>Live channel</h3>
           {!isOnline ? (
-            <p className="offline-banner">Mode hors ligne léger — vos messages sont gardés localement.</p>
+            <p className="offline-banner">Mode hors ligne léger — je peux répondre simplement et garder vos messages localement.</p>
           ) : null}
           <div className="history">
-            {snapshot.conversation.map((line, index) => <p key={`${line.from}-${index}`}><strong>{line.from}:</strong> {line.text}</p>)}
+            {visibleConversation.map((line, index) => (
+              <p key={`${line.from}-${index}-${line.text.slice(0, 12)}`}>
+                <strong>{line.from}:</strong> {line.text}
+                {'localReply' in line && line.localReply ? ' (Réponse locale hors ligne)' : null}
+              </p>
+            ))}
           </div>
           <div className="row">
             <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type fallback message" />
             <button
               className="accent"
               onClick={async () => {
-                if (!message) return;
-                if (!isOnline) {
-                  const nextQueue = enqueueOfflineMessage(message);
-                  setOfflineQueue(nextQueue);
-                  setMessage('');
-                  return;
-                }
-                await sendMessage(message);
-                setMessage('');
+                await submitMessage({
+                  isOnline,
+                  message,
+                  sendMessage,
+                  onQueueUpdate: (queueText) => {
+                    const nextQueue = enqueueOfflineMessage(queueText);
+                    setOfflineQueue(nextQueue);
+                  },
+                  onOfflineConversation: (lines) => {
+                    setOfflineConversation((previous) => [...previous, ...lines]);
+                  },
+                  onMessageCleared: () => setMessage('')
+                });
               }}
             >
               Send

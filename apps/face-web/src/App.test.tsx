@@ -12,6 +12,19 @@ const addPreference = vi.fn(async () => {});
 const removeMemory = vi.fn(async () => {});
 const saveOfflineQueue = vi.fn();
 const saveOfflineNote = vi.fn();
+const enqueueOfflineMessage = vi.fn((text: string) => {
+  const next: OfflineQueueEntry[] = [
+    ...mockOfflineQueue,
+    {
+      id: `${mockOfflineQueue.length + 1}`,
+      text,
+      createdAt: Date.now()
+    }
+  ];
+  mockOfflineQueue = next;
+  return next;
+});
+const getOfflineFallbackReply = vi.fn(() => 'Réponse locale hors ligne');
 
 let mockOfflineQueue: OfflineQueueEntry[] = [];
 let mockOfflineNote = '';
@@ -64,7 +77,10 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
   return {
     ...actual,
-    useState: vi.fn((initialValue: unknown) => [typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue, vi.fn()]),
+    useState: vi.fn((initialValue?: unknown) => [
+      typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue,
+      vi.fn()
+    ]),
     useEffect: vi.fn((effect: () => void | (() => void)) => effect())
   };
 });
@@ -87,18 +103,10 @@ vi.mock('./services/offline/persistence', () => ({
   loadOfflineNote: () => mockOfflineNote,
   saveOfflineQueue,
   saveOfflineNote,
-  enqueueOfflineMessage: (text: string) => {
-    const next: OfflineQueueEntry[] = [
-      ...mockOfflineQueue,
-      {
-        id: `${mockOfflineQueue.length + 1}`,
-        text,
-        createdAt: Date.now()
-      }
-    ];
-    mockOfflineQueue = next;
-    return next;
-  }
+  enqueueOfflineMessage
+}));
+vi.mock('./services/offline/offlineResponses', () => ({
+  getOfflineFallbackReply
 }));
 
 vi.mock('./components/control-panel/CompanionControlPanel', () => ({
@@ -128,7 +136,7 @@ vi.mock('./components/training-panel/TrainingPanel', () => ({
     )
 }));
 
-const { default: App } = await import('./App');
+const { default: App, submitMessage } = await import('./App');
 
 const findElements = (node: React.ReactNode, predicate: (element: React.ReactElement) => boolean): React.ReactElement[] => {
   const matches: React.ReactElement[] = [];
@@ -247,7 +255,7 @@ describe('App voice and layout flows', () => {
     mockConnectivity.wasOffline = true;
     const ui = App();
 
-    expect(textOf(ui)).toContain('Mode hors ligne léger — vos messages sont gardés localement.');
+    expect(textOf(ui)).toContain('Mode hors ligne léger — je peux répondre simplement et garder vos messages localement.');
     expect(textOf(ui)).toContain('Connectivité : hors ligne');
     expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')).toHaveLength(1);
   });
@@ -308,5 +316,29 @@ describe('App voice and layout flows', () => {
       { id: 'q2', text: 'queued-2', createdAt: 2 },
       { id: 'q3', text: 'queued-3', createdAt: 3 }
     ]);
+  });
+
+  it('sends an offline typed message to local queue and does not call online flow', async () => {
+    const onQueueUpdate = vi.fn((text: string) => enqueueOfflineMessage(text));
+    const onOfflineConversation = vi.fn();
+    const onMessageCleared = vi.fn();
+
+    await submitMessage({
+      isOnline: false,
+      message: 'hors ligne',
+      sendMessage,
+      onQueueUpdate,
+      onOfflineConversation,
+      onMessageCleared
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(enqueueOfflineMessage).toHaveBeenCalledWith('hors ligne');
+    expect(getOfflineFallbackReply).toHaveBeenCalledWith('hors ligne');
+    expect(onOfflineConversation).toHaveBeenCalledWith([
+      { from: 'user', text: 'hors ligne' },
+      { from: 'assistant', text: 'Réponse locale hors ligne', localReply: true }
+    ]);
+    expect(onMessageCleared).toHaveBeenCalledTimes(1);
   });
 });

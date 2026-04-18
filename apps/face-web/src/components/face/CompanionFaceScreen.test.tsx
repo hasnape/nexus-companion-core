@@ -71,13 +71,13 @@ describe('CompanionFaceScreen', () => {
 
   it('renders safely when listening with an empty transcript', () => {
     const ui = renderFace({ isListening: true, transcript: '' });
-    expect(toText(ui)).toContain('Listening');
+    expect(toText(ui)).toContain('Écoute active');
     expect(toText(ui)).not.toContain('“”');
   });
 
   it('shows transcript feedback when listening and transcript exists', () => {
     const ui = renderFace({ isListening: true, transcript: 'Testing transcript feedback' });
-    expect(toText(ui)).toContain('Mic live');
+    expect(toText(ui)).toContain('Micro actif');
     expect(toText(ui)).toContain('Testing transcript feedback');
   });
 
@@ -102,26 +102,26 @@ describe('CompanionFaceScreen', () => {
     const ui = renderFace({ state: { ...baseState, mode: 'speaking' } });
     const mouth = findElements(ui, (element) => element.props.className?.includes('mouth'))[0];
     expect(mouth.props.className).toContain('is-speaking');
-    expect(toText(ui)).toContain('Speaking');
+    expect(toText(ui)).toContain('Parole');
   });
 
   it('activates listening indicator when isListening is true', () => {
     const ui = renderFace({ isListening: true });
-    expect(toText(ui)).toContain('Listening');
-    expect(toText(ui)).toContain('Mic live');
+    expect(toText(ui)).toContain('Écoute active');
+    expect(toText(ui)).toContain('Micro actif');
   });
 
   it('does not show false listening or speaking feedback while idle', () => {
     const ui = renderFace({ state: { ...baseState, mode: 'idle' }, isListening: false });
     const mouth = findElements(ui, (element) => element.props.className?.includes('mouth'))[0];
     expect(toText(ui)).toContain('idle');
-    expect(toText(ui)).not.toContain('Mic live');
-    expect(toText(ui)).not.toContain('Listening');
+    expect(toText(ui)).not.toContain('Micro actif');
+    expect(toText(ui)).not.toContain('Écoute active');
     expect(mouth.props.className).not.toContain('is-speaking');
   });
 
   it('shows offline indicator when connectivity is unavailable', () => {
     const ui = renderFace({ isOnline: false });
-    expect(toText(ui)).toContain('Offline');
+    expect(toText(ui)).toContain('Hors ligne');
   });
 });

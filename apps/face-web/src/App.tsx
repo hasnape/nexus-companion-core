@@ -21,32 +21,55 @@ export default function App() {
   } = useCompanion();
   const [message, setMessage] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
+  const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
 
   return (
     <main className="layout">
-      <CompanionFaceScreen state={snapshot.state} action={snapshot.action} subtitle={snapshot.conversation.at(-1)?.text} />
+      <section className="immersive-stage">
+        <CompanionFaceScreen
+          state={snapshot.state}
+          action={snapshot.action}
+          subtitle={snapshot.conversation.at(-1)?.text}
+          isListening={isListening}
+          transcript={transcript}
+        />
+      </section>
       <section className="sidebar">
-        <div className="panel">
-          <h3>Conversation</h3>
+        <div className="panel panel-chat">
+          <h3>Live channel</h3>
           <div className="history">
             {snapshot.conversation.map((line, index) => <p key={`${line.from}-${index}`}><strong>{line.from}:</strong> {line.text}</p>)}
           </div>
           <div className="row">
-            <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type always available (fallback)" />
-            <button onClick={async () => { if (!message) return; await sendMessage(message); setMessage(''); }}>Send</button>
-            <button onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())} disabled={!voiceInputAvailable}>
+            <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type fallback message" />
+            <button className="accent" onClick={async () => { if (!message) return; await sendMessage(message); setMessage(''); }}>Send</button>
+            <button className={isListening ? 'mic-live' : ''} onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())} disabled={!voiceInputAvailable}>
               {isListening ? 'Stop mic' : 'Start mic'}
             </button>
           </div>
-          <p className="voice-status">
-            Voice input: {voiceInputAvailable ? (isListening ? 'listening…' : 'ready') : 'unavailable in this browser'}
-            {transcript ? ` | transcript: "${transcript}"` : ''}
-          </p>
+          <div className="status-grid">
+            <p className="voice-status">
+              Voice input: {voiceInputAvailable ? (isListening ? 'listening…' : 'ready') : 'unavailable in this browser'}
+            </p>
+            <p className="voice-status">Companion state: {snapshot.state.mode} / mood {snapshot.state.mood}</p>
+            <p className="voice-status">Current action: {snapshot.action.name}</p>
+            <p className="voice-status">Memories: {memoryCount} entries</p>
+          </div>
+          {transcript ? <p className="voice-status transcript-line">Transcript: “{transcript}”</p> : null}
           {listenerError ? <p className="voice-error">Voice error: {listenerError}</p> : null}
         </div>
-        <TrainingPanel config={training} onChange={(next) => { updateTraining(next); setTraining(next); }} />
-        <CompanionControlPanel snapshot={snapshot} onTrigger={triggerAction} />
-        <MemoryConsole memory={memory} onAddPreference={addPreference} onRemove={removeMemory} />
+        <details className="panel collapsible" open>
+          <summary>Behavior tuning</summary>
+          <TrainingPanel config={training} onChange={(next) => { updateTraining(next); setTraining(next); }} />
+        </details>
+        <details className="panel collapsible">
+          <summary>Action controls</summary>
+          <CompanionControlPanel snapshot={snapshot} onTrigger={triggerAction} />
+        </details>
+        <details className="panel collapsible">
+          <summary>Memory console</summary>
+          <MemoryConsole memory={memory} onAddPreference={addPreference} onRemove={removeMemory} />
+        </details>
       </section>
     </main>
   );

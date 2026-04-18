@@ -2,8 +2,8 @@
   "name": "@nexus/decision",
   "version": "0.1.0",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "dependencies": {
     "@nexus/shared": "0.1.0"
   },

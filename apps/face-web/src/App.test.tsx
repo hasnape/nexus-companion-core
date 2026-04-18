@@ -58,12 +58,22 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react');
   return {
     ...actual,
-    useState: vi.fn((initialValue: unknown) => [initialValue, vi.fn()])
+    useState: vi.fn((initialValue: unknown) => [typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue, vi.fn()]),
+    useEffect: vi.fn((effect: () => void | (() => void)) => effect())
   };
 });
 
 vi.mock('./hooks/useCompanion', () => ({
   useCompanion: () => mockCompanion
+}));
+
+const mockConnectivity = {
+  isOnline: true,
+  wasOffline: false
+};
+
+vi.mock('./hooks/useConnectivity', () => ({
+  useConnectivity: () => mockConnectivity
 }));
 
 vi.mock('./components/control-panel/CompanionControlPanel', () => ({
@@ -132,6 +142,8 @@ describe('App voice and layout flows', () => {
     mockCompanion.isListening = false;
     mockCompanion.transcript = '';
     mockCompanion.listenerError = null;
+    mockConnectivity.isOnline = true;
+    mockConnectivity.wasOffline = false;
   });
 
   it('keeps Start mic action wired to startVoiceInput', () => {
@@ -201,5 +213,15 @@ describe('App voice and layout flows', () => {
 
     expect(findElements(ui, (element) => element.type === 'section' && element.props.className === 'immersive-stage')).toHaveLength(1);
     expect(findElements(ui, (element) => element.type === 'section' && element.props.className === 'sidebar')).toHaveLength(1);
+  });
+
+  it('surfaces offline status without breaking chat controls', () => {
+    mockConnectivity.isOnline = false;
+    mockConnectivity.wasOffline = true;
+    const ui = App();
+
+    expect(textOf(ui)).toContain('You are offline');
+    expect(textOf(ui)).toContain('Connectivity: offline');
+    expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')).toHaveLength(1);
   });
 });

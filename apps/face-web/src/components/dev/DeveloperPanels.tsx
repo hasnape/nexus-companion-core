@@ -36,7 +36,8 @@ export function DeveloperPanels({
   isOnline,
   companionVisualStateLabel
 }: DeveloperPanelsProps) {
-  const lastInteractionLabel = lastInteractionAt > 0
+  const hasVisibleInteraction = localMessagesCount > 0 && lastInteractionAt > 0;
+  const lastInteractionLabel = hasVisibleInteraction
     ? new Date(lastInteractionAt).toLocaleString('fr-FR')
     : 'Aucune interaction';
 

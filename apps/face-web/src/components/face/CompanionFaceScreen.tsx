@@ -1,4 +1,5 @@
 import type { CompanionAction, InternalState } from '@nexus/shared';
+import type { CSSProperties } from 'react';
 import type { CompanionVisualState } from './companionVisualState';
 
 type CompanionFaceScreenProps = {
@@ -25,14 +26,15 @@ export function CompanionFaceScreen({
   const eyeOffset = state.attentionTarget === 'user' ? '0px' : state.attentionTarget === 'screen' ? '-7px' : '7px';
   const expression = state.mood === 'happy' || state.mood === 'curious' ? state.mood : state.mode;
   const fallbackSubtitle = `${companionVisualStateLabel} • ${action.name}`;
+  const visualStateClass = `visual-${companionVisualState}`;
 
   return (
-    <section className="face-screen" aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
+    <section className={`face-screen ${visualStateClass}`} aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
       <div className="ambient-grid" />
-      <div className={`halo mood-${state.mood}`} />
-      <div className={`face mode-${state.mode} visual-${companionVisualState} expression-${expression}`}>
+      <div className={`halo mood-${state.mood} ${visualStateClass}`} />
+      <div className={`face mode-${state.mode} ${visualStateClass} expression-${expression}`}>
         <div className="brow" />
-        <div className="eyes gaze-float" style={{ transform: `translateX(${eyeOffset})` }}>
+        <div className="eyes gaze-float" style={{ '--eye-offset-x': eyeOffset } as CSSProperties}>
           <span className="eye eye-left" />
           <span className="eye eye-right" />
         </div>

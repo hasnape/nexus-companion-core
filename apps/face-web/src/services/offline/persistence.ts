@@ -7,7 +7,14 @@ export type OfflineQueueEntry = {
 const OFFLINE_QUEUE_KEY = 'face-web-offline-queue-v1';
 const OFFLINE_NOTE_KEY = 'face-web-offline-note-v1';
 
-const canUseStorage = (): boolean => typeof window !== 'undefined' && !!window.localStorage;
+const getStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
 
 const safeParse = <T>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
@@ -19,16 +26,26 @@ const safeParse = <T>(raw: string | null, fallback: T): T => {
 };
 
 export const loadOfflineQueue = (): OfflineQueueEntry[] => {
-  if (!canUseStorage()) return [];
-  const parsed = safeParse<OfflineQueueEntry[]>(window.localStorage.getItem(OFFLINE_QUEUE_KEY), []);
-  return Array.isArray(parsed)
-    ? parsed.filter((entry) => typeof entry?.id === 'string' && typeof entry?.text === 'string' && typeof entry?.createdAt === 'number')
-    : [];
+  const storage = getStorage();
+  if (!storage) return [];
+  try {
+    const parsed = safeParse<OfflineQueueEntry[]>(storage.getItem(OFFLINE_QUEUE_KEY), []);
+    return Array.isArray(parsed)
+      ? parsed.filter((entry) => typeof entry?.id === 'string' && typeof entry?.text === 'string' && typeof entry?.createdAt === 'number')
+      : [];
+  } catch {
+    return [];
+  }
 };
 
 export const saveOfflineQueue = (entries: OfflineQueueEntry[]): void => {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(entries));
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(entries));
+  } catch {
+    // noop
+  }
 };
 
 export const enqueueOfflineMessage = (text: string): OfflineQueueEntry[] => {
@@ -45,16 +62,31 @@ export const enqueueOfflineMessage = (text: string): OfflineQueueEntry[] => {
 };
 
 export const loadOfflineNote = (): string => {
-  if (!canUseStorage()) return '';
-  return window.localStorage.getItem(OFFLINE_NOTE_KEY) ?? '';
+  const storage = getStorage();
+  if (!storage) return '';
+  try {
+    return storage.getItem(OFFLINE_NOTE_KEY) ?? '';
+  } catch {
+    return '';
+  }
 };
 
 export const saveOfflineNote = (note: string): void => {
-  if (!canUseStorage()) return;
-  window.localStorage.setItem(OFFLINE_NOTE_KEY, note);
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(OFFLINE_NOTE_KEY, note);
+  } catch {
+    // noop
+  }
 };
 
 export const clearOfflineQueue = (): void => {
-  if (!canUseStorage()) return;
-  window.localStorage.removeItem(OFFLINE_QUEUE_KEY);
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(OFFLINE_QUEUE_KEY);
+  } catch {
+    // noop
+  }
 };

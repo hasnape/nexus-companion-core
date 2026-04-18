@@ -57,4 +57,37 @@ describe('offline persistence', () => {
     localStorageMock.setItem('face-web-offline-queue-v1', '{broken-json');
     expect(loadOfflineQueue()).toEqual([]);
   });
+
+  it('does not crash if window.localStorage access throws', () => {
+    const originalWindow = globalThis.window;
+    const brokenWindow = {};
+    Object.defineProperty(brokenWindow, 'localStorage', {
+      get: () => {
+        throw new DOMException('Blocked', 'SecurityError');
+      }
+    });
+    Object.defineProperty(globalThis, 'window', {
+      value: brokenWindow,
+      configurable: true
+    });
+
+    expect(loadOfflineQueue()).toEqual([]);
+    expect(loadOfflineNote()).toBe('');
+    expect(() => saveOfflineQueue([{ id: '1', text: 'safe', createdAt: 1 }])).not.toThrow();
+    expect(() => saveOfflineNote('safe')).not.toThrow();
+    expect(() => clearOfflineQueue()).not.toThrow();
+
+    Object.defineProperty(globalThis, 'window', {
+      value: originalWindow,
+      configurable: true
+    });
+  });
+
+  it('returns safe fallbacks for corrupted storage values', () => {
+    localStorageMock.setItem('face-web-offline-queue-v1', JSON.stringify({ bad: true }));
+    localStorageMock.setItem('face-web-offline-note-v1', JSON.stringify({ bad: true }));
+
+    expect(loadOfflineQueue()).toEqual([]);
+    expect(loadOfflineNote()).toBe(JSON.stringify({ bad: true }));
+  });
 });

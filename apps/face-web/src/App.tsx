@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
 import { CompanionControlPanel } from './components/control-panel/CompanionControlPanel';
 import { MemoryConsole } from './components/memory-console/MemoryConsole';
@@ -26,28 +26,39 @@ export default function App() {
   const [training, updateTraining] = useState(defaultTraining);
   const [offlineQueue, setOfflineQueue] = useState(loadOfflineQueue);
   const [offlineNote, setOfflineNote] = useState(loadOfflineNote);
+  const [offlineFlushStatus, setOfflineFlushStatus] = useState('');
+  const [isFlushingOfflineQueue, setIsFlushingOfflineQueue] = useState(false);
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
 
-  useEffect(() => {
-    if (!isOnline || offlineQueue.length === 0) return;
-    let cancelled = false;
+  const flushOfflineQueue = async () => {
+    if (!isOnline || isFlushingOfflineQueue || offlineQueue.length === 0) return;
+    setIsFlushingOfflineQueue(true);
+    setOfflineFlushStatus('');
 
-    const flushOfflineQueue = async () => {
+    const remainingQueue = [...offlineQueue];
+    let sentCount = 0;
+
+    try {
       for (const item of offlineQueue) {
-        if (cancelled) return;
         await sendMessage(item.text);
+        sentCount += 1;
+        remainingQueue.shift();
       }
-      if (!cancelled) {
-        setOfflineQueue([]);
-        saveOfflineQueue([]);
-      }
-    };
-
-    void flushOfflineQueue();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOnline, offlineQueue, sendMessage]);
+      setOfflineQueue(remainingQueue);
+      saveOfflineQueue(remainingQueue);
+      setOfflineFlushStatus('Tous les messages en attente ont été envoyés.');
+    } catch {
+      setOfflineQueue(remainingQueue);
+      saveOfflineQueue(remainingQueue);
+      setOfflineFlushStatus(
+        sentCount > 0
+          ? 'Envoi interrompu. Les messages restants sont conservés.'
+          : 'Impossible d’envoyer les messages en attente. Réessayez.'
+      );
+    } finally {
+      setIsFlushingOfflineQueue(false);
+    }
+  };
 
   return (
     <main className="layout">
@@ -99,9 +110,15 @@ export default function App() {
             <p className="voice-status">Companion state: {snapshot.state.mode} / mood {snapshot.state.mood}</p>
             <p className="voice-status">Current action: {snapshot.action.name}</p>
             <p className="voice-status">Memories: {memoryCount} entries</p>
-            <p className="voice-status">Connectivity: {isOnline ? 'online' : 'offline'}{wasOffline && isOnline ? ' (reconnected)' : ''}</p>
+            <p className="voice-status">Connectivity: {isOnline ? 'online' : 'offline'}{wasOffline && isOnline ? ' (Connexion rétablie)' : ''}</p>
             <p className="voice-status">Queued offline messages: {offlineQueue.length}</p>
           </div>
+          {isOnline && offlineQueue.length > 0 ? (
+            <button className="accent" onClick={flushOfflineQueue} disabled={isFlushingOfflineQueue}>
+              {isFlushingOfflineQueue ? 'Envoi en cours…' : 'Envoyer les messages en attente'}
+            </button>
+          ) : null}
+          {offlineFlushStatus ? <p className="voice-status">{offlineFlushStatus}</p> : null}
           <label className="offline-note-label">
             Offline quick note
             <textarea

@@ -1,6 +1,7 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompanionAction, InternalState, TrainingConfig } from '@nexus/shared';
+import type { OfflineQueueEntry } from './services/offline/persistence';
 
 const startVoiceInput = vi.fn();
 const stopVoiceInput = vi.fn();
@@ -9,6 +10,11 @@ const setTraining = vi.fn();
 const sendMessage = vi.fn(async () => {});
 const addPreference = vi.fn(async () => {});
 const removeMemory = vi.fn(async () => {});
+const saveOfflineQueue = vi.fn();
+const saveOfflineNote = vi.fn();
+
+let mockOfflineQueue: OfflineQueueEntry[] = [];
+let mockOfflineNote = '';
 
 const snapshotState: InternalState = {
   mode: 'idle',
@@ -74,6 +80,25 @@ const mockConnectivity = {
 
 vi.mock('./hooks/useConnectivity', () => ({
   useConnectivity: () => mockConnectivity
+}));
+
+vi.mock('./services/offline/persistence', () => ({
+  loadOfflineQueue: () => mockOfflineQueue,
+  loadOfflineNote: () => mockOfflineNote,
+  saveOfflineQueue,
+  saveOfflineNote,
+  enqueueOfflineMessage: (text: string) => {
+    const next: OfflineQueueEntry[] = [
+      ...mockOfflineQueue,
+      {
+        id: `${mockOfflineQueue.length + 1}`,
+        text,
+        createdAt: Date.now()
+      }
+    ];
+    mockOfflineQueue = next;
+    return next;
+  }
 }));
 
 vi.mock('./components/control-panel/CompanionControlPanel', () => ({
@@ -144,6 +169,8 @@ describe('App voice and layout flows', () => {
     mockCompanion.listenerError = null;
     mockConnectivity.isOnline = true;
     mockConnectivity.wasOffline = false;
+    mockOfflineQueue = [];
+    mockOfflineNote = '';
   });
 
   it('keeps Start mic action wired to startVoiceInput', () => {
@@ -223,5 +250,62 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('You are offline');
     expect(textOf(ui)).toContain('Connectivity: offline');
     expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')).toHaveLength(1);
+  });
+
+  it('does not auto-send queued messages when back online', () => {
+    mockConnectivity.isOnline = true;
+    mockConnectivity.wasOffline = true;
+    mockOfflineQueue = [
+      { id: 'q1', text: 'queued-1', createdAt: 1 },
+      { id: 'q2', text: 'queued-2', createdAt: 2 }
+    ];
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Connexion rétablie');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('sends queued messages only after explicit click and drains queue once', async () => {
+    mockConnectivity.isOnline = true;
+    mockOfflineQueue = [
+      { id: 'q1', text: 'queued-1', createdAt: 1 },
+      { id: 'q2', text: 'queued-2', createdAt: 2 }
+    ];
+
+    const ui = App();
+    const flushButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Envoyer les messages en attente')[0];
+    expect(flushButton).toBeTruthy();
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    await flushButton.props.onClick();
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['queued-1', 'queued-2']);
+    expect(saveOfflineQueue).toHaveBeenCalledWith([]);
+  });
+
+  it('keeps remaining queued messages after a manual flush failure', async () => {
+    mockConnectivity.isOnline = true;
+    mockOfflineQueue = [
+      { id: 'q1', text: 'queued-1', createdAt: 1 },
+      { id: 'q2', text: 'queued-2', createdAt: 2 },
+      { id: 'q3', text: 'queued-3', createdAt: 3 }
+    ];
+    sendMessage.mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {
+        throw new Error('network');
+      });
+
+    const ui = App();
+    const flushButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Envoyer les messages en attente')[0];
+    await flushButton.props.onClick();
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls.map((call) => (call as unknown[])[0])).toEqual(['queued-1', 'queued-2']);
+    expect(saveOfflineQueue).toHaveBeenCalledWith([
+      { id: 'q2', text: 'queued-2', createdAt: 2 },
+      { id: 'q3', text: 'queued-3', createdAt: 3 }
+    ]);
   });
 });

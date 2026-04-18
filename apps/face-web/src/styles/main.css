@@ -667,4 +667,9 @@ label {
     animation: none !important;
     transition-duration: 0.01ms !important;
   }
+
+  .eyes.gaze-float,
+  .eyes {
+    transform: translateX(var(--eye-offset-x, 0px));
+  }
 }

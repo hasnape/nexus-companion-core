@@ -1,4 +1,3 @@
-import { promises as fs } from 'node:fs';
 import { createEmptyMemoryState, type MemoryState } from './models';
 
 export interface MemoryStore {
@@ -26,6 +25,7 @@ export class FileMemoryStore implements MemoryStore {
   constructor(private readonly path = './.nexus-memory.json') {}
   async load(): Promise<MemoryState> {
     try {
+      const { promises: fs } = await import('node:fs');
       const raw = await fs.readFile(this.path, 'utf8');
       return JSON.parse(raw) as MemoryState;
     } catch {
@@ -33,6 +33,7 @@ export class FileMemoryStore implements MemoryStore {
     }
   }
   async save(state: MemoryState): Promise<void> {
+    const { promises: fs } = await import('node:fs');
     await fs.writeFile(this.path, JSON.stringify(state, null, 2), 'utf8');
   }
 }

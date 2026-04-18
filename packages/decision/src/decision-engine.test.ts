@@ -5,7 +5,7 @@ import { createDefaultState } from './state';
 const personality = {
   displayName: 'Test', speakingStyle: 'calm', warmth: 0.7, curiosity: 0.6, proactivity: 0.8, humor: 0,
   attachmentStyle: 'balanced' as const, silenceTolerance: 0.6, greetingStyle: 'friendly' as const
-};
+} as const;
 const training = { proactivity: 0.7, silenceTolerance: 0.5, greetingFrequency: 0.5, emotionalIntensity: 0.6, chatterCooldownMs: 10000 };
 
 describe('decision engine', () => {

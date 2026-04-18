@@ -24,6 +24,9 @@ export class CompanionRuntime {
   private logs: string[] = [];
   private conversation: Array<{ from: 'user' | 'companion'; text: string }> = [];
   private lastUserMessageAt = Date.now();
+  private readonly greetingRegex = /\b(salut|bonjour|hello|coucou)\b/i;
+  private readonly preferenceRegex = /\b(j'aime|je préfère|je prefere)\b/i;
+  private readonly factRegex = /\b(je suis|j'habite|je travaille|mon prénom|mon prenom)\b/i;
 
   async init(): Promise<void> { await this.memory.init(); }
 
@@ -47,13 +50,45 @@ export class CompanionRuntime {
     this.lastUserMessageAt = now;
     this.state = transitionState(this.state, { at: now, interacted: true, mode: 'thinking', attentionTarget: 'user', mood: 'curious' });
     this.conversation.push({ from: 'user', text });
-    const response = `D'accord. Je retiens: "${text}". ${this.personality.curiosity > 0.6 ? 'Tu veux une suite courte ?' : 'Je reste disponible.'}`;
+    await this.rememberUserSignal(text, now);
+    const response = this.generateResponse(text);
     this.state = transitionState(this.state, { at: now, mode: 'speaking', mood: 'warm' });
     this.action = createAction('speak_calm', this.training.emotionalIntensity);
     this.conversation.push({ from: 'companion', text: response });
     if (this.voice.available) await this.voice.speak(response);
     this.log('response generated');
     return this.getSnapshot();
+  }
+
+  private generateResponse(text: string): string {
+    const knownPreference = this.memory.listByType('preference')[0]?.content;
+    if (this.greetingRegex.test(text)) {
+      return `Salut, je suis présent. ${knownPreference ? `Je me souviens que tu aimes: ${knownPreference}.` : 'On peut discuter quand tu veux.'}`;
+    }
+    if (this.preferenceRegex.test(text)) {
+      return `Bien noté, je garde cette préférence en mémoire pour nos prochaines discussions.`;
+    }
+    if (this.factRegex.test(text)) {
+      return 'Merci, je note cette information de profil pour mieux te comprendre.';
+    }
+    if (text.includes('?')) {
+      return this.personality.curiosity > 0.6
+        ? "Bonne question. Je te propose une réponse courte maintenant, puis on creuse si tu veux."
+        : 'Je traite ça calmement. Je peux aussi te répondre en version détaillée.';
+    }
+    return `D'accord. Je retiens: "${text}". ${this.personality.curiosity > 0.6 ? 'Tu veux une suite courte ?' : 'Je reste disponible.'}`;
+  }
+
+  private async rememberUserSignal(text: string, now: number): Promise<void> {
+    if (this.preferenceRegex.test(text)) {
+      await this.memory.upsert('behavioral', { id: `pref-${now}`, content: text, confidence: 0.82, type: 'preference', updatedAt: now });
+      this.log('memory write: preference from user message');
+      return;
+    }
+    if (this.factRegex.test(text)) {
+      await this.memory.upsert('longTerm', { id: `fact-${now}`, content: text, confidence: 0.7, type: 'fact', updatedAt: now });
+      this.log('memory write: fact from user message');
+    }
   }
 
   async addPreference(content: string): Promise<void> {

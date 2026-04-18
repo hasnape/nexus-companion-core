@@ -1,4 +1,5 @@
 import type { VoiceAdapter } from '@nexus/shared';
+export * from './listener';
 
 export class BrowserVoiceAdapter implements VoiceAdapter {
   available = typeof window !== 'undefined' && 'speechSynthesis' in window;

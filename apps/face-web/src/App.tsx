@@ -15,7 +15,10 @@ const defaultTraining: TrainingConfig = {
 };
 
 export default function App() {
-  const { snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory } = useCompanion();
+  const {
+    snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory,
+    voiceInputAvailable, isListening, startVoiceInput, stopVoiceInput, transcript, listenerError
+  } = useCompanion();
   const [message, setMessage] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
 
@@ -31,7 +34,15 @@ export default function App() {
           <div className="row">
             <input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type always available (fallback)" />
             <button onClick={async () => { if (!message) return; await sendMessage(message); setMessage(''); }}>Send</button>
+            <button onClick={() => (isListening ? stopVoiceInput() : startVoiceInput())} disabled={!voiceInputAvailable}>
+              {isListening ? 'Stop mic' : 'Start mic'}
+            </button>
           </div>
+          <p className="voice-status">
+            Voice input: {voiceInputAvailable ? (isListening ? 'listening…' : 'ready') : 'unavailable in this browser'}
+            {transcript ? ` | transcript: "${transcript}"` : ''}
+          </p>
+          {listenerError ? <p className="voice-error">Voice error: {listenerError}</p> : null}
         </div>
         <TrainingPanel config={training} onChange={(next) => { updateTraining(next); setTraining(next); }} />
         <CompanionControlPanel snapshot={snapshot} onTrigger={triggerAction} />

@@ -31,6 +31,21 @@ body {
 }
 
 .face-screen {
+  --state-accent: rgba(142, 176, 255, 0.7);
+  --state-border: rgba(128, 157, 255, 0.2);
+  --state-halo-opacity: 0.66;
+  --state-halo-blur: 34px;
+  --state-face-shadow:
+    inset 0 0 64px rgba(89, 133, 255, 0.45),
+    0 0 54px rgba(94, 121, 255, 0.2);
+  --state-mouth-width: 76px;
+  --state-mouth-height: 18px;
+  --state-mouth-radius: 999px;
+  --state-mouth-opacity: 0.88;
+  --state-mouth-scale-y: 1;
+  --state-grid-opacity: 0.46;
+  --state-brow-transform: translateY(0) scaleX(1);
+  --state-screen-tint: radial-gradient(circle at center, rgba(72, 105, 201, 0.08), transparent 68%);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -38,10 +53,13 @@ body {
   min-height: 100%;
   padding: 28px 18px 72px;
   border-radius: 24px;
-  border: 1px solid rgba(128, 157, 255, 0.2);
-  background: radial-gradient(circle at center, #121937 0%, #090d1f 72%);
+  border: 1px solid var(--state-border);
+  background:
+    var(--state-screen-tint),
+    radial-gradient(circle at center, #121937 0%, #090d1f 72%);
   overflow: hidden;
-  transition: border-color 220ms ease, box-shadow 220ms ease;
+  box-shadow: 0 0 0 1px rgba(131, 160, 255, 0.08) inset;
+  transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
 }
 
 .ambient-grid {
@@ -52,7 +70,8 @@ body {
     linear-gradient(90deg, rgba(155, 187, 255, 0.08) 1px, transparent 1px);
   background-size: 26px 26px;
   mask-image: radial-gradient(circle at center, black 25%, transparent 78%);
-  opacity: 0.5;
+  opacity: var(--state-grid-opacity);
+  transition: opacity 220ms ease;
 }
 
 .halo {
@@ -60,10 +79,10 @@ body {
   aspect-ratio: 1;
   border-radius: 50%;
   position: absolute;
-  filter: blur(34px);
-  opacity: 0.62;
+  filter: blur(var(--state-halo-blur));
+  opacity: var(--state-halo-opacity);
   animation: haloPulse 7s ease-in-out infinite;
-  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease;
+  transition: opacity 220ms ease, filter 220ms ease, transform 220ms ease, background 220ms ease;
 }
 
 @keyframes haloPulse {
@@ -87,9 +106,7 @@ body {
   display: grid;
   place-items: center;
   gap: 18px;
-  box-shadow:
-    inset 0 0 64px rgba(89, 133, 255, 0.45),
-    0 0 54px rgba(94, 121, 255, 0.2);
+  box-shadow: var(--state-face-shadow);
   animation: breathe 4.8s ease-in-out infinite;
   z-index: 2;
   transition: box-shadow 220ms ease, background 220ms ease;
@@ -108,7 +125,8 @@ body {
   border-top: 4px solid #95deff;
   border-radius: 100px;
   opacity: 0.9;
-  transition: transform 220ms ease;
+  transform: var(--state-brow-transform);
+  transition: transform 220ms ease, border-color 220ms ease, opacity 220ms ease;
 }
 
 .eyes {
@@ -159,12 +177,14 @@ body {
 }
 
 .mouth {
-  width: 76px;
-  height: 18px;
+  width: var(--state-mouth-width);
+  height: var(--state-mouth-height);
   margin-bottom: 20px;
-  border-radius: 999px;
+  border-radius: var(--state-mouth-radius);
   background: linear-gradient(180deg, #8ed8ff, #66a6ff);
   box-shadow: 0 0 12px rgba(115, 194, 255, 0.45);
+  opacity: var(--state-mouth-opacity);
+  transform: scaleY(var(--state-mouth-scale-y));
   transition: all 220ms ease;
 }
 
@@ -178,107 +198,33 @@ body {
 }
 
 .visual-waiting_for_wake_phrase .halo {
-  opacity: 0.78;
-  filter: blur(32px);
+  opacity: 0.76;
 }
 
+.state-listening .eye,
 .visual-listening_for_command .eye {
   background: radial-gradient(circle at 35% 35%, #f9fffd 10%, #dbfff4 50%, #84ffd4 100%);
   box-shadow: 0 0 24px rgba(145, 255, 228, 0.9);
 }
 
-.visual-listening_for_command .halo {
-  animation-duration: 3.2s;
-  opacity: 0.9;
-}
-
-.visual-listening_for_command .face {
-  box-shadow:
-    inset 0 0 72px rgba(110, 198, 255, 0.5),
-    0 0 62px rgba(97, 237, 192, 0.24);
-}
-
-.mode-thinking .brow {
-  transform: translateY(-3px) scaleX(0.92);
-}
-
-.visual-thinking .brow {
-  transform: translateY(-3px) scaleX(0.9);
-}
-
 .visual-thinking .ambient-grid {
-  opacity: 0.64;
   animation: thinkScan 2.2s ease-in-out infinite;
 }
 
-.visual-thinking .halo {
-  animation-duration: 5.5s;
-  opacity: 0.84;
-}
-
-.visual-thinking .face {
-  box-shadow:
-    inset 0 0 72px rgba(114, 147, 255, 0.5),
-    0 0 48px rgba(121, 144, 255, 0.26);
-}
-
 .visual-speaking .mouth {
-  height: 34px;
-  width: 58px;
-  border-radius: 24px;
   animation: mouthTalk 380ms ease-in-out infinite alternate;
 }
 
-.visual-speaking .halo {
-  opacity: 0.92;
-}
-
-.visual-speaking .face {
-  box-shadow:
-    inset 0 0 78px rgba(105, 186, 255, 0.56),
-    0 0 66px rgba(96, 185, 255, 0.24);
-}
-
 .visual-offline {
-  border-color: rgba(255, 182, 128, 0.8);
-  box-shadow: 0 0 14px rgba(255, 172, 74, 0.38);
-}
-
-.visual-offline .halo {
-  opacity: 0.45;
-  filter: blur(40px) saturate(0.6);
-}
-
-.visual-offline .face {
-  box-shadow:
-    inset 0 0 42px rgba(203, 158, 120, 0.36),
-    0 0 34px rgba(182, 137, 74, 0.2);
+  box-shadow: 0 0 14px rgba(255, 172, 74, 0.3);
 }
 
 .visual-error {
-  border-color: rgba(255, 130, 130, 0.84);
-  box-shadow: 0 0 14px rgba(255, 123, 123, 0.32);
-}
-
-.visual-error .brow {
-  transform: translateY(-4px) scaleX(0.88);
-}
-
-.visual-error .halo {
-  opacity: 0.82;
-}
-
-.visual-error .face {
-  box-shadow:
-    inset 0 0 70px rgba(204, 113, 126, 0.48),
-    0 0 50px rgba(217, 102, 124, 0.22);
+  box-shadow: 0 0 14px rgba(255, 123, 123, 0.24);
 }
 
 .mode-speaking .mouth,
 .mouth.is-speaking {
-  height: 34px;
-  width: 58px;
-  border-radius: 24px;
   animation: mouthTalk 380ms ease-in-out infinite alternate;
 }
 
@@ -338,6 +284,129 @@ body {
   border-color: rgba(94, 255, 210, 0.6);
   box-shadow: 0 0 14px rgba(91, 255, 204, 0.4);
   animation: haloPulse 2.8s ease-in-out infinite;
+}
+
+.state-idle {
+  --state-accent: rgba(142, 176, 255, 0.7);
+  --state-border: rgba(132, 162, 255, 0.26);
+  --state-halo-opacity: 0.62;
+  --state-face-shadow:
+    inset 0 0 62px rgba(89, 133, 255, 0.42),
+    0 0 50px rgba(94, 121, 255, 0.18);
+}
+
+.state-wake,
+.visual-waiting_for_wake_phrase {
+  --state-accent: rgba(134, 252, 219, 0.86);
+  --state-border: rgba(109, 235, 208, 0.46);
+  --state-halo-opacity: 0.78;
+  --state-halo-blur: 32px;
+  --state-grid-opacity: 0.55;
+  --state-face-shadow:
+    inset 0 0 72px rgba(92, 205, 235, 0.5),
+    0 0 56px rgba(84, 223, 190, 0.22);
+  --state-mouth-opacity: 0.96;
+  --state-screen-tint: radial-gradient(circle at center, rgba(84, 209, 187, 0.14), transparent 70%);
+}
+
+.state-listening,
+.visual-listening_for_command {
+  --state-accent: rgba(108, 255, 221, 0.94);
+  --state-border: rgba(92, 239, 205, 0.58);
+  --state-halo-opacity: 0.9;
+  --state-halo-blur: 30px;
+  --state-grid-opacity: 0.58;
+  --state-face-shadow:
+    inset 0 0 78px rgba(82, 214, 232, 0.52),
+    0 0 66px rgba(78, 245, 198, 0.26);
+  --state-mouth-width: 72px;
+  --state-mouth-height: 16px;
+  --state-mouth-opacity: 1;
+  --state-screen-tint: radial-gradient(circle at center, rgba(89, 241, 196, 0.16), transparent 68%);
+}
+
+.state-listening .halo,
+.visual-listening_for_command .halo {
+  animation-duration: 3.2s;
+}
+
+.mode-thinking,
+.state-thinking,
+.visual-thinking {
+  --state-accent: rgba(138, 159, 255, 0.88);
+  --state-border: rgba(131, 151, 255, 0.52);
+  --state-halo-opacity: 0.84;
+  --state-grid-opacity: 0.64;
+  --state-face-shadow:
+    inset 0 0 72px rgba(114, 147, 255, 0.5),
+    0 0 48px rgba(121, 144, 255, 0.26);
+  --state-brow-transform: translateY(-3px) scaleX(0.9);
+  --state-mouth-width: 66px;
+  --state-mouth-height: 14px;
+  --state-mouth-opacity: 0.82;
+  --state-screen-tint: radial-gradient(circle at center, rgba(120, 138, 255, 0.14), transparent 70%);
+}
+
+.state-thinking .halo,
+.visual-thinking .halo {
+  animation-duration: 5.5s;
+}
+
+.mode-speaking,
+.state-speaking,
+.visual-speaking {
+  --state-accent: rgba(107, 196, 255, 0.95);
+  --state-border: rgba(117, 194, 255, 0.58);
+  --state-halo-opacity: 0.92;
+  --state-grid-opacity: 0.52;
+  --state-face-shadow:
+    inset 0 0 78px rgba(105, 186, 255, 0.56),
+    0 0 66px rgba(96, 185, 255, 0.24);
+  --state-mouth-width: 58px;
+  --state-mouth-height: 34px;
+  --state-mouth-radius: 24px;
+  --state-mouth-opacity: 1;
+  --state-screen-tint: radial-gradient(circle at center, rgba(95, 177, 255, 0.15), transparent 70%);
+}
+
+.state-offline,
+.visual-offline {
+  --state-accent: rgba(255, 176, 109, 0.9);
+  --state-border: rgba(255, 182, 128, 0.76);
+  --state-halo-opacity: 0.44;
+  --state-halo-blur: 38px;
+  --state-grid-opacity: 0.34;
+  --state-face-shadow:
+    inset 0 0 42px rgba(203, 158, 120, 0.36),
+    0 0 34px rgba(182, 137, 74, 0.2);
+  --state-mouth-opacity: 0.72;
+  --state-screen-tint: radial-gradient(circle at center, rgba(255, 159, 85, 0.12), transparent 72%);
+}
+
+.state-offline .halo,
+.visual-offline .halo {
+  filter: blur(var(--state-halo-blur)) saturate(0.65);
+}
+
+.state-error,
+.visual-error {
+  --state-accent: rgba(255, 119, 148, 0.96);
+  --state-border: rgba(255, 130, 130, 0.82);
+  --state-halo-opacity: 0.8;
+  --state-grid-opacity: 0.48;
+  --state-face-shadow:
+    inset 0 0 70px rgba(204, 113, 126, 0.48),
+    0 0 50px rgba(217, 102, 124, 0.22);
+  --state-brow-transform: translateY(-4px) scaleX(0.88);
+  --state-mouth-width: 70px;
+  --state-mouth-height: 14px;
+  --state-mouth-opacity: 0.74;
+  --state-screen-tint: radial-gradient(circle at center, rgba(227, 102, 136, 0.15), transparent 72%);
+}
+
+.state-error .brow,
+.visual-error .brow {
+  border-top-color: rgba(255, 179, 194, 0.9);
 }
 
 .state-offline {
@@ -671,5 +740,15 @@ label {
   .eyes.gaze-float,
   .eyes {
     transform: translateX(var(--eye-offset-x, 0px));
+  }
+
+  .face-screen {
+    box-shadow:
+      0 0 0 1px var(--state-border) inset,
+      0 0 18px rgba(131, 160, 255, 0.2);
+  }
+
+  .halo {
+    opacity: var(--state-halo-opacity);
   }
 }

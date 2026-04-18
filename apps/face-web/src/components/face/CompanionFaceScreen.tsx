@@ -27,12 +27,20 @@ export function CompanionFaceScreen({
   const expression = state.mood === 'happy' || state.mood === 'curious' ? state.mood : state.mode;
   const fallbackSubtitle = `${companionVisualStateLabel} • ${action.name}`;
   const visualStateClass = `visual-${companionVisualState}`;
+  const semanticStateClass = `state-${(
+    companionVisualState === 'waiting_for_wake_phrase'
+      ? 'wake'
+      : companionVisualState === 'listening_for_command'
+        ? 'listening'
+        : companionVisualState
+  )}`;
+  const stateClasses = `${visualStateClass} ${semanticStateClass}`;
 
   return (
-    <section className={`face-screen ${visualStateClass}`} aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
+    <section className={`face-screen ${stateClasses}`} aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
       <div className="ambient-grid" />
-      <div className={`halo mood-${state.mood} ${visualStateClass}`} />
-      <div className={`face mode-${state.mode} ${visualStateClass} expression-${expression}`}>
+      <div className={`halo mood-${state.mood} ${stateClasses}`} />
+      <div className={`face mode-${state.mode} ${stateClasses} expression-${expression}`}>
         <div className="brow" />
         <div className="eyes gaze-float" style={{ '--eye-offset-x': eyeOffset } as CSSProperties}>
           <span className="eye eye-left" />

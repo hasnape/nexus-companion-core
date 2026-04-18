@@ -89,6 +89,8 @@ vi.mock('./hooks/useCompanion', () => ({
   useCompanion: () => mockCompanion
 }));
 
+const usePwaShell = vi.fn();
+
 const mockConnectivity = {
   isOnline: true,
   wasOffline: false
@@ -107,6 +109,10 @@ vi.mock('./services/offline/persistence', () => ({
 }));
 vi.mock('./services/offline/offlineResponses', () => ({
   getOfflineFallbackReply
+}));
+
+vi.mock('./hooks/usePwaShell', () => ({
+  usePwaShell
 }));
 
 vi.mock('./components/control-panel/CompanionControlPanel', () => ({
@@ -164,8 +170,11 @@ const textOf = (node: React.ReactNode): string => {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (!node) return '';
   if (Array.isArray(node)) return node.map(textOf).join('');
-  if (React.isValidElement(node)) return textOf(node.props.children);
-  return '';
+  if (!React.isValidElement(node)) return '';
+  if (typeof node.type === 'function') {
+    return textOf((node.type as (props: Record<string, unknown>) => React.ReactNode)(node.props));
+  }
+  return textOf(node.props.children);
 };
 
 describe('App voice and layout flows', () => {
@@ -182,9 +191,9 @@ describe('App voice and layout flows', () => {
     mockOfflineNote = '';
   });
 
-  it('keeps Start mic action wired to startVoiceInput', () => {
+  it('keeps Démarrer le micro action wired to startVoiceInput', () => {
     const ui = App();
-    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')[0];
+    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
 
     startButton.props.onClick();
 
@@ -192,10 +201,10 @@ describe('App voice and layout flows', () => {
     expect(stopVoiceInput).not.toHaveBeenCalled();
   });
 
-  it('keeps Stop mic action wired to stopVoiceInput', () => {
+  it('keeps Arrêter le micro action wired to stopVoiceInput', () => {
     mockCompanion.isListening = true;
     const ui = App();
-    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Stop mic')[0];
+    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter le micro')[0];
 
     stopButton.props.onClick();
 
@@ -205,17 +214,17 @@ describe('App voice and layout flows', () => {
 
   it('does not crash when voice actions are repeated across start/stop cycles', () => {
     let ui = App();
-    let micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')[0];
+    let micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
     micButton.props.onClick();
 
     mockCompanion.isListening = true;
     ui = App();
-    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Stop mic')[0];
+    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter le micro')[0];
     micButton.props.onClick();
 
     mockCompanion.isListening = false;
     ui = App();
-    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')[0];
+    micButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')[0];
     micButton.props.onClick();
 
     expect(startVoiceInput).toHaveBeenCalledTimes(2);
@@ -227,7 +236,8 @@ describe('App voice and layout flows', () => {
     const ui = App();
 
     const summaries = findElements(ui, (element) => element.type === 'summary').map((summary) => textOf(summary));
-    expect(summaries).toEqual(['Behavior tuning', 'Action controls', 'Memory console']);
+    expect(textOf(ui)).toContain('Outils avancés');
+    expect(summaries).toEqual(['Réglages du comportement', 'Contrôles développeur', 'Mémoire locale']);
 
     const detailsPanels = findElements(ui, (element) => element.type === 'details' && element.props.className === 'panel collapsible');
     expect(detailsPanels).toHaveLength(3);
@@ -251,6 +261,24 @@ describe('App voice and layout flows', () => {
     expect(findElements(ui, (element) => element.type === 'section' && element.props.className === 'sidebar')).toHaveLength(1);
   });
 
+
+  it('renders French-first labels in chat and status areas', () => {
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Conversation');
+    expect(textOf(ui)).toContain('Entrée vocale');
+    expect(textOf(ui)).toContain('État du compagnon');
+    expect(textOf(ui)).toContain('Action en cours');
+    expect(textOf(ui)).toContain('Souvenirs');
+    expect(textOf(ui)).toContain('Note locale hors ligne');
+  });
+
+  it('invokes the PWA shell hook during app composition', () => {
+    App();
+
+    expect(usePwaShell).toHaveBeenCalledTimes(1);
+  });
+
   it('surfaces offline status without breaking chat controls', () => {
     mockConnectivity.isOnline = false;
     mockConnectivity.wasOffline = true;
@@ -258,7 +286,7 @@ describe('App voice and layout flows', () => {
 
     expect(textOf(ui)).toContain('Mode hors ligne léger — je peux répondre simplement et garder vos messages localement.');
     expect(textOf(ui)).toContain('Connectivité : hors ligne');
-    expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Start mic')).toHaveLength(1);
+    expect(findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer le micro')).toHaveLength(1);
   });
 
   it('does not auto-send queued messages when back online', () => {

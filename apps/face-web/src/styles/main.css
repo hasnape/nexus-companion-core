@@ -310,6 +310,18 @@ body {
   box-shadow: inset 0 0 32px rgba(84, 118, 226, 0.12);
 }
 
+.advanced-panels {
+  display: grid;
+  gap: 10px;
+}
+
+.advanced-title {
+  margin: 2px 4px 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  color: #dce8ff;
+}
+
 .history {
   max-height: 130px;
   overflow: auto;
@@ -324,12 +336,14 @@ body {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
+  align-items: stretch;
 }
 
 input,
-button {
+button,
+textarea {
   min-width: 0;
   background: rgba(32, 43, 89, 0.84);
   color: #eaf1ff;

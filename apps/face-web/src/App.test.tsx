@@ -229,6 +229,14 @@ describe('App voice and layout flows', () => {
     expect(mockVoiceInput.stopListeningSession).not.toHaveBeenCalled();
   });
 
+  it('shows inactive voice status and privacy-safe helper copy by default', () => {
+    const ui = App();
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Micro désactivé');
+    expect(textOf(ui)).toContain('Le micro ne démarre jamais tout seul.');
+    expect(textOf(ui)).toContain('Activer le micro');
+  });
+
   it('keeps Arrêter l’écoute action wired to stopListeningSession', () => {
     mockVoiceInput.isSessionActive = true;
     const ui = App();
@@ -238,6 +246,17 @@ describe('App voice and layout flows', () => {
 
     expect(mockVoiceInput.stopListeningSession).toHaveBeenCalledTimes(1);
     expect(mockVoiceInput.startListeningSession).not.toHaveBeenCalled();
+  });
+
+  it('shows active wake/listening text and keeps stop control visible when listening is active', () => {
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.wakeState = 'waiting_for_wake_phrase';
+    const ui = App();
+    const stopButtons = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter l’écoute');
+
+    expect(textOf(ui)).toContain('Micro actif — dites “Nexus”');
+    expect(textOf(ui)).toContain('En attente du mot “Nexus”');
+    expect(stopButtons.length).toBeGreaterThan(0);
   });
 
   it('shows French-first voice labels and wake hints', () => {

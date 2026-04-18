@@ -28,6 +28,8 @@ body {
 .immersive-stage {
   position: relative;
   min-height: 55vh;
+  display: grid;
+  gap: 10px;
 }
 
 .face-screen {
@@ -431,6 +433,73 @@ body {
   text-wrap: balance;
 }
 
+.voice-status-panel {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 3;
+  max-width: min(90%, 340px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(130, 162, 255, 0.3);
+  background: rgba(8, 14, 33, 0.78);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  backdrop-filter: blur(6px);
+}
+
+.voice-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--state-accent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--state-accent) 62%, transparent);
+  animation: haloPulse 2.6s ease-in-out infinite;
+}
+
+.voice-status-content {
+  min-width: 0;
+}
+
+.voice-status-title,
+.voice-status-label {
+  margin: 0;
+}
+
+.voice-status-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.voice-status-label {
+  font-size: 0.85rem;
+  color: #eaf1ff;
+}
+
+.voice-session-controls {
+  display: grid;
+  gap: 8px;
+  align-self: end;
+}
+
+.voice-session-copy,
+.voice-session-hint {
+  margin: 0;
+}
+
+.voice-session-copy {
+  font-size: 0.82rem;
+  opacity: 0.9;
+}
+
+.voice-session-hint {
+  font-size: 0.82rem;
+  color: #d4e6ff;
+}
+
 .sidebar {
   display: grid;
   gap: 10px;
@@ -669,6 +738,10 @@ label {
   .state-pill {
     font-size: 0.72rem;
   }
+
+  .voice-status-panel {
+    max-width: calc(100% - 28px);
+  }
 }
 
 .face-mode-toggle {
@@ -735,6 +808,10 @@ label {
   .visual-thinking .ambient-grid {
     animation: none !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .voice-status-dot {
+    animation: none !important;
   }
 
   .eyes.gaze-float,

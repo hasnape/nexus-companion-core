@@ -190,6 +190,21 @@ export default function App() {
     companionMode: snapshot.state.mode
   });
   const visualStateLabel = companionVisualStateLabel(visualState, listenerError);
+  const voiceSessionStatusLabel = (() => {
+    if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
+    if (!isOnline || visualState === 'offline') return 'Mode hors ligne';
+    if (visualState === 'speaking') return 'Je réponds';
+    if (visualState === 'thinking') return 'Je réfléchis';
+    if (visualState === 'listening_for_command') {
+      return transcript?.trim() ? 'J’écoute votre demande' : 'Réveil détecté — je vous écoute';
+    }
+    if (visualState === 'waiting_for_wake_phrase' || isSessionActive) return 'Micro actif — dites “Nexus”';
+    return 'Micro désactivé';
+  })();
+
+  const voiceSessionHint = isSessionActive
+    ? (visualState === 'listening_for_command' ? 'Écoute active' : 'En attente du mot “Nexus”')
+    : 'Micro inactif';
 
   if (isFaceOnlyMode) {
     return (
@@ -198,6 +213,7 @@ export default function App() {
         action={snapshot.action}
         companionVisualState={visualState}
         companionVisualStateLabel={visualStateLabel}
+        voiceSessionStatusLabel={voiceSessionStatusLabel}
         subtitle={visibleConversation.at(-1)?.text}
         isListening={isSessionActive}
         transcript={transcript}
@@ -221,11 +237,27 @@ export default function App() {
           action={snapshot.action}
           companionVisualState={visualState}
           companionVisualStateLabel={visualStateLabel}
+          voiceSessionStatusLabel={voiceSessionStatusLabel}
           subtitle={visibleConversation.at(-1)?.text}
           isListening={isSessionActive}
           transcript={transcript}
           isOnline={isOnline}
         />
+        <div className="voice-session-controls panel" aria-label="Contrôle de session vocale">
+          <p className="voice-session-copy">
+            Le micro ne démarre jamais tout seul. Vous l’activez manuellement et pouvez l’arrêter à tout moment.
+          </p>
+          <p className="voice-session-hint" aria-live="polite">{voiceSessionHint}</p>
+          {isSessionActive ? (
+            <button className="mic-live" type="button" onClick={stopListeningSession}>
+              Arrêter l’écoute
+            </button>
+          ) : (
+            <button type="button" onClick={startListeningSession}>
+              Activer le micro
+            </button>
+          )}
+        </div>
       </section>
       <section className="sidebar">
         <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>

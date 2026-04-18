@@ -6,9 +6,10 @@ type CompanionFaceScreenProps = {
   subtitle?: string;
   isListening: boolean;
   transcript?: string;
+  isOnline?: boolean;
 };
 
-export function CompanionFaceScreen({ state, action, subtitle, isListening, transcript }: CompanionFaceScreenProps) {
+export function CompanionFaceScreen({ state, action, subtitle, isListening, transcript, isOnline = true }: CompanionFaceScreenProps) {
   const eyeOffset = state.attentionTarget === 'user' ? '0px' : state.attentionTarget === 'screen' ? '-7px' : '7px';
   const expression = state.mood === 'happy' || state.mood === 'curious' ? state.mood : state.mode;
   const statusLabel = isListening ? 'Listening' : state.mode === 'speaking' ? 'Speaking' : state.mode;
@@ -28,6 +29,7 @@ export function CompanionFaceScreen({ state, action, subtitle, isListening, tran
       <div className="presence-indicators">
         <span className={`state-pill mode-${state.mode}`}>{statusLabel}</span>
         <span className={`state-pill mood-${state.mood}`}>{state.mood}</span>
+        {!isOnline ? <span className="state-pill state-offline">Offline</span> : null}
         {isListening ? <span className="state-pill state-live">Mic live</span> : null}
         {transcript ? <span className="state-pill transcript-pill">“{transcript}”</span> : null}
       </div>

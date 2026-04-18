@@ -53,12 +53,14 @@ const renderFace = (overrides?: {
   isListening?: boolean;
   transcript?: string;
   subtitle?: string;
+  isOnline?: boolean;
 }) => CompanionFaceScreen({
   state: overrides?.state ?? baseState,
   action: overrides?.action ?? baseAction,
   subtitle: overrides?.subtitle,
   isListening: overrides?.isListening ?? false,
-  transcript: overrides?.transcript
+  transcript: overrides?.transcript,
+  isOnline: overrides?.isOnline
 });
 
 describe('CompanionFaceScreen', () => {
@@ -116,5 +118,10 @@ describe('CompanionFaceScreen', () => {
     expect(toText(ui)).not.toContain('Mic live');
     expect(toText(ui)).not.toContain('Listening');
     expect(mouth.props.className).not.toContain('is-speaking');
+  });
+
+  it('shows offline indicator when connectivity is unavailable', () => {
+    const ui = renderFace({ isOnline: false });
+    expect(toText(ui)).toContain('Offline');
   });
 });

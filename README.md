@@ -1,6 +1,6 @@
 # Nexus Companion Face (V1)
 
-Compagnon IA **local-first** avec visage animé 2D, voix (fallback silencieux), mémoire utile locale, moteur d'état interne et micro-décisions sociales.
+Compagnon IA **local-first** avec visage animé 2D, voix (fallback silencieux), écoute micro (Web Speech API), mémoire utile locale, moteur d'état interne et micro-décisions sociales.
 
 ## Objectif
 - Construire une présence crédible sur écran (pas un robot complet).
@@ -48,6 +48,8 @@ Règles dans `packages/decision/src/rules.ts` selon:
 
 ## Conversation
 - Input texte toujours disponible (fallback principal).
+- Input micro via Web Speech API quand le navigateur le permet.
+- Intention simple V1 (greeting / préférence / fait profil / question) + réponse contextuelle.
 - Provider local template/règles contextuelles.
 - Interface `ResponseProvider` prête pour brancher Ollama (optionnel futur).
 

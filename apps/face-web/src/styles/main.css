@@ -13,6 +13,8 @@ body { margin: 0; background: #0d1022; color: #e8ecff; }
 .mouth { width: 72px; height: 16px; border-radius: 24px; background: #9ad3ff; margin-bottom: 18px; transition: all .2s ease; }
 .action-speak_calm { height: 30px; }
 .action-thinking_soft { width: 40px; }
+.mode-listening .eye { box-shadow: 0 0 16px #a8ffed; background: #d9fff7; }
+.mode-speaking .mouth { box-shadow: 0 0 14px #7dc7ff; }
 .subtitle { position: absolute; bottom: 22px; color: #d2daf9; opacity: .9; }
 .sidebar { display: grid; gap: 10px; overflow: auto; }
 .panel { background: #141935; border: 1px solid #2e3d77; border-radius: 12px; padding: 12px; }
@@ -23,5 +25,7 @@ button { cursor: pointer; }
 .actions-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; max-height: 180px; overflow: auto; }
 .logs { max-height: 120px; overflow: auto; font-size: .8rem; opacity: .9; }
 .memory-item { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: .9rem; }
+.voice-status { font-size: .85rem; opacity: .9; margin: 8px 0 0; }
+.voice-error { font-size: .85rem; color: #ffadad; margin: 4px 0 0; }
 label { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; font-size: .9rem; margin-bottom: 4px; }
 @media (max-width: 1000px){ .layout { grid-template-columns: 1fr; } .face-screen { min-height: 45vh; } }

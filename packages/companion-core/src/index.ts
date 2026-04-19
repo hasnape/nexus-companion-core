@@ -8,3 +8,4 @@ export * from './provider';
 export * from './engine';
 
 export * from './cognitive';
+export * from './brain';

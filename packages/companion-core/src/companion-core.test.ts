@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCognitiveMemorySummary,
+  buildBrainStateSummary,
   buildCompanionContext,
   consolidateMemoryCandidates,
   createDefaultCreatorIdentity,
@@ -11,12 +12,19 @@ import {
   createLearningEvent,
   createMemoryItem,
   decideCompanionResponse,
+  deriveGoalState,
+  createCompanionEngine,
+  createDefaultBrainState,
+  decayWorkingMemory,
   evaluateLearningEvent,
   extractMemoryCandidates,
   LocalMemoryStore,
   LocalDeterministicAiProvider,
   scoreMemoryImportance,
   scoreMemoryStability,
+  updateBrainFromDecision,
+  updateWorkingMemory,
+  inferAttentionFocus,
   shouldAskMemoryConfirmation,
   validateEnvironmentSignal
 } from './index';
@@ -24,7 +32,7 @@ import {
 describe('companion-core V2-B cognitive foundation', () => {
   it('default creator identity contains Amine 0410', () => {
     const creator = createDefaultCreatorIdentity();
-    expect(creator.creatorId).toBe('Amine 0410');
+    expect(creator.creatorId).toBe('ingénieur Amine 0410');
     expect(creator.role).toBe('creator');
   });
 
@@ -335,5 +343,106 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(scoreMemoryStability({ content: 'Préférence stable', occurrences: 3 })).toBeGreaterThan(
       scoreMemoryStability({ content: 'Préférence stable', occurrences: 1 })
     );
+  });
+
+  it('brain defaults are deterministic and safe', () => {
+    const brain = createDefaultBrainState({ now: 100 });
+    expect(brain.creatorId).toBe('ingénieur Amine 0410');
+    expect(brain.currentMode).toBe('idle');
+    expect(brain.pendingConfirmations).toEqual([]);
+    expect(brain.workingMemory.shortTermFacts).toEqual([]);
+    expect(brain.personalityState.tone).toBe('clear');
+  });
+
+  it('working memory updates and decays without promoting transient emotion to identity', () => {
+    const initial = createDefaultBrainState({ now: 0 }).workingMemory;
+    const updated = updateWorkingMemory(initial, { userMessage: 'Je suis stressé', now: 100 });
+    expect(updated.shortTermFacts).toEqual([]);
+
+    const withQuestion = updateWorkingMemory(updated, { userMessage: 'Peux-tu planifier le projet Nexus ?', now: 200 });
+    expect(withQuestion.pendingActions.length).toBeGreaterThan(0);
+    const decayed = decayWorkingMemory(withQuestion, withQuestion.decay.lastDecayAt + withQuestion.decay.ttlMs + 1);
+    expect(decayed.pendingActions.length).toBeLessThanOrEqual(withQuestion.pendingActions.length);
+  });
+
+  it('attention focus infers project cautiously with bounded confidence', () => {
+    const project = inferAttentionFocus({ userMessage: 'Sur le projet Nexus Companion: peux-tu structurer la roadmap ?', now: 10 });
+    expect(project.topic).toContain('Nexus');
+    expect(project.confidence).toBeLessThanOrEqual(1);
+    expect(project.reason.length).toBeGreaterThan(5);
+
+    const casual = inferAttentionFocus({ userMessage: 'Salut', now: 10 });
+    expect(casual.confidence).toBeLessThan(0.6);
+  });
+
+  it('goal derivation maps safe and unsafe requests correctly', () => {
+    const profile = createDefaultCompanionProfile();
+    const destructiveDecision = decideCompanionResponse(buildCompanionContext({ profile, userMessage: 'supprime tout', memories: [] }));
+    const destructiveGoal = deriveGoalState({ userMessage: 'supprime tout', decision: destructiveDecision, now: 1 });
+    expect(['ask_confirmation', 'protect_user']).toContain(destructiveGoal.type);
+    expect(destructiveGoal.status).toBe('blocked');
+
+    const questionDecision = decideCompanionResponse(buildCompanionContext({ profile, userMessage: 'Peux-tu résumer ce module ?', memories: [] }));
+    const questionGoal = deriveGoalState({ userMessage: 'Peux-tu résumer ce module ?', decision: questionDecision, now: 2 });
+    expect(['answer_user', 'help_project']).toContain(questionGoal.type);
+  });
+
+  it('brain summary is compact, safe and deterministic', () => {
+    const state = updateBrainFromDecision(
+      createDefaultBrainState({ now: 10 }),
+      {
+        intent: 'answer',
+        memoryCandidates: [],
+        suggestedResponseStyle: 'clear',
+        requiredConfirmations: ['creator_approval_required'],
+        riskFlags: ['deployment_validation_bypass_request'],
+        nextVisualState: 'speaking'
+      },
+      {
+        userMessage: 'mets en prod sans validation',
+        assistantMessage: 'non',
+        profile: createDefaultCompanionProfile(),
+        now: 11
+      }
+    );
+    const summary = buildBrainStateSummary(state);
+    expect(summary.pendingConfirmations).toContain('creator_approval_required');
+    expect(summary.nonSensitiveSummary.join(' ')).not.toContain('camera_status');
+    expect(summary.mode).toBe(state.currentMode);
+  });
+
+  it('engine updates brain state when store supports it and still works with minimal store', async () => {
+    const fullStore = new LocalMemoryStore('brain-test');
+    const engine = createCompanionEngine({ memoryStore: fullStore });
+    const reply = await engine.processUserMessage({ userMessage: 'Peux-tu m’aider sur le projet Nexus ?' });
+    expect(reply.brainSummary?.focus).toBeDefined();
+    expect(await engine.getBrainState()).toBeDefined();
+
+    const minimalStore = {
+      listMemories: async () => [],
+      addMemory: async () => {},
+      updateMemory: async () => {},
+      deleteMemory: async () => {},
+      clearMemories: async () => {},
+      searchMemories: async () => []
+    };
+    const minimalEngine = createCompanionEngine({ memoryStore: minimalStore });
+    const minimalReply = await minimalEngine.processUserMessage({ userMessage: 'Bonjour' });
+    expect(minimalReply.text.length).toBeGreaterThan(0);
+  });
+
+  it('memory lifecycle keeps records archived/conflict instead of silent deletion', async () => {
+    const store = new LocalMemoryStore('memory-lifecycle-test');
+    await store.consolidateMemories([
+      createMemoryItem({ type: 'project_context', layer: 'project_context', content: 'Le projet fonctionne sans Internet.', source: 'user_message', confidence: 0.9, importance: 0.9, stability: 0.8 }),
+      createMemoryItem({ type: 'project_context', layer: 'project_context', content: 'Le projet fonctionne avec Internet.', source: 'user_message', confidence: 0.9, importance: 0.8, stability: 0.7 })
+    ]);
+    const memories = await store.listMemories();
+    expect(memories.some((memory) => memory.lifecycleState === 'conflict')).toBe(true);
+
+    const firstId = memories[0]?.id;
+    if (firstId) await store.deleteMemory(firstId);
+    const afterDelete = await store.listMemories();
+    expect(afterDelete.some((memory) => memory.id === firstId)).toBe(false);
   });
 });

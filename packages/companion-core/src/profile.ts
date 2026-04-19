@@ -7,7 +7,7 @@ import type {
 } from './types';
 
 export const createDefaultCreatorIdentity = (): CreatorIdentity => ({
-  creatorId: 'Amine 0410',
+  creatorId: 'ingénieur Amine 0410',
   role: 'creator',
   authorityLevel: 'highest_product_local_authority',
   description: 'Creator controls companion configuration, memory policy, safety doctrine, and code evolution approval.'

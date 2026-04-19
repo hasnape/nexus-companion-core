@@ -133,7 +133,20 @@ export interface CompanionMemoryItem {
   requiresConfirmation?: boolean;
   sensitive?: boolean;
   storagePreference?: CompanionStoragePreference;
+  lifecycleState?: MemoryLifecycleState;
+  archivedAt?: number;
+  outdatedAt?: number;
+  conflictWithIds?: string[];
 }
+
+export type MemoryLifecycleState =
+  | 'active'
+  | 'dormant'
+  | 'archived'
+  | 'outdated'
+  | 'conflict'
+  | 'pending_confirmation'
+  | 'creator_deleted';
 
 export interface EnvironmentSignal {
   id: string;
@@ -205,6 +218,7 @@ export interface CompanionContext {
   cognitiveMemorySummary?: CognitiveMemorySummary;
   environmentSignals?: EnvironmentSignal[];
   recentLearningEvents?: LearningEvent[];
+  brainSummary?: BrainStateSummary;
   recentConversationSummary?: string;
   appState?: {
     isOnline?: boolean;
@@ -230,6 +244,101 @@ export interface CompanionDecision {
 export interface CompanionReply {
   text: string;
   decision: CompanionDecision;
+  brainSummary?: BrainStateSummary;
+}
+
+export type CompanionMode =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'responding'
+  | 'learning'
+  | 'blocked'
+  | 'needs_confirmation';
+
+export interface WorkingMemoryState {
+  recentUserMessage?: string;
+  recentAssistantMessage?: string;
+  shortTermFacts: string[];
+  activeProjectContext?: string;
+  activePreferences: string[];
+  unresolvedQuestions: string[];
+  pendingActions: string[];
+  decay: {
+    lastDecayAt: number;
+    ttlMs: number;
+  };
+}
+
+export interface AttentionFocus {
+  topic: string;
+  project?: string;
+  confidence: number;
+  source: 'user_message' | 'memory' | 'decision' | 'safety';
+  reason: string;
+  expiresAt: number;
+}
+
+export interface PersonalityState {
+  tone: 'warm' | 'clear' | 'protective' | 'practical' | 'empathetic';
+  energy: 'low' | 'balanced' | 'high';
+  empathyLevel: number;
+  cautionLevel: number;
+  confidenceLevel: number;
+  languagePreference: CompanionLanguagePreference;
+  creatorRelationshipLabel: string;
+  lastUpdatedAt: number;
+}
+
+export interface GoalState {
+  id: string;
+  title: string;
+  type:
+  | 'answer_user'
+  | 'help_project'
+  | 'remember_safely'
+  | 'ask_confirmation'
+  | 'protect_user'
+  | 'refuse_unsafe_action'
+  | 'maintain_context';
+  status: 'active' | 'completed' | 'blocked' | 'expired';
+  priority: number;
+  evidence: string[];
+  requiresCreatorApproval: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CompanionBrainState {
+  version: string;
+  creatorId: string;
+  currentMode: CompanionMode;
+  activeIntent?: ResponseIntent;
+  attentionFocus: AttentionFocus;
+  workingMemory: WorkingMemoryState;
+  personalityState: PersonalityState;
+  activeGoals: GoalState[];
+  pendingConfirmations: string[];
+  lastLearningEvents: string[];
+  lastEnvironmentSignals: string[];
+  updatedAt: number;
+}
+
+export interface CognitiveLoopResult {
+  nextState: CompanionBrainState;
+  summary: BrainStateSummary;
+  changed: boolean;
+}
+
+export interface BrainStateSummary {
+  mode: CompanionMode;
+  focus: string;
+  activeProject?: string;
+  currentUserNeed: string;
+  safeMemoryHints: string[];
+  pendingConfirmations: string[];
+  safetyNotes: string[];
+  nonSensitiveSummary: string[];
 }
 
 export interface CompanionAiProvider {
@@ -252,4 +361,11 @@ export interface LearningStore {
 
 export interface CognitiveMemoryStore {
   consolidateMemories?(candidates: CompanionMemoryItem[]): Promise<CompanionMemoryItem[]>;
+}
+
+export interface BrainStateStore {
+  getBrainState?(): Promise<CompanionBrainState | undefined>;
+  setBrainState?(state: CompanionBrainState): Promise<void>;
+  updateBrainState?(updater: (state: CompanionBrainState | undefined) => CompanionBrainState): Promise<CompanionBrainState>;
+  clearBrainState?(): Promise<void>;
 }

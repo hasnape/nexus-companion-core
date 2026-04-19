@@ -16,6 +16,7 @@ export const buildCompanionContext = ({
   voiceState,
   environmentSignals,
   recentLearningEvents,
+  brainSummary,
   includeCognitiveSummary = true
 }: {
   profile: CompanionProfile;
@@ -26,6 +27,7 @@ export const buildCompanionContext = ({
   voiceState?: CompanionContext['voiceState'];
   environmentSignals?: EnvironmentSignal[];
   recentLearningEvents?: LearningEvent[];
+  brainSummary?: CompanionContext['brainSummary'];
   includeCognitiveSummary?: boolean;
 }): CompanionContext => ({
   profile,
@@ -34,6 +36,7 @@ export const buildCompanionContext = ({
   cognitiveMemorySummary: includeCognitiveSummary ? buildCognitiveMemorySummary(memories) : undefined,
   environmentSignals,
   recentLearningEvents,
+  brainSummary,
   recentConversationSummary,
   appState,
   voiceState,

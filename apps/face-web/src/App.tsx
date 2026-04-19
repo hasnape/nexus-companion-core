@@ -322,6 +322,7 @@ export default function App() {
         <CompanionMemoryPanel
           memories={displayMemories}
           memoryCandidates={memoryCandidates}
+          brainSummary={snapshot.brainSummary}
           onClearMemory={clearCompanionMemory}
         />
         <DeveloperPanels

@@ -3,6 +3,12 @@ import type { CompanionMemoryItem } from '@nexus/companion-core';
 type CompanionMemoryPanelProps = {
   memories: CompanionMemoryItem[];
   memoryCandidates: CompanionMemoryItem[];
+  brainSummary?: {
+    mode: string;
+    focus: string;
+    currentUserNeed: string;
+    pendingConfirmations: string[];
+  };
   onClearMemory: () => Promise<void>;
 };
 
@@ -19,7 +25,7 @@ const byGroup = (memories: CompanionMemoryItem[]) => {
   };
 };
 
-export function CompanionMemoryPanel({ memories, memoryCandidates, onClearMemory }: CompanionMemoryPanelProps) {
+export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary, onClearMemory }: CompanionMemoryPanelProps) {
   const grouped = byGroup(memories);
 
   return (
@@ -58,6 +64,14 @@ export function CompanionMemoryPanel({ memories, memoryCandidates, onClearMemory
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {brainSummary && (
+        <div className="brain-summary" aria-label="Résumé cognitif local">
+          <p><strong>État actuel</strong> : {brainSummary.mode}</p>
+          <p><strong>Focus</strong> : {brainSummary.focus}</p>
+          <p><strong>Objectif actif</strong> : {brainSummary.currentUserNeed}</p>
+          <p><strong>Confirmations en attente</strong> : {brainSummary.pendingConfirmations.length === 0 ? 'aucune' : brainSummary.pendingConfirmations.join(', ')}</p>
         </div>
       )}
       <button type="button" onClick={() => void onClearMemory()}>Effacer la mémoire locale</button>

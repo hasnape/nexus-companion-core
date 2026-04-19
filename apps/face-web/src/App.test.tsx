@@ -273,6 +273,30 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Arrêter l’écoute');
   });
 
+  it('keeps wake-phrase waiting label when session is active with stale transcript', () => {
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.wakeState = 'waiting_for_wake_phrase';
+    mockVoiceInput.transcript = 'commande précédente';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Micro actif — dites “Nexus”');
+    expect(textOf(ui)).not.toContain('J’écoute votre demande');
+  });
+
+  it('keeps Je réfléchis when thinking with stale transcript', () => {
+    mockCompanion.snapshot.state.mode = 'thinking';
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.transcript = 'commande précédente';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Je réfléchis');
+    expect(textOf(ui)).not.toContain('J’écoute votre demande');
+  });
+
   it('shows Je réponds when session is active and companion is speaking', () => {
     mockCompanion.snapshot.state.mode = 'speaking';
     mockVoiceInput.isSessionActive = true;
@@ -282,6 +306,18 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Je réponds');
     expect(textOf(ui)).toContain('Arrêter l’écoute');
+  });
+
+  it('keeps Je réponds when speaking with stale transcript', () => {
+    mockCompanion.snapshot.state.mode = 'speaking';
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.transcript = 'commande précédente';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Je réponds');
+    expect(textOf(ui)).not.toContain('J’écoute votre demande');
   });
 
   it('keeps Arrêter l’écoute action wired to stopListeningSession', () => {
@@ -304,6 +340,38 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Micro actif — dites “Nexus”');
     expect(textOf(ui)).toContain('En attente du mot “Nexus”');
     expect(stopButtons.length).toBeGreaterThan(0);
+  });
+
+  it('shows active command listening label when wake phrase is detected and transcript is non-empty', () => {
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.wakeState = 'awake_listening_for_command';
+    mockVoiceInput.transcript = 'allume la lumière';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('J’écoute votre demande');
+  });
+
+  it('shows wake detected label when wake phrase is detected and transcript is empty', () => {
+    mockVoiceInput.isSessionActive = true;
+    mockVoiceInput.wakeState = 'awake_listening_for_command';
+    mockVoiceInput.transcript = '   ';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Réveil détecté — je vous écoute');
+    expect(textOf(ui)).not.toContain('J’écoute votre demande');
+  });
+
+  it('keeps Micro désactivé when inactive even with stale transcript', () => {
+    mockVoiceInput.isSessionActive = false;
+    mockVoiceInput.transcript = 'commande précédente';
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Micro désactivé');
+    expect(textOf(ui)).not.toContain('J’écoute votre demande');
   });
 
   it('shows French-first voice labels and wake hints', () => {

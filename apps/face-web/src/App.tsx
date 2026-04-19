@@ -191,15 +191,16 @@ export default function App() {
   });
   const visualStateLabel = companionVisualStateLabel(visualState, listenerError);
   const voiceSessionStatusLabel = (() => {
-    if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
     if (!isOnline || visualState === 'offline') return 'Mode hors ligne';
-    if (visualState === 'speaking') return 'Je réponds';
-    if (visualState === 'thinking') return 'Je réfléchis';
-    if (visualState === 'listening_for_command') {
+    if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
+    if (!isSessionActive) return 'Micro désactivé';
+    if (wakeState === 'awake_listening_for_command' || visualState === 'listening_for_command') {
       return transcript?.trim() ? 'J’écoute votre demande' : 'Réveil détecté — je vous écoute';
     }
-    if (visualState === 'waiting_for_wake_phrase' || isSessionActive) return 'Micro actif — dites “Nexus”';
-    return 'Micro désactivé';
+    if (transcript?.trim()) return 'J’écoute votre demande';
+    if (visualState === 'thinking') return 'Je réfléchis';
+    if (visualState === 'speaking') return 'Je réponds';
+    return 'Micro actif — dites “Nexus”';
   })();
 
   const voiceSessionHint = isSessionActive

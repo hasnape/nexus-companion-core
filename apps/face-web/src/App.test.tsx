@@ -211,6 +211,7 @@ describe('App voice and layout flows', () => {
     mockVoiceInput.listenerError = null;
     mockVoiceInput.wakeState = 'inactive';
     mockVoiceInput.wakeStatus = 'Micro désactivé';
+    mockCompanion.snapshot.state.mode = 'idle';
     mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
     mockCompanion.snapshot.state.lastInteractionAt = 0;
     mockConnectivity.isOnline = true;
@@ -235,6 +236,52 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Micro désactivé');
     expect(textOf(ui)).toContain('Le micro ne démarre jamais tout seul.');
     expect(textOf(ui)).toContain('Activer le micro');
+  });
+
+  it('keeps voice panel on Micro désactivé when companion is thinking but session is inactive', () => {
+    mockCompanion.snapshot.state.mode = 'thinking';
+    mockVoiceInput.isSessionActive = false;
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('État du compagnon : Je réfléchis');
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Micro désactivé');
+    expect(textOf(ui)).not.toContain('Session vocaleJe réfléchis');
+  });
+
+  it('keeps voice panel on Micro désactivé when companion is speaking but session is inactive', () => {
+    mockCompanion.snapshot.state.mode = 'speaking';
+    mockVoiceInput.isSessionActive = false;
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('État du compagnon : Je réponds');
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Micro désactivé');
+    expect(textOf(ui)).not.toContain('Session vocaleJe réponds');
+  });
+
+  it('shows Je réfléchis when session is active and companion is thinking', () => {
+    mockCompanion.snapshot.state.mode = 'thinking';
+    mockVoiceInput.isSessionActive = true;
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Je réfléchis');
+    expect(textOf(ui)).toContain('Arrêter l’écoute');
+  });
+
+  it('shows Je réponds when session is active and companion is speaking', () => {
+    mockCompanion.snapshot.state.mode = 'speaking';
+    mockVoiceInput.isSessionActive = true;
+
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Session vocale');
+    expect(textOf(ui)).toContain('Je réponds');
+    expect(textOf(ui)).toContain('Arrêter l’écoute');
   });
 
   it('keeps Arrêter l’écoute action wired to stopListeningSession', () => {

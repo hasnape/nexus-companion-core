@@ -1,4 +1,4 @@
-import type { CompanionMemoryItem, MemoryCategory, MemorySource } from './types';
+import type { CompanionMemoryItem, CompanionStoragePreference, MemoryCategory, MemorySource } from './types';
 
 const SENSITIVE_PATTERNS = [
   /santé|maladie|diagnostic|médicament|therapy|health/i,
@@ -11,6 +11,8 @@ const SENSITIVE_PATTERNS = [
 
 const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler/i];
 const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif/i];
+const PRECISE_LOCATION_PATTERNS = [/adresse exacte|exact address|coordonn[ée]es gps|latitude|longitude|localisation exacte/i];
+const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le cloud|store everything.*cloud/i];
 
 export const isSensitiveMemoryContent = (content: string): boolean => SENSITIVE_PATTERNS.some((pattern) => pattern.test(content));
 
@@ -40,6 +42,13 @@ const inferMemoryType = (content: string): MemoryCategory => {
   return 'conversation_summary';
 };
 
+const inferStoragePreference = (content: string, sensitive: boolean): CompanionStoragePreference => {
+  if (sensitive && PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(content))) return 'cloud_restricted';
+  if (sensitive) return 'cloud_restricted';
+  if (CLOUD_EVERYTHING_PATTERNS.some((pattern) => pattern.test(content))) return 'cloud_allowed';
+  return 'local';
+};
+
 export const extractMemoryCandidates = (
   userMessage: string,
   source: MemorySource = 'user_message'
@@ -49,19 +58,23 @@ export const extractMemoryCandidates = (
 
   const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))
     || PROJECT_PATTERNS.some((pattern) => pattern.test(content))
-    || /je suis|j'habite|mon prénom|mon prenom/i.test(content);
+    || /je suis|j'habite|mon prénom|mon prenom|souviens-toi|remember my/i.test(content)
+    || PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(content));
 
   if (!looksMemorable) return [];
 
   const sensitive = isSensitiveMemoryContent(content);
+  const storagePreference = inferStoragePreference(content, sensitive);
+  const cloudRisk = CLOUD_EVERYTHING_PATTERNS.some((pattern) => pattern.test(content));
   return [createMemoryItem({
     type: inferMemoryType(content),
     content,
     source,
     confidence: sensitive ? 0.52 : 0.78,
     importance: sensitive ? 0.5 : 0.7,
-    tags: sensitive ? ['sensitive'] : ['candidate'],
-    requiresConfirmation: sensitive,
-    sensitive
+    tags: sensitive ? ['sensitive', 'candidate'] : cloudRisk ? ['candidate', 'cloud-risk'] : ['candidate'],
+    requiresConfirmation: sensitive || cloudRisk,
+    sensitive,
+    storagePreference
   })];
 };

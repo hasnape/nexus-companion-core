@@ -5,8 +5,11 @@ import type { CompanionAiProvider, CompanionContext, CompanionDecision } from '.
 const BLOCKING_CONFIRMATION_FLAGS = new Set([
   'explicit_authorization_required',
   'creator_approval_required',
+  'creator_deployment_approval_required',
   'environment_monitoring_consent_required',
   'explicit_environment_scope_and_consent_required',
+  'destructive_action_confirmation',
+  'sensor_activation_consent_required',
   'self_code_modification_approval_required',
   'creator_code_change_approval_required'
 ]);

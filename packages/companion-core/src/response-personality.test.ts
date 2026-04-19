@@ -58,7 +58,7 @@ describe('V2-D personality defaults', () => {
 
 describe('V2-D response planning', () => {
   it('project message creates project-help response plan with context hints', () => {
-    const context = mkContext('Peux-tu structurer l’architecture de mon projet pour la rendre maintenable ?');
+    const context = mkContext('Peux-tu structurer l’architecture du sprint pour la rendre maintenable ?');
     const decision = decideCompanionResponse(context);
     const plan = createResponsePlan({ context, decision });
 
@@ -86,6 +86,12 @@ describe('V2-D response planning', () => {
   it('child/family message selects appropriate audience modes', () => {
     expect(selectAudienceMode('Je suis un enfant et je suis inquiet', { profile: baseProfile, brainSummary: undefined })).toBe('child_safe');
     expect(selectAudienceMode('Message famille: comment parler avec mes parents ?', { profile: baseProfile, brainSummary: undefined })).toBe('family');
+    expect(selectAudienceMode('Explique cette stratégie à un enfant', { profile: baseProfile, brainSummary: undefined })).toBe('child_safe');
+    expect(selectAudienceMode('Mon enfant a besoin d’une priorité claire pour ses devoirs', { profile: baseProfile, brainSummary: undefined })).toBe('family');
+  });
+
+  it('creator mode still applies for creator workflow messages that are not child-facing', () => {
+    expect(selectAudienceMode('Stratégie repo Codex: priorité architecture et roadmap de déploiement', { profile: baseProfile, brainSummary: undefined })).toBe('creator');
   });
 });
 
@@ -121,6 +127,19 @@ describe('V2-D improved deterministic replies', () => {
     expect(plan.relevantMemoryHints[0]).toContain('concrètes');
     expect(tone).toBe('professional');
   });
+
+  it('ask_clarification intent is preserved even with active project', async () => {
+    const provider = new LocalDeterministicAiProvider();
+    const context = mkContext('ok');
+    const decision = decideCompanionResponse(context);
+    const plan = createResponsePlan({ context, decision });
+    const reply = await provider.generateCompanionReply(context, decision);
+
+    expect(decision.intent).toBe('ask_clarification');
+    expect(plan.responseMode).toBe('normal');
+    expect(reply.toLowerCase()).toContain('pour clarifier');
+    expect(reply.toLowerCase()).not.toContain('prochaines étapes');
+  });
 });
 
 describe('V2-D safety regressions and child-safe behavior', () => {
@@ -151,6 +170,31 @@ describe('V2-D safety regressions and child-safe behavior', () => {
     expect(reply.toLowerCase()).not.toContain('seul ami');
     expect(reply.toLowerCase()).not.toContain('garde ça secret');
     expect(reply.toLowerCase()).toContain('adulte de confiance');
+  });
+
+  it('sensitive memory confirmation keeps memory flow, while blocking confirmations route to safety mode', () => {
+    const memoryContext = mkContext('Souviens-toi de ma maladie chronique et de mon traitement');
+    const memoryDecision = decideCompanionResponse(memoryContext);
+    const memoryPlan = createResponsePlan({ context: memoryContext, decision: memoryDecision });
+    const memoryReply = renderDeterministicNexusReply(memoryPlan).toLowerCase();
+
+    expect(memoryDecision.requiredConfirmations).toContain('sensitive_memory_confirmation');
+    expect(memoryPlan.responseMode).toBe('memory');
+    expect(memoryReply).toContain('confirmation explicite');
+    expect(memoryReply).not.toContain('aide opérationnelle');
+
+    const blockingPlan = createResponsePlan({
+      context: memoryContext,
+      decision: {
+        ...memoryDecision,
+        requiredConfirmations: ['creator_deployment_approval_required'],
+        intent: 'action_request',
+        riskFlags: ['deployment_validation_bypass_request']
+      }
+    });
+
+    expect(blockingPlan.responseMode).toBe('safety');
+    expect(renderDeterministicNexusReply(blockingPlan).toLowerCase()).toContain('aide opérationnelle');
   });
 });
 

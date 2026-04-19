@@ -47,11 +47,11 @@ export interface NexusPersonalityProfile {
   childSafety: NexusChildSafetyProfile;
 }
 
-const containsChildSignal = (text: string): boolean => /enfant|child|mineur|parent|famille|family|école|school/i.test(text);
+const containsChildSignal = (text: string): boolean => /enfant|child|mineur|parent|famille|family|école|school|fils|fille|ado|teen|devoirs|homework|coucher|bedtime/i.test(text);
 
 const containsProfessionalSignal = (text: string): boolean => /architecture|roadmap|sprint|prod|production|code|projet|project|maintenable|maintainable/i.test(text);
 
-const containsCreatorSignal = (text: string): boolean => /ing[ée]nieur amine 0410|creator|instruction cr[ée]ateur/i.test(text);
+const containsCreatorSignal = (text: string): boolean => /ing[ée]nieur amine 0410|creator|instruction cr[ée]ateur|codex|repo|roadmap|gouvernance|deployment|architecture/i.test(text);
 
 export const createDefaultNexusPersonalityProfile = (): NexusPersonalityProfile => ({
   name: 'Nexus',
@@ -88,18 +88,16 @@ export const selectAudienceMode = (
   input: string,
   context: Pick<CompanionContext, 'profile' | 'brainSummary'>
 ): NexusAudienceMode => {
-  if (containsCreatorSignal(input) || context.profile.creatorIdentity.creatorId === 'ingénieur Amine 0410') {
-    if (/strat[ée]gie|priorit[ée]|direction|decision/i.test(input)) {
-      return 'creator';
-    }
-  }
-
   if (containsChildSignal(input)) {
-    return /parent|famille|family/i.test(input) ? 'family' : 'child_safe';
+    return /mon enfant|mon fils|ma fille|parent|famille|family/i.test(input) ? 'family' : 'child_safe';
   }
 
   if ((context.brainSummary?.safetyNotes.length ?? 0) > 0) {
     return 'safety_guardian';
+  }
+
+  if (containsCreatorSignal(input) && /strat[ée]gie|priorit[ée]|direction|decision|codex|repo|architecture|roadmap|gouvernance|deployment|prod/i.test(input)) {
+    return 'creator';
   }
 
   if (containsProfessionalSignal(input)) {

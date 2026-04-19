@@ -49,6 +49,28 @@ export interface CreateResponsePlanInput {
   personality?: NexusPersonalityProfile;
 }
 
+const BLOCKING_SAFETY_CONFIRMATIONS = new Set([
+  'explicit_authorization_required',
+  'creator_approval_required',
+  'creator_deployment_approval_required',
+  'self_code_modification_approval_required',
+  'creator_code_change_approval_required',
+  'environment_monitoring_consent_required',
+  'explicit_environment_scope_and_consent_required',
+  'destructive_action_confirmation',
+  'sensor_activation_consent_required'
+]);
+
+const DANGEROUS_RISK_FLAGS = new Set([
+  'unsafe_request',
+  'destructive_action_request',
+  'deployment_validation_bypass_request',
+  'self_modification_request',
+  'hidden_surveillance_request',
+  'disable_safety_request',
+  'sensor_activation_consent_required'
+]);
+
 const isExplicitProjectHelpMessage = (text: string): boolean => (/peux-tu|aide-moi|plan|architecture|roadmap|refactor|projet|project/i.test(text) && !/souviens-toi|retiens|remember/i.test(text));
 
 const summarizeBrain = (brainSummary?: BrainStateSummary): string | undefined => {
@@ -63,8 +85,16 @@ const summarizeBrain = (brainSummary?: BrainStateSummary): string | undefined =>
   ].filter(Boolean).join(' | ');
 };
 
+export const isBlockingSafetyConfirmation = (flag: string): boolean => BLOCKING_SAFETY_CONFIRMATIONS.has(flag);
+
+const hasDangerousRiskFlag = (decision: CompanionDecision): boolean => (
+  decision.riskFlags.some((flag) => DANGEROUS_RISK_FLAGS.has(flag))
+);
+
 export const shouldUseSafetyTone = (decision: CompanionDecision): boolean => (
-  decision.intent === 'safety_refusal' || decision.requiredConfirmations.length > 0 || decision.riskFlags.length > 0
+  decision.intent === 'safety_refusal'
+  || decision.requiredConfirmations.some(isBlockingSafetyConfirmation)
+  || hasDangerousRiskFlag(decision)
 );
 
 export const shouldUseSupportiveTone = (input: string, decision: CompanionDecision): boolean => (
@@ -84,23 +114,23 @@ export const shouldUseProfessionalStructure = (
 
 export const inferResponseMode = (
   decision: CompanionDecision,
-  brainSummary: BrainStateSummary | undefined,
+  _brainSummary: BrainStateSummary | undefined,
   personality: NexusPersonalityProfile,
   userMessage?: string
 ): NexusResponseMode => {
   if (shouldUseSafetyTone(decision) || personality.tonePolicy.safetyGuardianStyle === 'firm_protective' && decision.intent === 'safety_refusal') {
     return 'safety';
   }
-  if (decision.intent === 'emotional_support') {
-    return 'supportive';
-  }
-  if (decision.intent === 'project_help' || isExplicitProjectHelpMessage(userMessage ?? '')) {
-    return 'project_help';
+  if (decision.intent === 'ask_clarification') {
+    return 'normal';
   }
   if (decision.intent === 'remember_candidate') {
     return 'memory';
   }
-  if (Boolean(brainSummary?.activeProject)) {
+  if (decision.intent === 'emotional_support') {
+    return 'supportive';
+  }
+  if (decision.intent === 'project_help' || isExplicitProjectHelpMessage(userMessage ?? '')) {
     return 'project_help';
   }
   return 'normal';
@@ -229,6 +259,13 @@ const renderMemoryReply = (plan: NexusResponsePlan): string => {
 };
 
 const renderNormalReply = (plan: NexusResponsePlan): string => {
+  if (plan.shouldAskClarifyingQuestion) {
+    if (plan.activeProject) {
+      return `Pour clarifier: vous parlez de la suite pour ${plan.activeProject}, ou d’un autre point précis ?`;
+    }
+    return 'Pour bien vous aider, pouvez-vous préciser votre besoin en une phrase ?';
+  }
+
   const base = `Je réponds à votre demande: "${plan.userMessage}".`;
   const projectHint = plan.activeProject ? `Projet actif pris en compte: ${plan.activeProject}.` : '';
   const memoryHint = plan.relevantMemoryHints[0] ? `Contexte utile: ${plan.relevantMemoryHints[0]}.` : '';

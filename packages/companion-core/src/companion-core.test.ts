@@ -260,6 +260,53 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(evaluated.candidate?.content).not.toContain('timestamp');
   });
 
+  it('does not classify non-app-state structured signals as technical by metadata shape only', () => {
+    const evaluated = evaluateLearningEvent(createLearningEvent({
+      type: 'environment_signal',
+      input: {
+        id: 'voice-signal-1',
+        timestamp: 123,
+        type: 'voice_state',
+        value: 'listening',
+        source: 'voice_state',
+        content: 'Voice channel active and listening'
+      } as unknown as never,
+      source: 'environment_signal',
+      suggestedMemoryLayer: 'environment_context',
+      confidence: 0.9,
+      importance: 0.9,
+      requiresConfirmation: false,
+      riskFlags: []
+    }));
+
+    expect(evaluated.reason).not.toBe('technical_signal_excluded');
+    expect(evaluated.accepted).toBe(true);
+    expect(evaluated.candidate?.content).toBe('Voice channel active and listening');
+    expect(evaluated.candidate?.content).not.toContain('voice-signal-1');
+    expect(evaluated.candidate?.content).not.toContain('timestamp');
+  });
+
+  it('safe non-app-state low-value structured payloads are rejected by normal gating, not technical exclusion', () => {
+    const evaluated = evaluateLearningEvent(createLearningEvent({
+      type: 'environment_signal',
+      input: {
+        id: 'safe-signal-2',
+        timestamp: 123,
+        turnId: 'turn-7',
+        sessionId: 'session-9'
+      } as unknown as never,
+      source: 'environment_signal',
+      suggestedMemoryLayer: 'environment_context',
+      confidence: 0.2,
+      importance: 0.2,
+      requiresConfirmation: false,
+      riskFlags: []
+    }));
+
+    expect(evaluated.accepted).toBe(false);
+    expect(evaluated.reason).toBe('low_value_or_ephemeral');
+  });
+
   it('camera/micro/location signals require consent', () => {
     const camera = validateEnvironmentSignal({
       id: 'sig2',
@@ -560,6 +607,12 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(persisted[0]?.lifecycleState).toBe('archived');
     expect(persisted[0]?.tags).toContain('internal_technical_signal');
     expect(isTechnicalMemoryContent(rawMemory.content)).toBe(true);
+  });
+
+  it('does not classify prose or config snippets that mention app_state as technical memory content', () => {
+    expect(isTechnicalMemoryContent('Souviens-toi que mon exemple JSON contient "source":"app_state".')).toBe(false);
+    expect(isTechnicalMemoryContent('Voici une config: {"source":"app_state","enabled":true}')).toBe(false);
+    expect(isTechnicalMemoryContent('```json\n{"source":"app_state","enabled":true}\n```')).toBe(false);
   });
 
   it('clearMemories wipes persisted brain state and short-term recent text', async () => {

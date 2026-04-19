@@ -43,7 +43,9 @@ const VOLATILE_SIGNAL_FIELDS = new Set([
   'capturedAt',
   'timestamp',
   'turnId',
-  'sessionId'
+  'sessionId',
+  'createdAt',
+  'updatedAt'
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -72,24 +74,41 @@ const sanitizeVolatileMetadata = (value: unknown): unknown => {
   return clean;
 };
 
+const SEMANTIC_TEXT_FIELDS = ['label', 'title', 'content', 'text', 'message', 'summary', 'description'] as const;
+
+const pickSemanticText = (value: Record<string, unknown>): string | undefined => {
+  for (const field of SEMANTIC_TEXT_FIELDS) {
+    const candidate = value[field];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return undefined;
+};
+
+const isRuntimeTelemetryPayload = (value: Record<string, unknown>): boolean => (
+  Object.keys(value).some((key) => VOLATILE_SIGNAL_FIELDS.has(key))
+  || 'storagePreference' in value
+  || 'consentRequired' in value
+  || 'sensitivity' in value
+);
+
 const isVolatileTechnicalSignal = (value: unknown): boolean => {
   if (!isRecord(value)) return false;
   const source = typeof value.source === 'string' ? value.source : '';
   const type = typeof value.type === 'string' ? value.type : '';
   if (source === 'app_state') return true;
   if (VOLATILE_SIGNAL_TYPES.has(type as EnvironmentSignal['type'])) return true;
-  if (Object.keys(value).some((key) => VOLATILE_SIGNAL_FIELDS.has(key)) && ('value' in value || 'source' in value || 'type' in value)) return true;
   return false;
 };
 
 export const isTechnicalMemoryContent = (content: string): boolean => {
   const normalized = content.trim();
   if (!normalized) return false;
-  if (/"source"\s*:\s*"app_state"/i.test(normalized)) return true;
-  if (/"capturedAt"|"storagePreference"|"consentRequired"/i.test(normalized) && /"type"\s*:\s*"app_/i.test(normalized)) return true;
   if (!normalized.startsWith('{') || !normalized.endsWith('}')) return false;
   try {
-    return isVolatileTechnicalSignal(JSON.parse(normalized));
+    const parsed = JSON.parse(normalized);
+    if (!isRecord(parsed)) return false;
+    if (!isVolatileTechnicalSignal(parsed)) return false;
+    return isRuntimeTelemetryPayload(parsed);
   } catch {
     return false;
   }
@@ -100,7 +119,11 @@ const normalizeLearningInput = (event: LearningEvent): { text: string; skipDurab
   if (isVolatileTechnicalSignal(event.input)) return { text: '', skipDurableMemory: true };
 
   const sanitized = sanitizeVolatileMetadata(event.input);
-  if (isRecord(sanitized) && Object.keys(sanitized).length === 0) return { text: '', skipDurableMemory: true };
+  if (isRecord(sanitized)) {
+    const semantic = pickSemanticText(sanitized);
+    if (semantic) return { text: semantic, skipDurableMemory: false };
+    if (Object.keys(sanitized).length === 0) return { text: '', skipDurableMemory: false };
+  }
   return { text: stableStringify(sanitized).slice(0, 320), skipDurableMemory: false };
 };
 
@@ -198,9 +221,10 @@ export const evaluateLearningEvent = (event: LearningEvent): {
   candidate?: CompanionMemoryItem;
 } => {
   const normalized = normalizeLearningInput(event);
-  if (normalized.skipDurableMemory || !normalized.text.trim()) {
+  if (normalized.skipDurableMemory) {
     return { accepted: false, reason: 'technical_signal_excluded' };
   }
+  if (!normalized.text.trim()) return { accepted: false, reason: 'low_value_or_ephemeral' };
   const text = normalized.text;
   const sensitivity = sensitivityFromText(text);
   const importance = clamp01(Math.max(event.importance, scoreMemoryImportance({ content: text, source: event.source as MemorySource, eventType: event.type })));

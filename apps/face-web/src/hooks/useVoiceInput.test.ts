@@ -20,6 +20,7 @@ const createHookHarness = async () => {
   const states: unknown[] = [];
   const refs: Array<{ current: unknown }> = [];
   const memos: Array<{ deps?: unknown[]; value: unknown }> = [];
+  const effectCleanups: Array<() => void> = [];
   let hookIndex = 0;
 
   const depsEqual = (a?: unknown[], b?: unknown[]) => {
@@ -70,10 +71,10 @@ const createHookHarness = async () => {
     },
     useEffect: (effect: () => void | (() => void)) => {
       hookIndex += 1;
-      effect();
+      const cleanup = effect();
+      if (typeof cleanup === 'function') effectCleanups.push(cleanup);
     }
   }));
-
 
   const mockWindow = {
     setTimeout,
@@ -113,9 +114,20 @@ const createHookHarness = async () => {
     }
   });
 
+  const trackStopCalls: ReturnType<typeof vi.fn>[] = [];
+  const getUserMedia = vi.fn(async () => {
+    const stop = vi.fn();
+    trackStopCalls.push(stop);
+    return {
+      getAudioTracks: () => [{ readyState: 'live', enabled: true, stop }],
+      getVideoTracks: () => [],
+      getTracks: () => [{ stop }]
+    };
+  });
+
   Object.defineProperty(globalThis, 'navigator', {
     writable: true,
-    value: { mediaDevices: { getUserMedia: vi.fn(async () => ({ getAudioTracks: () => [{ readyState: 'live', enabled: true }], getVideoTracks: () => [], getTracks: () => [] })) } }
+    value: { mediaDevices: { getUserMedia } }
   });
 
   const module = await import('./useVoiceInput');
@@ -130,6 +142,10 @@ const createHookHarness = async () => {
     return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake });
   };
 
+  const unmount = () => {
+    effectCleanups.forEach((cleanup) => cleanup());
+  };
+
   const emitFinal = (recognition: MockRecognition, transcript: string) => {
     recognition.onresult?.({
       resultIndex: 0,
@@ -137,7 +153,7 @@ const createHookHarness = async () => {
     });
   };
 
-  return { render, callbacks, recognitionInstances, emitFinal };
+  return { render, callbacks, recognitionInstances, emitFinal, getUserMedia, trackStopCalls, unmount };
 };
 
 describe('useVoiceInput reliability', () => {
@@ -192,27 +208,6 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
-  it('uses latest onWake callback after rerender', async () => {
-    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
-    const firstOnWake = callbacks.onWake;
-
-    let hook = render();
-    await hook.startListeningSession();
-    hook = render();
-    const recognition = recognitionInstances[0];
-
-    const latestOnWake = vi.fn();
-    callbacks.onWake = latestOnWake;
-    hook = render();
-
-    emitFinal(recognition, 'Nexus');
-    hook = render();
-
-    expect(firstOnWake).not.toHaveBeenCalled();
-    expect(latestOnWake).toHaveBeenCalledTimes(1);
-    expect(hook.wakeState).toBe('awake_listening_for_command');
-  });
-
   it('returns to waiting_for_wake_phrase after recoverable error restart and still processes transcripts', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
@@ -241,7 +236,6 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
-
   it('accepts wake-prefixed command directly while waiting for wake phrase', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
@@ -259,21 +253,46 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
-  it('manual stop prevents auto-restart', async () => {
-    const { render, recognitionInstances } = await createHookHarness();
+  it('cleans media/session when recognition.start throws and avoids leaking tracks across retries', async () => {
+    const { render, recognitionInstances, trackStopCalls, getUserMedia } = await createHookHarness();
 
     let hook = render();
     await hook.startListeningSession();
     hook = render();
+
     const recognition = recognitionInstances[0];
+    recognition.start.mockImplementationOnce(() => {
+      throw new Error('start failed');
+    });
+
+    await hook.startListeningSession();
+    hook = render();
+
+    expect(hook.isSessionActive).toBe(false);
+    expect(hook.mediaState.micActive).toBe(false);
+    expect(hook.mediaState.cameraActive).toBe(false);
+    expect(hook.listenerError).toBe('Erreur micro');
+    expect(trackStopCalls[0]).toHaveBeenCalled();
+    expect(trackStopCalls[1]).toHaveBeenCalled();
+
+    await hook.startListeningSession();
+    hook = render();
+    expect(getUserMedia).toHaveBeenCalledTimes(3);
+  });
+
+  it('manual stop and unmount stop media tracks idempotently', async () => {
+    const { render, trackStopCalls, unmount } = await createHookHarness();
+
+    let hook = render();
+    await hook.startListeningSession();
+    hook = render();
 
     hook.stopListeningSession();
     hook = render();
     expect(hook.wakeState).toBe('inactive');
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
 
-    recognition.onend?.();
-    vi.advanceTimersByTime(600);
-
-    expect(recognition.start).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
   });
 });

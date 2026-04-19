@@ -1,9 +1,9 @@
-const WAKE_PHRASES = [
-  'nexus',
-  'hey nexus',
-  'ok nexus',
-  'nexus reveille toi',
-  'reveille toi nexus'
+const WAKE_PREFIX_PATTERNS = [
+  /^(?:hey\b[\s,;:!?.-]*nexus\b)/i,
+  /^(?:ok\b[\s,;:!?.-]*nexus\b)/i,
+  /^(?:nexus\b[\s,;:!?.-]*r[ée]veille(?:[\s'’-]*toi)\b)/i,
+  /^(?:r[ée]veille(?:[\s'’-]*toi)\b[\s,;:!?.-]*nexus\b)/i,
+  /^(?:nexus\b)/i
 ] as const;
 
 const MEMORY_PREFIXES = [
@@ -24,28 +24,43 @@ export const normalizeWakePhrase = (input: string): string => input
   .replace(/\s+/g, ' ')
   .trim();
 
-export const isWakeOnlyInput = (input: string): boolean => {
-  const normalized = normalizeWakePhrase(input);
-  return WAKE_PHRASES.some((phrase) => normalized === phrase);
+export const matchWakePrefix = (input: string): {
+  matched: boolean;
+  wakeOnly: boolean;
+  command: string;
+  matchedPrefix: string;
+} => {
+  const raw = input.trimStart();
+  if (!raw) return { matched: false, wakeOnly: false, command: '', matchedPrefix: '' };
+
+  for (const pattern of WAKE_PREFIX_PATTERNS) {
+    const match = raw.match(pattern);
+    if (!match || typeof match.index !== 'number' || match.index !== 0) continue;
+
+    const matchedPrefix = match[0];
+    const rest = raw.slice(matchedPrefix.length).replace(/^[\s,;:!?.-]+/, '');
+    return {
+      matched: true,
+      wakeOnly: rest.length === 0,
+      command: rest,
+      matchedPrefix
+    };
+  }
+
+  return {
+    matched: false,
+    wakeOnly: false,
+    command: raw,
+    matchedPrefix: ''
+  };
 };
 
+export const isWakeOnlyInput = (input: string): boolean => matchWakePrefix(input).wakeOnly;
+
 export const stripWakePrefix = (input: string): string => {
-  const raw = input.trim();
-  if (!raw) return '';
-  const normalized = normalizeWakePhrase(raw);
-
-  const wakePrefix = WAKE_PHRASES
-    .slice()
-    .sort((a, b) => b.length - a.length)
-    .find((phrase) => normalized === phrase || normalized.startsWith(`${phrase} `));
-
-  if (!wakePrefix) return raw;
-  if (normalized === wakePrefix) return '';
-
-  const rawWithoutLeadingPunctuation = raw.replace(/^[\s,:;.!?-]+/, '');
-  const parts = rawWithoutLeadingPunctuation.split(/\s+/);
-  const wakeWords = wakePrefix.split(' ').length;
-  return parts.slice(wakeWords).join(' ').replace(/^[,;:.!?\-\s]+/, '').trim();
+  const match = matchWakePrefix(input);
+  if (!match.matched) return input.trim();
+  return match.command;
 };
 
 const normalizeMemoryCommand = (input: string): string => normalizeWakePhrase(stripWakePrefix(input));

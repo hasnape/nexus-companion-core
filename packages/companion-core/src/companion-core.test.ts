@@ -341,6 +341,9 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(isWakeOnlyInput('Hey Nexus')).toBe(true);
     expect(isWakeOnlyInput('Nexus réveille-toi')).toBe(true);
     expect(stripWakePrefix('Nexus quelle est la suite ?')).toBe('quelle est la suite ?');
+    expect(stripWakePrefix('réveille-toi nexus lance la suite')).toBe('lance la suite');
+    expect(stripWakePrefix('Hey Nexus: lance la suite')).toBe('lance la suite');
+    expect(stripWakePrefix('Peux-tu aider Nexus Companion ?')).toBe('Peux-tu aider Nexus Companion ?');
   });
 
   it('does not create memories for incomplete memory commands', () => {

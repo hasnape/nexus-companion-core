@@ -68,7 +68,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     window.speechSynthesis.speak(utterance);
   }, []);
 
-
   useEffect(() => {
     wakeStateRef.current = wakeState;
   }, [wakeState]);
@@ -101,11 +100,23 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     }
   };
 
-  const stopMediaStream = useCallback(() => {
+  const stopAndClearMediaStream = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
     setMediaState({ micActive: false, cameraActive: false });
   }, []);
+
+  const cleanupMediaSession = useCallback((options?: { setWakeInactive?: boolean }) => {
+    sessionEnabledRef.current = false;
+    setSessionActive(false);
+    restartCountRef.current = 0;
+    clearRestartTimer();
+    recognitionRef.current?.stop();
+    stopAndClearMediaStream();
+    if (options?.setWakeInactive ?? true) {
+      setWakeListeningState('inactive');
+    }
+  }, [setWakeListeningState, stopAndClearMediaStream]);
 
   const scheduleRestart = useCallback(() => {
     clearRestartTimer();
@@ -113,9 +124,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (restartCountRef.current >= 5) {
       setWakeListeningState('error');
       setListenerError('Erreur micro');
-      sessionEnabledRef.current = false;
-      setSessionActive(false);
-      stopMediaStream();
+      cleanupMediaSession({ setWakeInactive: false });
       return;
     }
     restartCountRef.current += 1;
@@ -128,19 +137,14 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       } catch {
         setWakeListeningState('error');
         setListenerError('Erreur micro');
+        cleanupMediaSession({ setWakeInactive: false });
       }
     }, 550);
-  }, [setWakeListeningState, stopMediaStream]);
+  }, [cleanupMediaSession, setWakeListeningState]);
 
   const stopListeningSession = useCallback(() => {
-    sessionEnabledRef.current = false;
-    setSessionActive(false);
-    setWakeListeningState('inactive');
-    restartCountRef.current = 0;
-    clearRestartTimer();
-    recognitionRef.current?.stop();
-    stopMediaStream();
-  }, [setWakeListeningState, stopMediaStream]);
+    cleanupMediaSession();
+  }, [cleanupMediaSession]);
 
   const handleFinalTranscript = useCallback(async (nextTranscript: string) => {
     if (!nextTranscript || !sessionEnabledRef.current) return;
@@ -187,7 +191,8 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setListenerError(null);
     setTranscript('');
     fatalErrorRef.current = false;
-    restartCountRef.current = 0;
+
+    cleanupMediaSession();
 
     if (!speechRecognitionCtor) {
       setWakeListeningState('error');
@@ -204,6 +209,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           cameraActive: stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled)
         });
       } catch {
+        cleanupMediaSession({ setWakeInactive: false });
         setWakeListeningState('error');
         setListenerError('Autorisation micro/caméra refusée.');
         return;
@@ -229,11 +235,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.onerror = (event) => {
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           fatalErrorRef.current = true;
-          sessionEnabledRef.current = false;
-          setSessionActive(false);
+          cleanupMediaSession({ setWakeInactive: false });
           setWakeListeningState('error');
           setListenerError('Autorisation micro refusée.');
-          stopMediaStream();
           return;
         }
         setWakeListeningState('error');
@@ -253,10 +257,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     try {
       recognitionRef.current.start();
     } catch {
+      cleanupMediaSession({ setWakeInactive: false });
       setWakeListeningState('error');
       setListenerError('Erreur micro');
     }
-  }, [handleFinalTranscript, requestCamera, scheduleRestart, setWakeListeningState, speechRecognitionCtor, stopMediaStream]);
+  }, [cleanupMediaSession, handleFinalTranscript, requestCamera, scheduleRestart, setWakeListeningState, speechRecognitionCtor]);
 
   useEffect(() => () => {
     stopListeningSession();

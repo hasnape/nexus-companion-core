@@ -1,5 +1,5 @@
 import { consolidateMemoryCandidates } from './cognitive';
-import type { CompanionMemoryItem, LearningEvent, MemoryStore } from './types';
+import type { BrainStateStore, CompanionBrainState, CompanionMemoryItem, LearningEvent, MemoryStore } from './types';
 
 interface KeyValueStorage {
   getItem(key: string): string | null;
@@ -16,14 +16,18 @@ const createFallbackStorage = (): KeyValueStorage => {
   };
 };
 
-export class LocalMemoryStore implements MemoryStore {
+export class LocalMemoryStore implements MemoryStore, BrainStateStore {
   private cache: CompanionMemoryItem[] | null = null;
   private learningEvents: LearningEvent[] = [];
+  private brainState: CompanionBrainState | undefined;
+  private readonly brainKey: string;
 
   constructor(
     private readonly key = 'nexus-companion-core-memory-v2a',
     private readonly storage: KeyValueStorage = createFallbackStorage()
-  ) {}
+  ) {
+    this.brainKey = `${key}-brain-v2b`;
+  }
 
   private readAll(): CompanionMemoryItem[] {
     if (this.cache) return this.cache;
@@ -47,7 +51,7 @@ export class LocalMemoryStore implements MemoryStore {
   }
 
   async listMemories(): Promise<CompanionMemoryItem[]> {
-    return this.readAll();
+    return this.readAll().filter((memory) => memory.lifecycleState !== 'creator_deleted');
   }
 
   async addMemory(memory: CompanionMemoryItem): Promise<void> {
@@ -62,18 +66,52 @@ export class LocalMemoryStore implements MemoryStore {
 
   async deleteMemory(id: string): Promise<void> {
     const current = this.readAll();
-    this.persist(current.filter((item) => item.id !== id));
+    this.persist(current.map((item) => item.id === id ? {
+      ...item,
+      lifecycleState: 'creator_deleted',
+      archivedAt: Date.now(),
+      updatedAt: Date.now()
+    } : item));
   }
 
   async clearMemories(): Promise<void> {
     this.persist([]);
     this.learningEvents = [];
+    await this.clearBrainState();
+  }
+
+  async getBrainState(): Promise<CompanionBrainState | undefined> {
+    if (this.brainState) return this.brainState;
+    const raw = this.storage.getItem(this.brainKey);
+    if (!raw) return undefined;
+    try {
+      this.brainState = JSON.parse(raw) as CompanionBrainState;
+      return this.brainState;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async setBrainState(state: CompanionBrainState): Promise<void> {
+    this.brainState = state;
+    this.storage.setItem(this.brainKey, JSON.stringify(state));
+  }
+
+  async updateBrainState(updater: (state: CompanionBrainState | undefined) => CompanionBrainState): Promise<CompanionBrainState> {
+    const updated = updater(await this.getBrainState());
+    await this.setBrainState(updated);
+    return updated;
+  }
+
+  async clearBrainState(): Promise<void> {
+    this.brainState = undefined;
+    this.storage.setItem(this.brainKey, '');
   }
 
   async searchMemories(query: string): Promise<CompanionMemoryItem[]> {
     const value = query.trim().toLowerCase();
-    if (!value) return this.readAll();
-    return this.readAll().filter((memory) => (
+    if (!value) return this.listMemories();
+    return (await this.listMemories()).filter((memory) => (
       memory.content.toLowerCase().includes(value)
       || memory.tags?.some((tag) => tag.toLowerCase().includes(value))
     ));

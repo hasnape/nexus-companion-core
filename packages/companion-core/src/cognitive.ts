@@ -168,6 +168,24 @@ const candidateSourceFromEvent = (event: LearningEvent): MemorySource => {
 };
 
 const normalizeContentKey = (content: string): string => content.trim().toLowerCase().replace(/\s+/g, ' ');
+export const MAX_CONSOLIDATED_MEMORIES = 200;
+
+const lifecyclePriority = (memory: CompanionMemoryItem): number => {
+  if (memory.lifecycleState === 'pending_confirmation' || memory.requiresConfirmation) return 6;
+  if ((memory.lifecycleState ?? 'active') === 'active') return 5;
+  if (memory.lifecycleState === 'conflict') return 4;
+  if (memory.type === 'project_context' || memory.type === 'user_profile' || memory.type === 'user_preference') return 3;
+  if (memory.lifecycleState === 'dormant' || memory.lifecycleState === 'archived' || memory.lifecycleState === 'outdated') return 2;
+  if (memory.lifecycleState === 'creator_deleted') return 1;
+  return 2;
+};
+
+const retentionScore = (memory: CompanionMemoryItem): number => (
+  lifecyclePriority(memory) * 100
+  + (memory.importance * 10)
+  + ((memory.stability ?? 0) * 6)
+  + (memory.confidence * 4)
+);
 
 export const consolidateMemoryCandidates = (existing: CompanionMemoryItem[], candidates: CompanionMemoryItem[]): CompanionMemoryItem[] => {
   const byKey = new Map<string, CompanionMemoryItem>();
@@ -203,10 +221,14 @@ export const consolidateMemoryCandidates = (existing: CompanionMemoryItem[], can
     if (sameLayerConflict) {
       sameLayerConflict.confidence = clamp01(sameLayerConflict.confidence - 0.25);
       sameLayerConflict.tags = Array.from(new Set([...(sameLayerConflict.tags ?? []), 'conflict_detected']));
+      sameLayerConflict.lifecycleState = 'conflict';
+      sameLayerConflict.conflictWithIds = Array.from(new Set([...(sameLayerConflict.conflictWithIds ?? []), candidate.id]));
       byKey.set(`${key}#conflict`, {
         ...candidate,
         confidence: clamp01(candidate.confidence - 0.15),
-        tags: Array.from(new Set([...(candidate.tags ?? []), 'conflicting_candidate']))
+        tags: Array.from(new Set([...(candidate.tags ?? []), 'conflicting_candidate'])),
+        lifecycleState: 'conflict',
+        conflictWithIds: [sameLayerConflict.id]
       });
       continue;
     }
@@ -216,18 +238,45 @@ export const consolidateMemoryCandidates = (existing: CompanionMemoryItem[], can
     }
   }
 
-  return Array.from(byKey.values())
-    .sort((a, b) => (b.importance + (b.stability ?? 0)) - (a.importance + (a.stability ?? 0)))
-    .slice(0, 200)
+  const lifecycled = Array.from(byKey.values())
     .map((memory) => {
+      if (memory.requiresConfirmation) {
+        return {
+          ...memory,
+          lifecycleState: 'pending_confirmation' as const
+        };
+      }
       if ((memory.importance < 0.45 || (memory.stability ?? 0) < 0.35) && !memory.expiresAt) {
         return {
           ...memory,
+          lifecycleState: 'dormant' as const,
           expiresAt: Date.now() + (1000 * 60 * 60 * 24 * 14)
         };
       }
-      return memory;
+      if (memory.expiresAt && memory.expiresAt < Date.now()) {
+        return {
+          ...memory,
+          lifecycleState: 'archived' as const,
+          archivedAt: Date.now()
+        };
+      }
+      if (/obsol[èe]te|outdated|deprecated/i.test(memory.content)) {
+        return {
+          ...memory,
+          lifecycleState: 'outdated' as const,
+          outdatedAt: Date.now()
+        };
+      }
+      return { ...memory, lifecycleState: memory.lifecycleState ?? 'active' };
     });
+
+  return lifecycled
+    .sort((a, b) => (
+      retentionScore(b) - retentionScore(a)
+      || b.updatedAt - a.updatedAt
+      || a.id.localeCompare(b.id)
+    ))
+    .slice(0, MAX_CONSOLIDATED_MEMORIES);
 };
 
 export const buildCognitiveMemorySummary = (memories: CompanionMemoryItem[]): CognitiveMemorySummary => {

@@ -15,6 +15,13 @@ export interface CompanionSnapshot {
   action: CompanionAction;
   logs: string[];
   conversation: Array<{ from: 'user' | 'companion'; text: string }>;
+  brainSummary?: {
+    mode: string;
+    focus: string;
+    currentUserNeed: string;
+    pendingConfirmations: string[];
+    nonSensitiveSummary: string[];
+  };
 }
 
 const browserSafeStore = (): MemoryStore => {
@@ -58,13 +65,20 @@ export class CompanionRuntime {
   private conversation: Array<{ from: 'user' | 'companion'; text: string }> = [];
   private memoryState: MemoryState = { session: [], longTerm: [], behavioral: [] };
   private memoryCandidates: CompanionMemoryItem[] = [];
+  private brainSummary: CompanionSnapshot['brainSummary'];
 
   async init(): Promise<void> {
     this.memoryState = toLegacyMemoryState(await this.engine.listMemories());
   }
 
   getSnapshot(): CompanionSnapshot {
-    return { state: this.state, action: this.action, logs: this.logs.slice(-30), conversation: this.conversation.slice(-20) };
+    return {
+      state: this.state,
+      action: this.action,
+      logs: this.logs.slice(-30),
+      conversation: this.conversation.slice(-20),
+      brainSummary: this.brainSummary
+    };
   }
 
   getMemory() { return this.memoryState; }
@@ -75,6 +89,7 @@ export class CompanionRuntime {
     await this.engine.clearMemories();
     this.memoryState = { session: [], longTerm: [], behavioral: [] };
     this.memoryCandidates = [];
+    this.brainSummary = undefined;
     this.log('memory cleared by user');
   }
 
@@ -99,6 +114,7 @@ export class CompanionRuntime {
     });
 
     this.memoryCandidates = reply.decision.memoryCandidates;
+    this.brainSummary = reply.brainSummary;
     this.memoryState = toLegacyMemoryState(await this.engine.listMemories());
 
     this.state = transitionState(this.state, { at: now, mode: 'speaking', mood: 'warm' });

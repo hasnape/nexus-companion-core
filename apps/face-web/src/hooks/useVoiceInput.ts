@@ -111,8 +111,13 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setSessionActive(false);
     restartCountRef.current = 0;
     clearRestartTimer();
-    recognitionRef.current?.stop();
-    stopAndClearMediaStream();
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // no-op: cleanup must remain idempotent and continue releasing media resources.
+    } finally {
+      stopAndClearMediaStream();
+    }
     if (options?.setWakeInactive ?? true) {
       setWakeListeningState('inactive');
     }

@@ -20,7 +20,12 @@ const SENSITIVE_PATTERNS = [
 
 const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner/i];
 const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline/i];
-const RELATIONSHIP_PATTERNS = [/parle-moi|ton|style|sois plus|communication/i];
+const RELATIONSHIP_PATTERNS = [
+  /parle[- ]moi de mani[èe]re (?:plus )?(?:professionnelle?|directe?|claire?|structur[ée]e?)/i,
+  /sois plus (?:professionnel(?:le)?|direct(?:e)?|clair(?:e)?|structur[ée]e?)/i,
+  /garde un style (?:clair|structur[ée]|professionnel|direct)/i,
+  /notre relation doit rester professionnelle/i
+];
 const STATIC_USER_PROFILE_PATTERNS = [
   /je m['’]appelle\s+/i,
   /mon nom est\s+/i,

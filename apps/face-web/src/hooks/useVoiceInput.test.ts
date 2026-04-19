@@ -303,4 +303,27 @@ describe('useVoiceInput reliability', () => {
     unmount();
     expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
   });
+
+  it('still releases media tracks when recognition.stop throws during cleanup', async () => {
+    const { render, recognitionInstances, trackStopCalls } = await createHookHarness();
+
+    let hook = render();
+    await hook.startListeningSession();
+    hook = render();
+
+    const recognition = recognitionInstances[0];
+    recognition.stop.mockImplementation(() => {
+      throw new Error('stop failed');
+    });
+
+    expect(() => hook.stopListeningSession()).not.toThrow();
+    hook = render();
+    expect(hook.isSessionActive).toBe(false);
+    expect(hook.mediaState.micActive).toBe(false);
+    expect(hook.mediaState.cameraActive).toBe(false);
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+
+    expect(() => hook.stopListeningSession()).not.toThrow();
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+  });
 });

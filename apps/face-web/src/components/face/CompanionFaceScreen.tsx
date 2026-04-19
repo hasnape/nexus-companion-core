@@ -12,6 +12,7 @@ type CompanionFaceScreenProps = {
   isListening: boolean;
   transcript?: string;
   isOnline?: boolean;
+  onFaceInteraction?: () => void;
 };
 
 export function CompanionFaceScreen({
@@ -23,7 +24,8 @@ export function CompanionFaceScreen({
   subtitle,
   isListening,
   transcript,
-  isOnline = true
+  isOnline = true,
+  onFaceInteraction
 }: CompanionFaceScreenProps) {
   const eyeOffset = state.attentionTarget === 'user' ? '0px' : state.attentionTarget === 'screen' ? '-7px' : '7px';
   const expression = state.mood === 'happy' || state.mood === 'curious' ? state.mood : state.mode;
@@ -42,7 +44,11 @@ export function CompanionFaceScreen({
     <section className={`face-screen ${stateClasses}`} aria-label={`État du compagnon : ${companionVisualStateLabel}`}>
       <div className="ambient-grid" />
       <div className={`halo mood-${state.mood} ${stateClasses}`} />
-      <div className={`face mode-${state.mode} ${stateClasses} expression-${expression}`}>
+      <div
+        className={`face mode-${state.mode} ${stateClasses} expression-${expression}`}
+        onClick={onFaceInteraction}
+        data-testid="nexus-face-core"
+      >
         <div className="brow" />
         <div className="eyes gaze-float" style={{ '--eye-offset-x': eyeOffset } as CSSProperties}>
           <span className="eye eye-left" />

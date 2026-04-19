@@ -29,6 +29,81 @@ const SAFE_SIGNAL_TYPES = new Set<EnvironmentSignal['type']>([
   'project_context'
 ]);
 
+const VOLATILE_SIGNAL_TYPES = new Set<string>([
+  'app_mode',
+  'app_online_status',
+  'app_voice_status',
+  'app_presence_status',
+  'app_companion_state',
+  'app_runtime_status'
+]);
+
+const VOLATILE_SIGNAL_FIELDS = new Set([
+  'id',
+  'capturedAt',
+  'timestamp',
+  'turnId',
+  'sessionId'
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const stableStringify = (value: unknown): string => {
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
+  if (!isRecord(value)) return JSON.stringify(String(value));
+  const entries = Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+  return `{${entries.join(',')}}`;
+};
+
+const sanitizeVolatileMetadata = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map((entry) => sanitizeVolatileMetadata(entry));
+  if (!isRecord(value)) return value;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (VOLATILE_SIGNAL_FIELDS.has(key) || key === 'ttl') continue;
+    clean[key] = sanitizeVolatileMetadata(raw);
+  }
+  return clean;
+};
+
+const isVolatileTechnicalSignal = (value: unknown): boolean => {
+  if (!isRecord(value)) return false;
+  const source = typeof value.source === 'string' ? value.source : '';
+  const type = typeof value.type === 'string' ? value.type : '';
+  if (source === 'app_state') return true;
+  if (VOLATILE_SIGNAL_TYPES.has(type as EnvironmentSignal['type'])) return true;
+  if (Object.keys(value).some((key) => VOLATILE_SIGNAL_FIELDS.has(key)) && ('value' in value || 'source' in value || 'type' in value)) return true;
+  return false;
+};
+
+export const isTechnicalMemoryContent = (content: string): boolean => {
+  const normalized = content.trim();
+  if (!normalized) return false;
+  if (/"source"\s*:\s*"app_state"/i.test(normalized)) return true;
+  if (/"capturedAt"|"storagePreference"|"consentRequired"/i.test(normalized) && /"type"\s*:\s*"app_/i.test(normalized)) return true;
+  if (!normalized.startsWith('{') || !normalized.endsWith('}')) return false;
+  try {
+    return isVolatileTechnicalSignal(JSON.parse(normalized));
+  } catch {
+    return false;
+  }
+};
+
+const normalizeLearningInput = (event: LearningEvent): { text: string; skipDurableMemory: boolean } => {
+  if (typeof event.input === 'string') return { text: event.input, skipDurableMemory: isTechnicalMemoryContent(event.input) };
+  if (isVolatileTechnicalSignal(event.input)) return { text: '', skipDurableMemory: true };
+
+  const sanitized = sanitizeVolatileMetadata(event.input);
+  if (isRecord(sanitized) && Object.keys(sanitized).length === 0) return { text: '', skipDurableMemory: true };
+  return { text: stableStringify(sanitized).slice(0, 320), skipDurableMemory: false };
+};
+
 const defaultLayerForText = (text: string): CognitiveMemoryLayer => {
   if (/pr[ée]f[èe]re|prefe?r|toujours|habituellement|d'habitude/i.test(text)) return 'preference';
   if (/projet|roadmap|release|objectif|direction/i.test(text)) return 'project_context';
@@ -122,7 +197,11 @@ export const evaluateLearningEvent = (event: LearningEvent): {
   reason: string;
   candidate?: CompanionMemoryItem;
 } => {
-  const text = typeof event.input === 'string' ? event.input : JSON.stringify(event.input);
+  const normalized = normalizeLearningInput(event);
+  if (normalized.skipDurableMemory || !normalized.text.trim()) {
+    return { accepted: false, reason: 'technical_signal_excluded' };
+  }
+  const text = normalized.text;
   const sensitivity = sensitivityFromText(text);
   const importance = clamp01(Math.max(event.importance, scoreMemoryImportance({ content: text, source: event.source as MemorySource, eventType: event.type })));
   const stability = scoreMemoryStability({ content: text, occurrences: event.type === 'repeated_preference' ? 3 : 1 });

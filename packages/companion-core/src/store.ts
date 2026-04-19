@@ -1,4 +1,4 @@
-import { consolidateMemoryCandidates } from './cognitive';
+import { consolidateMemoryCandidates, isTechnicalMemoryContent } from './cognitive';
 import type { BrainStateStore, CompanionBrainState, CompanionMemoryItem, LearningEvent, MemoryStore } from './types';
 
 interface KeyValueStorage {
@@ -37,7 +37,24 @@ export class LocalMemoryStore implements MemoryStore, BrainStateStore {
       return this.cache;
     }
     try {
-      this.cache = JSON.parse(raw) as CompanionMemoryItem[];
+      const parsed = JSON.parse(raw) as CompanionMemoryItem[];
+      let mutated = false;
+      const now = Date.now();
+      const sanitized = parsed.map((memory) => {
+        if (!isTechnicalMemoryContent(memory.content)) return memory;
+        mutated = true;
+        return {
+          ...memory,
+          lifecycleState: 'archived' as const,
+          archivedAt: memory.archivedAt ?? now,
+          updatedAt: now,
+          tags: Array.from(new Set([...(memory.tags ?? []), 'internal_technical_signal', 'hidden_from_ui']))
+        };
+      });
+      this.cache = sanitized;
+      if (mutated) {
+        this.storage.setItem(this.key, JSON.stringify(sanitized));
+      }
       return this.cache;
     } catch {
       this.cache = [];
@@ -51,7 +68,11 @@ export class LocalMemoryStore implements MemoryStore, BrainStateStore {
   }
 
   async listMemories(): Promise<CompanionMemoryItem[]> {
-    return this.readAll().filter((memory) => memory.lifecycleState !== 'creator_deleted');
+    return this.readAll().filter((memory) => (
+      memory.lifecycleState !== 'creator_deleted'
+      && !memory.tags?.includes('internal_technical_signal')
+      && !isTechnicalMemoryContent(memory.content)
+    ));
   }
 
   async addMemory(memory: CompanionMemoryItem): Promise<void> {
@@ -127,7 +148,10 @@ export class LocalMemoryStore implements MemoryStore, BrainStateStore {
   }
 
   async consolidateMemories(candidates: CompanionMemoryItem[]): Promise<CompanionMemoryItem[]> {
-    const consolidated = consolidateMemoryCandidates(this.readAll(), candidates);
+    const consolidated = consolidateMemoryCandidates(
+      this.readAll(),
+      candidates.filter((candidate) => !isTechnicalMemoryContent(candidate.content))
+    );
     this.persist(consolidated);
     return consolidated;
   }

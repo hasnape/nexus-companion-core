@@ -2,6 +2,7 @@ import { BrowserVoiceAdapter, SilentVoiceAdapter } from '@nexus/adapters';
 import {
   createCompanionEngine,
   createDefaultCompanionProfile,
+  isTechnicalMemoryContent,
   LocalMemoryStore,
   type CompanionMemoryItem,
   type MemoryStore
@@ -146,7 +147,7 @@ export class CompanionRuntime {
 
   async listDisplayableMemories(): Promise<CompanionMemoryItem[]> {
     const memories = await this.engine.listMemories();
-    return memories.filter((memory) => !memory.sensitive);
+    return memories.filter((memory) => !memory.sensitive && !isTechnicalMemoryContent(memory.content));
   }
 
   trigger(actionName: CompanionAction['name']): CompanionSnapshot {

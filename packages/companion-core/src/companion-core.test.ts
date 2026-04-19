@@ -26,6 +26,7 @@ import {
   updateBrainFromDecision,
   updateWorkingMemory,
   inferAttentionFocus,
+  isTechnicalMemoryContent,
   shouldAskMemoryConfirmation,
   validateEnvironmentSignal
 } from './index';
@@ -178,6 +179,85 @@ describe('companion-core V2-B cognitive foundation', () => {
       storagePreference: 'local'
     });
     expect(valid.valid).toBe(true);
+  });
+
+  it('volatile app_state signals are not converted into durable memories', () => {
+    const evaluatedMode = evaluateLearningEvent(createLearningEvent({
+      type: 'environment_signal',
+      input: {
+        id: 'signal-mode',
+        type: 'app_mode',
+        value: 'thinking',
+        source: 'app_state',
+        capturedAt: 1,
+        sensitivity: 'low',
+        consentRequired: false,
+        storagePreference: 'local'
+      },
+      source: 'app_state',
+      suggestedMemoryLayer: 'environment_context',
+      requiresConfirmation: false,
+      riskFlags: []
+    }));
+    const evaluatedOnline = evaluateLearningEvent(createLearningEvent({
+      type: 'environment_signal',
+      input: {
+        id: 'signal-online',
+        type: 'app_online_status',
+        value: true,
+        source: 'app_state',
+        capturedAt: 2,
+        sensitivity: 'low',
+        consentRequired: false,
+        storagePreference: 'local'
+      },
+      source: 'app_state',
+      suggestedMemoryLayer: 'environment_context',
+      requiresConfirmation: false,
+      riskFlags: []
+    }));
+
+    expect(evaluatedMode.accepted).toBe(false);
+    expect(evaluatedMode.reason).toBe('technical_signal_excluded');
+    expect(evaluatedOnline.accepted).toBe(false);
+    expect(evaluatedOnline.reason).toBe('technical_signal_excluded');
+  });
+
+  it('repeated app_state signals do not increase durable memory count', async () => {
+    const store = new LocalMemoryStore('volatile-signal-dedupe');
+    const engine = createCompanionEngine({ memoryStore: store });
+
+    await engine.processUserMessage({ userMessage: 'Bonjour', appState: { isOnline: true, visualMode: 'thinking' } });
+    const afterFirst = await engine.listMemories();
+    await engine.processUserMessage({ userMessage: 'Toujours là ?', appState: { isOnline: true, visualMode: 'thinking' } });
+    const afterSecond = await engine.listMemories();
+
+    expect(afterFirst.length).toBe(0);
+    expect(afterSecond.length).toBe(0);
+  });
+
+  it('normalizes non-string learning input without raw volatile metadata', () => {
+    const evaluated = evaluateLearningEvent(createLearningEvent({
+      type: 'project_update',
+      input: {
+        topic: 'Souviens-toi que mon projet actuel est Nexus Companion.',
+        metadata: {
+          sessionId: 'abc',
+          timestamp: 123
+        }
+      } as unknown as never,
+      source: 'user_message',
+      suggestedMemoryLayer: 'project_context',
+      confidence: 0.95,
+      importance: 0.95,
+      requiresConfirmation: false,
+      riskFlags: []
+    }));
+
+    expect(evaluated.accepted).toBe(true);
+    expect(evaluated.candidate?.content).toContain('Nexus Companion');
+    expect(evaluated.candidate?.content).not.toContain('sessionId');
+    expect(evaluated.candidate?.content).not.toContain('timestamp');
   });
 
   it('camera/micro/location signals require consent', () => {
@@ -446,6 +526,40 @@ describe('companion-core V2-B cognitive foundation', () => {
     if (firstId) await store.deleteMemory(firstId);
     const afterDelete = await store.listMemories();
     expect(afterDelete.some((memory) => memory.id === firstId)).toBe(false);
+  });
+
+  it('local store quarantines pre-existing raw app_state JSON memories', async () => {
+    const now = Date.now();
+    const rawMemory = createMemoryItem({
+      id: 'raw-signal-memory',
+      type: 'conversation_summary',
+      layer: 'environment_context',
+      content: '{"id":"signal-1","type":"app_mode","value":"thinking","source":"app_state","capturedAt":123,"storagePreference":"local","consentRequired":false}',
+      source: 'environment_signal',
+      confidence: 0.7,
+      importance: 0.5,
+      createdAt: now,
+      updatedAt: now
+    });
+    const storage = {
+      values: new Map<string, string>(),
+      getItem(key: string) {
+        return this.values.get(key) ?? null;
+      },
+      setItem(key: string, value: string) {
+        this.values.set(key, value);
+      }
+    };
+    storage.setItem('polluted-memory', JSON.stringify([rawMemory]));
+
+    const store = new LocalMemoryStore('polluted-memory', storage);
+    const visible = await store.listMemories();
+
+    expect(visible).toHaveLength(0);
+    const persisted = JSON.parse(storage.getItem('polluted-memory') ?? '[]') as Array<{ tags?: string[]; lifecycleState?: string }>;
+    expect(persisted[0]?.lifecycleState).toBe('archived');
+    expect(persisted[0]?.tags).toContain('internal_technical_signal');
+    expect(isTechnicalMemoryContent(rawMemory.content)).toBe(true);
   });
 
   it('clearMemories wipes persisted brain state and short-term recent text', async () => {

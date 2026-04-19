@@ -13,6 +13,7 @@ import { useFullscreenMode } from './hooks/useFullscreenMode';
 import { useCreatorMode } from './hooks/useCreatorMode';
 import { enqueueOfflineMessage, loadOfflineNote, loadOfflineQueue, saveOfflineNote, saveOfflineQueue } from './services/offline/persistence';
 import { getOfflineFallbackReply } from './services/offline/offlineResponses';
+import { config } from './services/config';
 import type { TrainingConfig } from '@nexus/shared';
 import type { OfflineQueueEntry } from './services/offline/persistence';
 
@@ -183,11 +184,13 @@ export default function App() {
     listenerError,
     wakeState,
     wakeStatus,
+    mediaState,
     voiceProfile,
     voiceProfileLabel
   } = useVoiceInput({
     onCommand: submitRecognizedMessage,
-    onWake: () => triggerAction('listen_attentive')
+    onWake: () => triggerAction('listen_attentive'),
+    requestCamera: config.enableCamera
   });
 
   const flushOfflineQueue = async () => {
@@ -272,13 +275,14 @@ export default function App() {
             Le micro ne démarre jamais tout seul. Vous l’activez manuellement et pouvez l’arrêter à tout moment.
           </p>
           <p className="voice-session-hint" aria-live="polite">{voiceSessionHint}</p>
+          <p className="voice-session-hint">Micro : {mediaState.micActive ? 'actif' : 'inactif'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>
           {isSessionActive ? (
-            <button className="mic-live" type="button" onClick={stopListeningSession}>
-              Arrêter l’écoute
+            <button className="mic-live" type="button" onClick={() => { void stopListeningSession(); }}>
+              Arrêter la session Nexus
             </button>
           ) : (
-            <button type="button" onClick={startListeningSession}>
-              Activer le micro
+            <button type="button" onClick={() => { void startListeningSession(); }}>
+              Démarrer Nexus
             </button>
           )}
         </div>

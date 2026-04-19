@@ -12,3 +12,5 @@ export * from './brain';
 
 export * from './personality';
 export * from './response';
+
+export * from './wake';

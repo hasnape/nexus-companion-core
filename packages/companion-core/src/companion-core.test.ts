@@ -28,7 +28,10 @@ import {
   inferAttentionFocus,
   isTechnicalMemoryContent,
   shouldAskMemoryConfirmation,
-  validateEnvironmentSignal
+  validateEnvironmentSignal,
+  isWakeOnlyInput,
+  stripWakePrefix,
+  isIncompleteMemoryCommand
 } from './index';
 
 describe('companion-core V2-B cognitive foundation', () => {
@@ -330,6 +333,22 @@ describe('companion-core V2-B cognitive foundation', () => {
 
     const needsConsent = decideCompanionResponse(buildCompanionContext({ profile, userMessage: 'Apprends de ton environnement', memories: [] }));
     expect(needsConsent.requiredConfirmations).toContain('explicit_environment_scope_and_consent_required');
+  });
+
+
+  it('normalizes wake-only and wake-prefixed command inputs', () => {
+    expect(isWakeOnlyInput('Nexus')).toBe(true);
+    expect(isWakeOnlyInput('Hey Nexus')).toBe(true);
+    expect(isWakeOnlyInput('Nexus réveille-toi')).toBe(true);
+    expect(stripWakePrefix('Nexus quelle est la suite ?')).toBe('quelle est la suite ?');
+  });
+
+  it('does not create memories for incomplete memory commands', () => {
+    expect(isIncompleteMemoryCommand('Souviens-toi')).toBe(true);
+    expect(isIncompleteMemoryCommand('Nexus souviens-toi')).toBe(true);
+    expect(isIncompleteMemoryCommand('Retiens ça')).toBe(true);
+    expect(extractMemoryCandidates('Souviens-toi')).toEqual([]);
+    expect(extractMemoryCandidates('Nexus souviens-toi')).toEqual([]);
   });
 
   it('decision pipeline handles required scenario requests', () => {

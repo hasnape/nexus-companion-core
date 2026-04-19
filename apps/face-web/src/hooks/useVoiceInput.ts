@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultCompanionVoiceProfile, hasFrenchVoice, selectPreferredVoice } from '../services/voice/voiceProfile';
-import { isWakePhrase, wakeStateLabel, type WakeListeningState } from './useWakePhrase';
+import { isWakePhrase, stripWakePhrasePrefix, wakeStateLabel, type WakeListeningState } from './useWakePhrase';
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -26,16 +26,19 @@ const getSpeechRecognitionCtor = (): SpeechRecognitionCtor | null => {
 type UseVoiceInputParams = {
   onCommand: (text: string) => Promise<void>;
   onWake: () => void;
+  requestCamera?: boolean;
 };
 
-export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
+export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseVoiceInputParams) => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionEnabledRef = useRef(false);
   const fatalErrorRef = useRef(false);
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
 
   const [isSessionActive, setSessionActive] = useState(false);
+  const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
   const [transcript, setTranscript] = useState('');
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [wakeState, setWakeState] = useState<WakeListeningState>('inactive');
@@ -54,7 +57,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
 
   const speakAcknowledgement = useCallback(() => {
     if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance('Je suis là.');
+    const utterance = new SpeechSynthesisUtterance('Je t’écoute.');
     const voices = window.speechSynthesis.getVoices();
     const preferredVoice = selectPreferredVoice(voices);
     if (preferredVoice) utterance.voice = preferredVoice;
@@ -98,6 +101,12 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     }
   };
 
+  const stopMediaStream = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    setMediaState({ micActive: false, cameraActive: false });
+  }, []);
+
   const scheduleRestart = useCallback(() => {
     clearRestartTimer();
     if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
@@ -106,6 +115,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
       setListenerError('Erreur micro');
       sessionEnabledRef.current = false;
       setSessionActive(false);
+      stopMediaStream();
       return;
     }
     restartCountRef.current += 1;
@@ -120,7 +130,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
         setListenerError('Erreur micro');
       }
     }, 550);
-  }, [setWakeListeningState]);
+  }, [setWakeListeningState, stopMediaStream]);
 
   const stopListeningSession = useCallback(() => {
     sessionEnabledRef.current = false;
@@ -129,24 +139,42 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     restartCountRef.current = 0;
     clearRestartTimer();
     recognitionRef.current?.stop();
-  }, [setWakeListeningState]);
+    stopMediaStream();
+  }, [setWakeListeningState, stopMediaStream]);
 
   const handleFinalTranscript = useCallback(async (nextTranscript: string) => {
     if (!nextTranscript || !sessionEnabledRef.current) return;
 
     const currentWakeState = wakeStateRef.current;
 
-    if (currentWakeState === 'waiting_for_wake_phrase' && isWakePhrase(nextTranscript)) {
-      setWakeListeningState('awake_listening_for_command');
-      onWakeRef.current();
-      speakAcknowledgement();
+    if (currentWakeState === 'waiting_for_wake_phrase') {
+      if (isWakePhrase(nextTranscript)) {
+        setWakeListeningState('awake_listening_for_command');
+        onWakeRef.current();
+        speakAcknowledgement();
+        return;
+      }
+
+      const strippedAtWake = stripWakePhrasePrefix(nextTranscript);
+      if (strippedAtWake && strippedAtWake !== nextTranscript.trim()) {
+        setWakeListeningState('processing_command');
+        onWakeRef.current();
+        try {
+          await onCommandRef.current(strippedAtWake);
+          if (sessionEnabledRef.current) setWakeListeningState('waiting_for_wake_phrase');
+        } catch {
+          setWakeListeningState('error');
+          setListenerError('Erreur micro');
+        }
+      }
       return;
     }
 
     if (currentWakeState === 'awake_listening_for_command') {
+      const command = stripWakePhrasePrefix(nextTranscript) || nextTranscript;
       setWakeListeningState('processing_command');
       try {
-        await onCommandRef.current(nextTranscript);
+        await onCommandRef.current(command);
         if (sessionEnabledRef.current) setWakeListeningState('waiting_for_wake_phrase');
       } catch {
         setWakeListeningState('error');
@@ -155,7 +183,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
     }
   }, [setWakeListeningState, speakAcknowledgement]);
 
-  const startListeningSession = useCallback(() => {
+  const startListeningSession = useCallback(async () => {
     setListenerError(null);
     setTranscript('');
     fatalErrorRef.current = false;
@@ -165,6 +193,21 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
       setWakeListeningState('error');
       setListenerError('La reconnaissance vocale n’est pas disponible sur ce navigateur.');
       return;
+    }
+
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: requestCamera });
+        mediaStreamRef.current = stream;
+        setMediaState({
+          micActive: stream.getAudioTracks().some((track) => track.readyState === 'live' && track.enabled),
+          cameraActive: stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled)
+        });
+      } catch {
+        setWakeListeningState('error');
+        setListenerError('Autorisation micro/caméra refusée.');
+        return;
+      }
     }
 
     if (!recognitionRef.current) {
@@ -190,6 +233,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
           setSessionActive(false);
           setWakeListeningState('error');
           setListenerError('Autorisation micro refusée.');
+          stopMediaStream();
           return;
         }
         setWakeListeningState('error');
@@ -212,7 +256,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
       setWakeListeningState('error');
       setListenerError('Erreur micro');
     }
-  }, [handleFinalTranscript, scheduleRestart, setWakeListeningState, speechRecognitionCtor]);
+  }, [handleFinalTranscript, requestCamera, scheduleRestart, setWakeListeningState, speechRecognitionCtor, stopMediaStream]);
 
   useEffect(() => () => {
     stopListeningSession();
@@ -221,6 +265,7 @@ export const useVoiceInput = ({ onCommand, onWake }: UseVoiceInputParams) => {
   return {
     voiceInputAvailable,
     isSessionActive,
+    mediaState,
     startListeningSession,
     stopListeningSession,
     transcript,

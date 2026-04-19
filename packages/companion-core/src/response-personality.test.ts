@@ -128,6 +128,18 @@ describe('V2-D improved deterministic replies', () => {
     expect(tone).toBe('professional');
   });
 
+
+  it('incomplete memory command asks precise clarification without creating memory candidate', async () => {
+    const provider = new LocalDeterministicAiProvider();
+    const context = mkContext('Nexus souviens-toi');
+    const decision = decideCompanionResponse(context);
+    const reply = await provider.generateCompanionReply(context, decision);
+
+    expect(decision.memoryCandidates).toEqual([]);
+    expect(decision.intent).toBe('ask_clarification');
+    expect(reply).toBe('D’accord. Que veux-tu que je retienne exactement ?');
+  });
+
   it('ask_clarification intent is preserved even with active project', async () => {
     const provider = new LocalDeterministicAiProvider();
     const context = mkContext('ok');
@@ -180,7 +192,7 @@ describe('V2-D safety regressions and child-safe behavior', () => {
 
     expect(memoryDecision.requiredConfirmations).toContain('sensitive_memory_confirmation');
     expect(memoryPlan.responseMode).toBe('memory');
-    expect(memoryReply).toContain('confirmation explicite');
+    expect(memoryReply).toContain('tu veux que je retienne');
     expect(memoryReply).not.toContain('aide opérationnelle');
 
     const blockingPlan = createResponsePlan({

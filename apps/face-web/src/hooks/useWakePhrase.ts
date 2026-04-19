@@ -1,3 +1,5 @@
+import { isWakeOnlyInput, normalizeWakePhrase, stripWakePrefix } from '@nexus/companion-core';
+
 export type WakeListeningState =
   | 'inactive'
   | 'waiting_for_wake_phrase'
@@ -5,21 +7,11 @@ export type WakeListeningState =
   | 'processing_command'
   | 'error';
 
-const WAKE_PHRASES = ['nexus', 'hey nexus', 'ok nexus', 'nexus reveille toi', 'reveille toi nexus'] as const;
+export const normalizeWakePhraseText = normalizeWakePhrase;
 
-export const normalizeWakePhraseText = (value: string): string => value
-  .toLowerCase()
-  .normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^a-z0-9\s-]/g, ' ')
-  .replace(/[-_]+/g, ' ')
-  .replace(/\s+/g, ' ')
-  .trim();
+export const isWakePhrase = (value: string): boolean => isWakeOnlyInput(value);
 
-export const isWakePhrase = (value: string): boolean => {
-  const normalized = normalizeWakePhraseText(value);
-  return WAKE_PHRASES.some((phrase) => normalized === phrase);
-};
+export const stripWakePhrasePrefix = (value: string): string => stripWakePrefix(value);
 
 export const wakeStateLabel = (state: WakeListeningState): string => {
   switch (state) {

@@ -1,3 +1,5 @@
+import { isIncompleteMemoryCommand, isWakeFragmentNoise, stripWakePrefix } from './wake';
+
 import type {
   CompanionMemoryItem,
   CompanionStoragePreference,
@@ -116,8 +118,9 @@ export const extractMemoryCandidates = (
   userMessage: string,
   source: MemorySource = 'user_message'
 ): CompanionMemoryItem[] => {
-  const content = userMessage.trim();
+  const content = stripWakePrefix(userMessage).trim();
   if (!content || content.length < 12) return [];
+  if (isWakeFragmentNoise(content) || isIncompleteMemoryCommand(content)) return [];
 
   const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))
     || PROJECT_PATTERNS.some((pattern) => pattern.test(content))

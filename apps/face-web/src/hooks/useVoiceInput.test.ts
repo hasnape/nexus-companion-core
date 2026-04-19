@@ -113,6 +113,11 @@ const createHookHarness = async () => {
     }
   });
 
+  Object.defineProperty(globalThis, 'navigator', {
+    writable: true,
+    value: { mediaDevices: { getUserMedia: vi.fn(async () => ({ getAudioTracks: () => [{ readyState: 'live', enabled: true }], getVideoTracks: () => [], getTracks: () => [] })) } }
+  });
+
   const module = await import('./useVoiceInput');
 
   const callbacks = {
@@ -145,7 +150,7 @@ describe('useVoiceInput reliability', () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
     let hook = render();
-    hook.startListeningSession();
+    await hook.startListeningSession();
     hook = render();
 
     const recognition = recognitionInstances[0];
@@ -166,7 +171,7 @@ describe('useVoiceInput reliability', () => {
     const firstOnCommand = callbacks.onCommand;
 
     let hook = render();
-    hook.startListeningSession();
+    await hook.startListeningSession();
     hook = render();
     const recognition = recognitionInstances[0];
 
@@ -192,7 +197,7 @@ describe('useVoiceInput reliability', () => {
     const firstOnWake = callbacks.onWake;
 
     let hook = render();
-    hook.startListeningSession();
+    await hook.startListeningSession();
     hook = render();
     const recognition = recognitionInstances[0];
 
@@ -212,7 +217,7 @@ describe('useVoiceInput reliability', () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 
     let hook = render();
-    hook.startListeningSession();
+    await hook.startListeningSession();
     hook = render();
     const recognition = recognitionInstances[0];
 
@@ -236,11 +241,29 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+
+  it('accepts wake-prefixed command directly while waiting for wake phrase', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+
+    let hook = render();
+    await hook.startListeningSession();
+    hook = render();
+    const recognition = recognitionInstances[0];
+
+    emitFinal(recognition, 'Nexus quelle est la prochaine étape ?');
+    await Promise.resolve();
+    hook = render();
+
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
+    expect(callbacks.onCommand).toHaveBeenCalledWith('quelle est la prochaine étape ?');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+  });
+
   it('manual stop prevents auto-restart', async () => {
     const { render, recognitionInstances } = await createHookHarness();
 
     let hook = render();
-    hook.startListeningSession();
+    await hook.startListeningSession();
     hook = render();
     const recognition = recognitionInstances[0];
 

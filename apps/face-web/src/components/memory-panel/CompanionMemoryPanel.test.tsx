@@ -68,6 +68,55 @@ describe('CompanionMemoryPanel', () => {
     expect(textOf(ui)).toContain('Souvenirs récents');
   });
 
+  it('hides raw app_state JSON memories and still renders clean user memories', () => {
+    const ui = CompanionMemoryPanel({
+      memories: [
+        {
+          id: 'raw-1',
+          type: 'conversation_summary',
+          layer: 'environment_context',
+          content: '{"id":"signal-1","type":"app_mode","value":"thinking","source":"app_state","capturedAt":123,"storagePreference":"local","consentRequired":false}',
+          source: 'environment_signal',
+          confidence: 0.6,
+          importance: 0.5,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        },
+        {
+          id: 'proj-1',
+          type: 'project_context',
+          layer: 'project_context',
+          content: 'Souviens-toi que mon projet actuel est Nexus Companion.',
+          source: 'user_message',
+          confidence: 0.9,
+          importance: 0.9,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      ],
+      memoryCandidates: [{
+        id: 'raw-candidate',
+        type: 'conversation_summary',
+        layer: 'environment_context',
+        content: '{"id":"signal-mode","type":"app_mode","source":"app_state","capturedAt":1}',
+        source: 'environment_signal',
+        confidence: 0.6,
+        importance: 0.4,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }],
+      onClearMemory: async () => {}
+    });
+
+    const text = textOf(ui);
+    expect(text).toContain('Souvenirs enregistrés : 1');
+    expect(text).toContain('Souviens-toi que mon projet actuel est Nexus Companion.');
+    expect(text).toContain('Projets');
+    expect(text).not.toContain('"source":"app_state"');
+    expect(text).not.toContain('capturedAt');
+    expect(text).not.toContain('Suggestions de mémoire');
+  });
+
   it('clear memory button still calls onClearMemory', () => {
     const onClearMemory = vi.fn(async () => {});
     const ui = CompanionMemoryPanel({

@@ -1,4 +1,4 @@
-import type { CompanionMemoryItem } from '@nexus/companion-core';
+import { isTechnicalMemoryContent, type CompanionMemoryItem } from '@nexus/companion-core';
 
 type CompanionMemoryPanelProps = {
   memories: CompanionMemoryItem[];
@@ -13,7 +13,12 @@ type CompanionMemoryPanelProps = {
 };
 
 const byGroup = (memories: CompanionMemoryItem[]) => {
-  const nonSensitive = memories.filter((memory) => !memory.sensitive && memory.sensitivity !== 'high' && memory.sensitivity !== 'critical');
+  const nonSensitive = memories.filter((memory) => (
+    !memory.sensitive
+    && memory.sensitivity !== 'high'
+    && memory.sensitivity !== 'critical'
+    && !isTechnicalMemoryContent(memory.content)
+  ));
   return {
     preferences: nonSensitive.filter((memory) => memory.type === 'user_preference' || memory.layer === 'preference'),
     projects: nonSensitive.filter((memory) => memory.type === 'project_context' || memory.layer === 'project_context'),
@@ -26,19 +31,21 @@ const byGroup = (memories: CompanionMemoryItem[]) => {
 };
 
 export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary, onClearMemory }: CompanionMemoryPanelProps) {
-  const grouped = byGroup(memories);
+  const cleanMemories = memories.filter((memory) => !isTechnicalMemoryContent(memory.content));
+  const cleanCandidates = memoryCandidates.filter((candidate) => !isTechnicalMemoryContent(candidate.content));
+  const grouped = byGroup(cleanMemories);
 
   return (
     <section className="panel nexus-memory-panel" aria-label="Mémoire de Nexus">
       <h3>Mémoire de Nexus</h3>
       <p>Nexus apprend progressivement à partir de vos échanges, de vos préférences et du contexte autorisé. Il retient le minimum utile, les informations sensibles nécessitent votre accord, et vous pouvez effacer la mémoire à tout moment.</p>
-      <p>Souvenirs enregistrés : {memories.length}</p>
-      {memories.length === 0 ? (
+      <p>Souvenirs enregistrés : {cleanMemories.length}</p>
+      {cleanMemories.length === 0 ? (
         <p className="memory-empty">Aucun souvenir utile enregistré pour le moment.</p>
       ) : (
         <>
           <ul className="memory-list">
-            {memories
+            {cleanMemories
               .filter((memory) => !memory.sensitive && memory.sensitivity !== 'high' && memory.sensitivity !== 'critical')
               .slice(0, 8)
               .map((memory) => (
@@ -53,11 +60,11 @@ export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary,
           </div>
         </>
       )}
-      {memoryCandidates.length > 0 && (
+      {cleanCandidates.length > 0 && (
         <div className="memory-candidates">
           <p>Suggestions de mémoire :</p>
           <ul>
-            {memoryCandidates.slice(0, 6).map((candidate) => (
+            {cleanCandidates.slice(0, 6).map((candidate) => (
               <li key={candidate.id}>
                 {candidate.content}
                 {candidate.requiresConfirmation ? ' (confirmation requise)' : ''}

@@ -30,6 +30,8 @@ import {
   shouldAskMemoryConfirmation,
   validateEnvironmentSignal,
   isWakeOnlyInput,
+  isWakeOnlyInputWithOptions,
+  normalizeMemoryCandidateContent,
   stripWakePrefix,
   isIncompleteMemoryCommand
 } from './index';
@@ -350,6 +352,16 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(stripWakePrefix('Peux-tu aider Nexus Companion ?')).toBe('Peux-tu aider Nexus Companion ?');
     expect(stripWakePrefix('Nexus Companion est mon projet')).toBe('Nexus Companion est mon projet');
     expect(stripWakePrefix('Nexus souviens-toi que mon projet actuel est Nexus Companion')).toBe('souviens-toi que mon projet actuel est Nexus Companion');
+    expect(isWakeOnlyInputWithOptions('Nexus Companion', { allowFullNameWake: true })).toBe(true);
+    expect(stripWakePrefix('Nexus Companion lance la suite', { allowFullNameWake: true })).toBe('lance la suite');
+    expect(stripWakePrefix('Nexus Companion, lance la suite', { allowFullNameWake: true })).toBe('lance la suite');
+    expect(stripWakePrefix('Nexus Companion: lance la suite', { allowFullNameWake: true })).toBe('lance la suite');
+  });
+
+  it('normalizes memory command wrappers into clean facts', () => {
+    expect(normalizeMemoryCandidateContent('Souviens-toi que mon projet actuel est Nexus Companion"')).toBe('Le projet actuel est Nexus Companion.');
+    expect(normalizeMemoryCandidateContent('Nexus souviens-toi que je préfère les solutions long terme')).toBe('Le créateur préfère les solutions long terme.');
+    expect(normalizeMemoryCandidateContent('Souviens-toi que je m’appelle ingénieur amine 0410')).toBe('Le créateur est ingénieur Amine 0410.');
   });
 
   it('captures explicit relationship/style guidance without over-triggering normal questions', () => {

@@ -253,6 +253,23 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('accepts full-name wake-prefixed command and preserves first command word', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+
+    let hook = render();
+    await hook.startListeningSession();
+    hook = render();
+    const recognition = recognitionInstances[0];
+
+    emitFinal(recognition, 'Nexus Companion lance la suite');
+    await Promise.resolve();
+    hook = render();
+
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
+    expect(callbacks.onCommand).toHaveBeenCalledWith('lance la suite');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+  });
+
   it('cleans media/session when recognition.start throws and avoids leaking tracks across retries', async () => {
     const { render, recognitionInstances, trackStopCalls, getUserMedia } = await createHookHarness();
 

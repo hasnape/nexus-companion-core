@@ -6,6 +6,14 @@ const WAKE_PREFIX_PATTERNS = [
   /^(?:nexus\b)/i
 ] as const;
 
+const FULL_NAME_WAKE_PREFIX_PATTERNS = [
+  /^(?:hey\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i,
+  /^(?:ok\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i,
+  /^(?:nexus\b[\s,;:!?.-]*companion\b)/i
+] as const;
+
+const COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux-tu|fais|planifie|active|d[ée]sactive)\b/i;
+
 const MEMORY_PREFIXES = [
   'souviens toi',
   'souviens-toi',
@@ -30,16 +38,43 @@ export const matchWakePrefix = (input: string): {
   command: string;
   matchedPrefix: string;
 } => {
+  return matchWakePrefixWithOptions(input);
+};
+
+export const matchWakePrefixWithOptions = (
+  input: string,
+  options?: { allowFullNameWake?: boolean }
+): {
+  matched: boolean;
+  wakeOnly: boolean;
+  command: string;
+  matchedPrefix: string;
+} => {
   const raw = input.trimStart();
   if (!raw) return { matched: false, wakeOnly: false, command: '', matchedPrefix: '' };
+  if (options?.allowFullNameWake) {
+    const fullNameMatch = raw.match(/^(?:hey\b[\s,;:!?.-]*|ok\b[\s,;:!?.-]*)?nexus\b[\s,;:!?.-]*companion\b/i);
+    if (fullNameMatch && fullNameMatch.index === 0) {
+      const afterFullName = raw.slice(fullNameMatch[0].length).replace(/^[\s,;:!?.-]+/, '');
+      if (afterFullName.length > 0 && !COMMAND_AFTER_WAKE_PATTERN.test(afterFullName)) {
+        return { matched: false, wakeOnly: false, command: raw, matchedPrefix: '' };
+      }
+    }
+  }
+  const patterns = options?.allowFullNameWake
+    ? [...FULL_NAME_WAKE_PREFIX_PATTERNS, ...WAKE_PREFIX_PATTERNS]
+    : WAKE_PREFIX_PATTERNS;
 
-  for (const pattern of WAKE_PREFIX_PATTERNS) {
+  for (const pattern of patterns) {
     const match = raw.match(pattern);
     if (!match || typeof match.index !== 'number' || match.index !== 0) continue;
 
     const matchedPrefix = match[0];
     const rest = raw.slice(matchedPrefix.length).replace(/^[\s,;:!?.-]+/, '');
-    if (/^companion\b/i.test(rest)) continue;
+    if (!options?.allowFullNameWake && /^companion\b/i.test(rest)) continue;
+    if (options?.allowFullNameWake && FULL_NAME_WAKE_PREFIX_PATTERNS.some((fullName) => fullName.test(matchedPrefix)) && rest.length > 0 && !COMMAND_AFTER_WAKE_PATTERN.test(rest)) {
+      continue;
+    }
     return {
       matched: true,
       wakeOnly: rest.length === 0,
@@ -58,8 +93,12 @@ export const matchWakePrefix = (input: string): {
 
 export const isWakeOnlyInput = (input: string): boolean => matchWakePrefix(input).wakeOnly;
 
-export const stripWakePrefix = (input: string): string => {
-  const match = matchWakePrefix(input);
+export const isWakeOnlyInputWithOptions = (input: string, options?: { allowFullNameWake?: boolean }): boolean => (
+  matchWakePrefixWithOptions(input, options).wakeOnly
+);
+
+export const stripWakePrefix = (input: string, options?: { allowFullNameWake?: boolean }): string => {
+  const match = matchWakePrefixWithOptions(input, options);
   if (!match.matched) return input.trim();
   return match.command;
 };

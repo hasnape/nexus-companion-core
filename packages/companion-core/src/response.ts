@@ -5,6 +5,7 @@ import {
   type NexusAudienceMode,
   type NexusPersonalityProfile
 } from './personality';
+import { normalizeMemoryCandidateContent } from './memory';
 import type { BrainStateSummary, CompanionContext, CompanionDecision } from './types';
 import { isIncompleteMemoryCommand, stripWakePrefix } from './wake';
 
@@ -126,6 +127,9 @@ export const inferResponseMode = (
     return 'normal';
   }
   if (decision.intent === 'remember_candidate') {
+    return 'memory';
+  }
+  if (decision.requiredConfirmations.includes('sensitive_memory_confirmation')) {
     return 'memory';
   }
   if (decision.intent === 'emotional_support') {
@@ -252,9 +256,9 @@ const renderMemoryReply = (plan: NexusResponsePlan): string => {
   const hint = plan.relevantMemoryHints[0];
   if (plan.pendingConfirmations.includes('sensitive_memory_confirmation')) {
     const stripped = stripWakePrefix(plan.userMessage);
-    const memoryContent = stripped.replace(/^(souviens-toi|souviens toi|retiens(?: que)?|m[eé]morise|garde en m[eé]moire)\s*/i, '').trim();
+    const memoryContent = normalizeMemoryCandidateContent(stripped).replace(/[.!?]+$/u, '').trim();
     if (memoryContent) {
-      return `Tu veux que je retienne que ${memoryContent.replace(/^que\s+/i, '')} ?`;
+      return `Tu veux que je retienne que ${memoryContent} ?`;
     }
   }
   if (plan.pendingConfirmations.length > 0) {

@@ -8,6 +8,7 @@ import type {
   PersonalityState,
   WorkingMemoryState
 } from './types';
+import { isIncompleteMemoryCommand, isWakeFragmentNoise } from './wake';
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
@@ -62,27 +63,28 @@ export const createDefaultBrainState = (options?: { now?: number; creatorId?: st
 
 export const updateWorkingMemory = (state: WorkingMemoryState, input: { userMessage?: string; assistantMessage?: string; now: number }): WorkingMemoryState => {
   const normalized = input.userMessage?.trim() ?? '';
+  const ignorableUserMessage = isWakeFragmentNoise(normalized) || isIncompleteMemoryCommand(normalized);
   const shortTermFacts = /je suis stress[ée]|je suis fatigu[ée]/i.test(normalized)
     ? state.shortTermFacts
-    : normalized && normalized.length > 10
+    : !ignorableUserMessage && normalized && normalized.length > 10
       ? [...state.shortTermFacts, normalized].slice(-6)
       : state.shortTermFacts;
 
-  const unresolvedQuestions = normalized.includes('?')
+  const unresolvedQuestions = !ignorableUserMessage && normalized.includes('?')
     ? [...state.unresolvedQuestions, normalized].slice(-5)
     : state.unresolvedQuestions;
 
-  const pendingActions = /peux-tu|fais|planifie|prépare/i.test(normalized)
+  const pendingActions = !ignorableUserMessage && /peux-tu|fais|planifie|prépare/i.test(normalized)
     ? [...state.pendingActions, normalized].slice(-5)
     : state.pendingActions;
 
-  const activeProjectContext = /projet|nexus|roadmap|architecture/i.test(normalized)
+  const activeProjectContext = !ignorableUserMessage && /projet|nexus|roadmap|architecture/i.test(normalized)
     ? normalized.slice(0, 120)
     : state.activeProjectContext;
 
   return {
     ...state,
-    recentUserMessage: input.userMessage ?? state.recentUserMessage,
+    recentUserMessage: ignorableUserMessage ? state.recentUserMessage : (input.userMessage ?? state.recentUserMessage),
     recentAssistantMessage: input.assistantMessage ?? state.recentAssistantMessage,
     shortTermFacts,
     unresolvedQuestions,
@@ -135,9 +137,17 @@ export const deriveGoalState = (input: { userMessage: string; decision: Companio
     ? 'blocked'
     : 'active';
 
+  const goalTitle = input.decision.intent === 'remember_candidate'
+    ? input.decision.requiredConfirmations.includes('sensitive_memory_confirmation')
+      ? 'Confirmer une information sensible'
+      : 'Retenir une information utile'
+    : input.decision.intent === 'ask_clarification'
+      ? 'Clarifier la demande utilisateur'
+      : input.userMessage.slice(0, 80);
+
   return {
     id: `goal-${input.now}-${input.decision.intent}`,
-    title: input.userMessage.slice(0, 80),
+    title: goalTitle,
     type,
     status,
     priority: requiresCreatorApproval ? 1 : 0.7,

@@ -110,7 +110,7 @@ describe('CompanionMemoryPanel', () => {
 
     const text = textOf(ui);
     expect(text).toContain('Souvenirs enregistrés : 1');
-    expect(text).toContain('Souviens-toi que mon projet actuel est Nexus Companion.');
+    expect(text).toContain('Le projet actuel est Nexus Companion.');
     expect(text).toContain('Projets');
     expect(text).not.toContain('"source":"app_state"');
     expect(text).not.toContain('capturedAt');
@@ -149,8 +149,35 @@ describe('CompanionMemoryPanel', () => {
 
     const text = textOf(ui);
     expect(text).toContain('Souvenirs enregistrés : 2');
-    expect(text).toContain('Souviens-toi que mon exemple JSON contient "source":"app_state".');
+    expect(text).toContain('mon exemple JSON contient "source":"app_state".');
     expect(text).toContain('Voici une config: {"source":"app_state","enabled":true}');
+  });
+
+  it('keeps sensitive location memories in pending confirmations instead of confirmed souvenirs', () => {
+    const ui = CompanionMemoryPanel({
+      memories: [
+        {
+          id: 'loc-1',
+          type: 'user_profile',
+          layer: 'episodic',
+          content: 'Souviens-toi que j’habite à Lyon',
+          source: 'user_message',
+          confidence: 0.8,
+          importance: 0.8,
+          sensitive: true,
+          requiresConfirmation: true,
+          lifecycleState: 'pending_confirmation',
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      ],
+      memoryCandidates: [],
+      onClearMemory: async () => {}
+    });
+
+    const text = textOf(ui);
+    expect(text).toContain('Souvenirs enregistrés : 0');
+    expect(text).toContain('Retenir que vous habitez à Lyon ?');
   });
 
   it('clear memory button still calls onClearMemory', () => {

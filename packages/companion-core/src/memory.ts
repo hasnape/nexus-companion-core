@@ -18,8 +18,8 @@ const SENSITIVE_PATTERNS = [
   /intime|sexual|orientation/i
 ];
 
-const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner/i];
-const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline/i];
+const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner|le cr[ée]ateur pr[ée]f[èe]re/i];
+const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline|le projet actuel est/i];
 const RELATIONSHIP_PATTERNS = [
   /parle[- ]moi de mani[èe]re (?:plus )?(?:professionnelle?|directe?|claire?|structur[ée]e?)/i,
   /sois plus (?:professionnel(?:le)?|direct(?:e)?|clair(?:e)?|structur[ée]e?)/i,
@@ -30,8 +30,10 @@ const STATIC_USER_PROFILE_PATTERNS = [
   /je m['’]appelle\s+/i,
   /mon nom est\s+/i,
   /mon pr[ée]nom est\s+/i,
+  /le cr[ée]ateur est\s+/i,
   /j['’]habite\s+/i,
   /je vis [àa]\s+/i,
+  /vous habitez [àa]\s+/i,
   /mon m[ée]tier est\s+/i,
   /je travaille comme\s+/i,
   /je travaille en tant que\s+/i
@@ -55,6 +57,9 @@ const TRANSIENT_JE_SUIS_PATTERNS = [
 const STABLE_ROLE_KEYWORDS = /(d[ée]veloppeur|developpeur|ing[ée]nieur|ingenieur|technicien|auto-entrepreneur|entrepreneur|fondateur|cofondateur|architecte|consultant|designer|chef de projet|support)/i;
 const PRECISE_LOCATION_PATTERNS = [/adresse exacte|exact address|coordonn[ée]es gps|latitude|longitude|localisation exacte/i];
 const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le cloud|store everything.*cloud/i];
+const CREATOR_CANONICAL_IDENTITY = 'ingénieur Amine 0410';
+const MEMORY_WRAPPER_PREFIX = /^(?:souviens(?:-| )toi(?:\s+que)?|retiens(?:\s+que)?|m[ée]morise(?:\s+que)?|garde en m[ée]moire(?:\s+que)?)\s+/i;
+const SENSITIVE_LOCATION_PATTERNS = [/j['’]habite\s+[àa]\s+/i, /je vis\s+[àa]\s+/i, /localisation|adresse/i];
 
 const isStableJeSuisProfile = (content: string): boolean => {
   const match = content.match(/je suis\s+([^,.!?]+)/i);
@@ -70,6 +75,70 @@ const isStableUserProfileStatement = (content: string): boolean => (
 );
 
 export const isSensitiveMemoryContent = (content: string): boolean => SENSITIVE_PATTERNS.some((pattern) => pattern.test(content));
+
+const cleanMemoryFactText = (content: string): string => {
+  const unwrappedQuotes = content
+    .trim()
+    .replace(/^["“”'`«»]+/u, '')
+    .replace(/["“”'`«»]+$/u, '')
+    .trim();
+  const dedupedPunctuation = unwrappedQuotes
+    .replace(/[!?.,;:]{2,}$/u, (value) => value[0] ?? '')
+    .replace(/["“”'`«»]+$/u, '')
+    .trim();
+  return dedupedPunctuation;
+};
+
+const canonicalizeCreatorIdentity = (rawFact: string): string | null => {
+  const lower = rawFact.toLowerCase();
+  if (!/(je m['’]appelle|mon nom est|mon pr[ée]nom est)/i.test(rawFact)) return null;
+  if (/amine\s*0410/i.test(lower)) return `Le créateur est ${CREATOR_CANONICAL_IDENTITY}.`;
+  const named = rawFact.match(/(?:je m['’]appelle|mon nom est|mon pr[ée]nom est)\s+(.+)$/i)?.[1]?.trim();
+  if (!named) return null;
+  return `Le créateur est ${named}.`;
+};
+
+const normalizeMemoryFact = (fact: string): string => {
+  const cleaned = cleanMemoryFactText(fact).replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+
+  const canonicalIdentity = canonicalizeCreatorIdentity(cleaned);
+  if (canonicalIdentity) return canonicalIdentity;
+
+  const project = cleaned.match(/^mon projet actuel est\s+(.+)$/i)?.[1]?.trim();
+  if (project) return `Le projet actuel est ${cleanMemoryFactText(project)}.`;
+
+  const creatorPref = cleaned.match(/^je pr[ée]f[èe]re\s+(.+)$/i)?.[1]?.trim();
+  if (creatorPref) return `Le créateur préfère ${cleanMemoryFactText(creatorPref)}.`;
+
+  const liveAt = cleaned.match(/^j['’]habite\s+[àa]\s+(.+)$/i)?.[1]?.trim();
+  if (liveAt) return `Vous habitez à ${cleanMemoryFactText(liveAt)}.`;
+
+  if (/[.!?]$/u.test(cleaned)) return cleaned;
+  return `${cleaned}.`;
+};
+
+const stripMemoryCommandWrapper = (input: string): string => {
+  const wakeStripped = stripWakePrefix(input).trim();
+  return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, '').trim();
+};
+
+export const normalizeMemoryCandidateContent = (input: string): string => {
+  const stripped = stripMemoryCommandWrapper(input);
+  return normalizeMemoryFact(stripped || input);
+};
+
+export const normalizeMemoryContentKey = (content: string): string => content
+  .toLowerCase()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+export const shouldRequireLocationConfirmation = (content: string): boolean => (
+  SENSITIVE_LOCATION_PATTERNS.some((pattern) => pattern.test(content))
+);
 
 type CreateMemoryItemInput = Omit<CompanionMemoryItem, 'id' | 'createdAt' | 'updatedAt'> & {
   id?: string;
@@ -123,21 +192,24 @@ export const extractMemoryCandidates = (
   userMessage: string,
   source: MemorySource = 'user_message'
 ): CompanionMemoryItem[] => {
-  const content = stripWakePrefix(userMessage).trim();
+  const raw = stripWakePrefix(userMessage).trim();
+  const rawForDetection = stripMemoryCommandWrapper(raw);
+  const content = normalizeMemoryCandidateContent(raw);
   if (!content || content.length < 12) return [];
   if (isWakeFragmentNoise(content) || isIncompleteMemoryCommand(content)) return [];
 
-  const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))
-    || PROJECT_PATTERNS.some((pattern) => pattern.test(content))
-    || RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(content))
+  const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
+    || PROJECT_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
+    || RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
+    || isStableUserProfileStatement(rawForDetection)
     || isStableUserProfileStatement(content)
-    || /mon prénom|mon prenom|souviens-toi|remember my|retiens que/i.test(content)
-    || PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(content));
+    || /mon prénom|mon prenom|souviens-toi|remember my|retiens que|m[ée]morise que|garde en m[ée]moire que/i.test(rawForDetection)
+    || PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content));
 
   const likelySmallTalk = /^(ok|merci|salut|hello|bonjour)[!. ]*$/i.test(content);
   if (!looksMemorable || likelySmallTalk) return [];
 
-  const sensitive = isSensitiveMemoryContent(content);
+  const sensitive = isSensitiveMemoryContent(content) || shouldRequireLocationConfirmation(content);
   const storagePreference = inferStoragePreference(content, sensitive);
   const cloudRisk = CLOUD_EVERYTHING_PATTERNS.some((pattern) => pattern.test(content));
   const sensitivity = inferSensitivity(content);

@@ -343,6 +343,7 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(stripWakePrefix('Nexus quelle est la suite ?')).toBe('quelle est la suite ?');
     expect(stripWakePrefix('réveille-toi nexus lance la suite')).toBe('lance la suite');
     expect(stripWakePrefix('Hey Nexus: lance la suite')).toBe('lance la suite');
+    expect(stripWakePrefix('Nexus réveille-toi lance la suite')).toBe('lance la suite');
     expect(stripWakePrefix('Peux-tu aider Nexus Companion ?')).toBe('Peux-tu aider Nexus Companion ?');
   });
 

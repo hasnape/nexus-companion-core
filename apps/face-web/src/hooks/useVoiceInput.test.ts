@@ -275,8 +275,16 @@ describe('useVoiceInput reliability', () => {
     expect(trackStopCalls[0]).toHaveBeenCalled();
     expect(trackStopCalls[1]).toHaveBeenCalled();
 
+    recognition.start.mockImplementationOnce(() => {
+      throw new Error('start failed again');
+    });
+
     await hook.startListeningSession();
     hook = render();
+
+    expect(hook.isSessionActive).toBe(false);
+    expect(hook.mediaState.micActive).toBe(false);
+    expect(trackStopCalls[2]).toHaveBeenCalled();
     expect(getUserMedia).toHaveBeenCalledTimes(3);
   });
 

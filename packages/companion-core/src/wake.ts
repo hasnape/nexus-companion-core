@@ -39,6 +39,7 @@ export const matchWakePrefix = (input: string): {
 
     const matchedPrefix = match[0];
     const rest = raw.slice(matchedPrefix.length).replace(/^[\s,;:!?.-]+/, '');
+    if (/^companion\b/i.test(rest)) continue;
     return {
       matched: true,
       wakeOnly: rest.length === 0,

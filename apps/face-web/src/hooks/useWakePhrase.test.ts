@@ -26,6 +26,7 @@ describe('wake phrase detection', () => {
 
   it('does not strip nexus from the middle of normal text', () => {
     expect(stripWakePhrasePrefix('Peux-tu aider Nexus Companion sur ce ticket ?')).toBe('Peux-tu aider Nexus Companion sur ce ticket ?');
+    expect(stripWakePhrasePrefix('Nexus Companion est mon projet')).toBe('Nexus Companion est mon projet');
     expect(isWakePhrase('bonjour nexus companion')).toBe(false);
     expect(isWakePhrase('que fais-tu nexus')).toBe(false);
   });

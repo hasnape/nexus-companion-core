@@ -94,6 +94,9 @@ describe('companion-core V2-B cognitive foundation', () => {
 
   it('does not over-save casual one-off conversation', () => {
     expect(extractMemoryCandidates('ok').length).toBe(0);
+    expect(extractMemoryCandidates('Quel est ton avis ?').length).toBe(0);
+    expect(extractMemoryCandidates('Tu peux m’aider ?').length).toBe(0);
+    expect(extractMemoryCandidates('Ton analyse ?').length).toBe(0);
     const evaluated = evaluateLearningEvent(createLearningEvent({
       type: 'interaction_outcome',
       input: 'Merci',
@@ -345,6 +348,19 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(stripWakePrefix('Hey Nexus: lance la suite')).toBe('lance la suite');
     expect(stripWakePrefix('Nexus réveille-toi lance la suite')).toBe('lance la suite');
     expect(stripWakePrefix('Peux-tu aider Nexus Companion ?')).toBe('Peux-tu aider Nexus Companion ?');
+    expect(stripWakePrefix('Nexus Companion est mon projet')).toBe('Nexus Companion est mon projet');
+    expect(stripWakePrefix('Nexus souviens-toi que mon projet actuel est Nexus Companion')).toBe('souviens-toi que mon projet actuel est Nexus Companion');
+  });
+
+  it('captures explicit relationship/style guidance without over-triggering normal questions', () => {
+    const professionalStyle = extractMemoryCandidates('Parle-moi de manière plus professionnelle.');
+    expect(professionalStyle.length).toBe(1);
+    expect(professionalStyle[0].type).toBe('relationship_context');
+    expect(professionalStyle[0].layer).toBe('relationship_context');
+
+    const directPreference = extractMemoryCandidates('Je préfère que tu sois plus direct.');
+    expect(directPreference.length).toBe(1);
+    expect(['user_preference', 'relationship_context']).toContain(directPreference[0].type);
   });
 
   it('does not create memories for incomplete memory commands', () => {

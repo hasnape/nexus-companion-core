@@ -41,8 +41,31 @@ describe('CompanionMemoryPanel', () => {
     });
 
     expect(textOf(ui)).toContain('Mémoire de Nexus');
-    expect(textOf(ui)).toContain('Nexus retient le minimum utile pour mieux vous accompagner.');
-    expect(textOf(ui)).toContain('Les informations sensibles nécessitent votre accord');
+    expect(textOf(ui)).toContain('Nexus apprend progressivement à partir de vos échanges');
+    expect(textOf(ui)).toContain('les informations sensibles nécessitent votre accord');
+  });
+
+  it('shows grouped summary headings', () => {
+    const ui = CompanionMemoryPanel({
+      memories: [{
+        id: 'm1',
+        type: 'user_preference',
+        layer: 'preference',
+        content: 'Je préfère un mode offline.',
+        source: 'user_message',
+        confidence: 0.8,
+        importance: 0.8,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }],
+      memoryCandidates: [],
+      onClearMemory: async () => {}
+    });
+
+    expect(textOf(ui)).toContain('Préférences');
+    expect(textOf(ui)).toContain('Projets');
+    expect(textOf(ui)).toContain('Contexte');
+    expect(textOf(ui)).toContain('Souvenirs récents');
   });
 
   it('clear memory button still calls onClearMemory', () => {

@@ -1,4 +1,5 @@
-import type { CompanionMemoryItem, MemoryStore } from './types';
+import { consolidateMemoryCandidates } from './cognitive';
+import type { CompanionMemoryItem, LearningEvent, MemoryStore } from './types';
 
 interface KeyValueStorage {
   getItem(key: string): string | null;
@@ -17,6 +18,7 @@ const createFallbackStorage = (): KeyValueStorage => {
 
 export class LocalMemoryStore implements MemoryStore {
   private cache: CompanionMemoryItem[] | null = null;
+  private learningEvents: LearningEvent[] = [];
 
   constructor(
     private readonly key = 'nexus-companion-core-memory-v2a',
@@ -65,6 +67,7 @@ export class LocalMemoryStore implements MemoryStore {
 
   async clearMemories(): Promise<void> {
     this.persist([]);
+    this.learningEvents = [];
   }
 
   async searchMemories(query: string): Promise<CompanionMemoryItem[]> {
@@ -74,5 +77,20 @@ export class LocalMemoryStore implements MemoryStore {
       memory.content.toLowerCase().includes(value)
       || memory.tags?.some((tag) => tag.toLowerCase().includes(value))
     ));
+  }
+
+  async addLearningEvent(event: LearningEvent): Promise<void> {
+    this.learningEvents.push(event);
+    this.learningEvents = this.learningEvents.slice(-100);
+  }
+
+  async listLearningEvents(limit = 30): Promise<LearningEvent[]> {
+    return this.learningEvents.slice(-limit);
+  }
+
+  async consolidateMemories(candidates: CompanionMemoryItem[]): Promise<CompanionMemoryItem[]> {
+    const consolidated = consolidateMemoryCandidates(this.readAll(), candidates);
+    this.persist(consolidated);
+    return consolidated;
   }
 }

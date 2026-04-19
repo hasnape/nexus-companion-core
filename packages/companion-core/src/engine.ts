@@ -50,8 +50,20 @@ export const createCompanionEngine = ({
     const decision = decideCompanionResponse(context);
     const text = await provider.generateCompanionReply(context, decision);
 
-    for (const candidate of decision.memoryCandidates) {
-      if (!candidate.requiresConfirmation) {
+    const extensibleStore = memoryStore as MemoryStore & {
+      addLearningEvent?: (event: import('./types').LearningEvent) => Promise<void>;
+      consolidateMemories?: (candidates: CompanionMemoryItem[]) => Promise<CompanionMemoryItem[]>;
+    };
+
+    for (const event of decision.learningEvents ?? []) {
+      await extensibleStore.addLearningEvent?.(event);
+    }
+
+    const candidates = decision.memoryCandidates.filter((candidate) => !candidate.requiresConfirmation);
+    if (extensibleStore.consolidateMemories) {
+      await extensibleStore.consolidateMemories(candidates);
+    } else {
+      for (const candidate of candidates) {
         await memoryStore.addMemory(candidate);
       }
     }

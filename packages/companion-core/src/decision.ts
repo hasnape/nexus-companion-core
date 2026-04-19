@@ -13,7 +13,7 @@ const containsHiddenSurveillanceRequest = (text: string): boolean => (
 );
 
 const containsSelfModificationRequest = (text: string): boolean => (
-  /modifier.*code|self[- ]?modify|auto[- ]?commit|auto[- ]?patch|modifie ton code tout seul/i.test(text)
+  /modifi(?:er|e).*code|modifie.*propre code|self[- ]?modify|auto[- ]?commit|auto[- ]?patch|modifie ton code tout seul/i.test(text)
 );
 
 const containsDestructiveFormatRequest = (text: string): boolean => {
@@ -29,10 +29,14 @@ const containsDestructiveActionRequest = (text: string): boolean => (
 );
 
 const containsDeploymentBypassRequest = (text: string): boolean => (
-  /mets? en prod sans validation|d[ée]ploie sans validation|deploy without validation|bypass (la )?validation( du cr[ée]ateur)?/i.test(text)
+  /met(?:s|tre)? en prod sans validation|d[ée]ploie sans validation|deploy without validation|bypass (la )?validation( du cr[ée]ateur)?/i.test(text)
 );
 
 const explicitLearnRequest = (text: string): boolean => /souviens-toi|retiens que|remember that|apprends/i.test(text);
+
+const requestsSensitiveSensorActivation = (text: string): boolean => (
+  /active.*(cam[ée]ra|micro|microphone|location|localisation|gps)|turn on.*(camera|microphone|location)|ouvre.*cam[ée]ra/i.test(text)
+);
 
 const buildSignalFromContext = (context: CompanionContext): EnvironmentSignal[] => {
   const signals: EnvironmentSignal[] = [];
@@ -141,6 +145,11 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
 
   if (buildEnvironmentConsentPromptNeeded(lowerText)) {
     riskFlags.push('environment_monitoring_scope_required');
+    requiresConfirmation.push('explicit_environment_scope_and_consent_required');
+  }
+
+  if (requestsSensitiveSensorActivation(lowerText)) {
+    riskFlags.push('sensor_activation_consent_required');
     requiresConfirmation.push('explicit_environment_scope_and_consent_required');
   }
 

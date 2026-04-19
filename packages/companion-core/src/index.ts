@@ -9,3 +9,6 @@ export * from './engine';
 
 export * from './cognitive';
 export * from './brain';
+
+export * from './personality';
+export * from './response';

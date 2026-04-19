@@ -117,6 +117,42 @@ describe('CompanionMemoryPanel', () => {
     expect(text).not.toContain('Suggestions de mémoire');
   });
 
+  it('renders user-authored memories that mention app_state in prose or config text', () => {
+    const ui = CompanionMemoryPanel({
+      memories: [
+        {
+          id: 'prose-app-state',
+          type: 'conversation_summary',
+          layer: 'episodic',
+          content: 'Souviens-toi que mon exemple JSON contient "source":"app_state".',
+          source: 'user_message',
+          confidence: 0.8,
+          importance: 0.8,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        },
+        {
+          id: 'config-app-state',
+          type: 'project_context',
+          layer: 'project_context',
+          content: 'Voici une config: {"source":"app_state","enabled":true}',
+          source: 'user_message',
+          confidence: 0.8,
+          importance: 0.8,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      ],
+      memoryCandidates: [],
+      onClearMemory: async () => {}
+    });
+
+    const text = textOf(ui);
+    expect(text).toContain('Souvenirs enregistrés : 2');
+    expect(text).toContain('Souviens-toi que mon exemple JSON contient "source":"app_state".');
+    expect(text).toContain('Voici une config: {"source":"app_state","enabled":true}');
+  });
+
   it('clear memory button still calls onClearMemory', () => {
     const onClearMemory = vi.fn(async () => {});
     const ui = CompanionMemoryPanel({

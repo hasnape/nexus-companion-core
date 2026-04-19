@@ -19,6 +19,15 @@ const SENSITIVE_PATTERNS = [
 const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner/i];
 const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline/i];
 const RELATIONSHIP_PATTERNS = [/parle-moi|ton|style|sois plus|communication/i];
+const USER_PROFILE_PATTERNS = [
+  /je suis\s+/i,
+  /je m['’]appelle\s+/i,
+  /mon nom est\s+/i,
+  /j['’]habite\s+/i,
+  /je vis [àa]\s+/i,
+  /mon m[ée]tier est\s+/i,
+  /je travaille comme\s+/i
+];
 const PRECISE_LOCATION_PATTERNS = [/adresse exacte|exact address|coordonn[ée]es gps|latitude|longitude|localisation exacte/i];
 const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le cloud|store everything.*cloud/i];
 
@@ -46,6 +55,7 @@ export const createMemoryItem = (memory: CreateMemoryItemInput): CompanionMemory
 
 const inferMemoryType = (content: string): MemoryCategory => {
   if (PROJECT_PATTERNS.some((pattern) => pattern.test(content))) return 'project_context';
+  if (USER_PROFILE_PATTERNS.some((pattern) => pattern.test(content))) return 'user_profile';
   if (PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))) return 'user_preference';
   if (RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(content))) return 'relationship_context';
   return 'conversation_summary';
@@ -81,7 +91,8 @@ export const extractMemoryCandidates = (
   const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))
     || PROJECT_PATTERNS.some((pattern) => pattern.test(content))
     || RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(content))
-    || /je suis|j'habite|mon prénom|mon prenom|souviens-toi|remember my|retiens que/i.test(content)
+    || USER_PROFILE_PATTERNS.some((pattern) => pattern.test(content))
+    || /mon prénom|mon prenom|souviens-toi|remember my|retiens que/i.test(content)
     || PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(content));
 
   const likelySmallTalk = /^(ok|merci|salut|hello|bonjour)[!. ]*$/i.test(content);

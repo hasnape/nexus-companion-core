@@ -16,6 +16,10 @@ const containsSelfModificationRequest = (text: string): boolean => (
   /modifier.*code|self[- ]?modify|auto[- ]?commit|auto[- ]?patch|modifie ton code tout seul/i.test(text)
 );
 
+const containsDestructiveActionRequest = (text: string): boolean => (
+  /supprime tout|efface tout|delete everything|wipe all|format(e|te)?/i.test(text)
+);
+
 const explicitLearnRequest = (text: string): boolean => /souviens-toi|retiens que|remember that|apprends/i.test(text);
 
 const buildSignalFromContext = (context: CompanionContext): EnvironmentSignal[] => {
@@ -85,6 +89,10 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
       requiresConfirmation: true,
       riskFlags: ['creator_approval_workflow_required']
     }));
+  }
+  if (containsDestructiveActionRequest(lowerText)) {
+    riskFlags.push('destructive_action_request');
+    requiresConfirmation.push('explicit_authorization_required');
   }
   if (/d[ée]sactive.*(s[ée]curit[ée]|safety)|ignore.*safety/i.test(lowerText)) {
     riskFlags.push('disable_safety_request');

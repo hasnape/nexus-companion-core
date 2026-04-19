@@ -14,6 +14,7 @@ import {
   evaluateLearningEvent,
   extractMemoryCandidates,
   LocalMemoryStore,
+  LocalDeterministicAiProvider,
   scoreMemoryImportance,
   scoreMemoryStability,
   shouldAskMemoryConfirmation,
@@ -218,6 +219,41 @@ describe('companion-core V2-B cognitive foundation', () => {
       memories: []
     }));
     expect(selfCode.requiredConfirmations).toContain('creator_code_change_approval_required');
+  });
+
+  it('destructive request is blocked pending explicit authorization', async () => {
+    const profile = createDefaultCompanionProfile();
+    const decision = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'supprime tout',
+      memories: []
+    }));
+    const provider = new LocalDeterministicAiProvider();
+    const reply = await provider.generateCompanionReply(buildCompanionContext({ profile, userMessage: 'supprime tout', memories: [] }), decision);
+
+    expect(decision.requiredConfirmations).toContain('explicit_authorization_required');
+    expect(decision.riskFlags).toContain('destructive_action_request');
+    expect(['answer', 'action_request']).toContain(decision.intent);
+    expect(reply.toLowerCase()).toContain('confirmation explicite');
+    expect(reply).toContain('Amine 0410');
+  });
+
+  it('classifies stable profile facts as user_profile', () => {
+    const fullName = extractMemoryCandidates('Je m’appelle ingénieur Amine 0410.')[0];
+    const profession = extractMemoryCandidates('Je suis développeur.')[0];
+
+    expect(fullName.type).toBe('user_profile');
+    expect(profession.type).toBe('user_profile');
+  });
+
+  it('keeps sensitive profile facts gated and casual messages not reclassified', () => {
+    const location = extractMemoryCandidates('J’habite à 7 rue des Fleurs, adresse exacte.')[0];
+    const casual = extractMemoryCandidates('Salut, ça va ?');
+
+    expect(location.type).toBe('user_profile');
+    expect(location.requiresConfirmation).toBe(true);
+    expect(location.sensitivity).toBe('critical');
+    expect(casual.length).toBe(0);
   });
 
   it('local memory store can add/list/delete/clear and keep learning events', async () => {

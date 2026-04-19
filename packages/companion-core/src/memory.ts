@@ -19,8 +19,48 @@ const SENSITIVE_PATTERNS = [
 const PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner/i];
 const PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline/i];
 const RELATIONSHIP_PATTERNS = [/parle-moi|ton|style|sois plus|communication/i];
+const STATIC_USER_PROFILE_PATTERNS = [
+  /je m['’]appelle\s+/i,
+  /mon nom est\s+/i,
+  /mon pr[ée]nom est\s+/i,
+  /j['’]habite\s+/i,
+  /je vis [àa]\s+/i,
+  /mon m[ée]tier est\s+/i,
+  /je travaille comme\s+/i,
+  /je travaille en tant que\s+/i
+];
+const TRANSIENT_JE_SUIS_PATTERNS = [
+  /^stress[ée]?$/,
+  /^fatigu[ée]?$/,
+  /^content(?:e)?$/,
+  /^malade$/,
+  /^triste$/,
+  /^en col[èe]re$/,
+  /^occup[ée]?$/,
+  /^en retard$/,
+  /^perdu(?:e)?$/,
+  /^inquiet(?:e)?$/,
+  /^disponible$/,
+  /^indisponible$/,
+  /^dans le train$/,
+  /^en train de\b/
+];
+const STABLE_ROLE_KEYWORDS = /(d[ée]veloppeur|developpeur|ing[ée]nieur|ingenieur|technicien|auto-entrepreneur|entrepreneur|fondateur|cofondateur|architecte|consultant|designer|chef de projet|support)/i;
 const PRECISE_LOCATION_PATTERNS = [/adresse exacte|exact address|coordonn[ée]es gps|latitude|longitude|localisation exacte/i];
 const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le cloud|store everything.*cloud/i];
+
+const isStableJeSuisProfile = (content: string): boolean => {
+  const match = content.match(/je suis\s+([^,.!?]+)/i);
+  if (!match) return false;
+  const complement = match[1].trim().toLowerCase();
+  if (!complement) return false;
+  if (TRANSIENT_JE_SUIS_PATTERNS.some((pattern) => pattern.test(complement))) return false;
+  return STABLE_ROLE_KEYWORDS.test(complement);
+};
+
+const isStableUserProfileStatement = (content: string): boolean => (
+  STATIC_USER_PROFILE_PATTERNS.some((pattern) => pattern.test(content)) || isStableJeSuisProfile(content)
+);
 
 export const isSensitiveMemoryContent = (content: string): boolean => SENSITIVE_PATTERNS.some((pattern) => pattern.test(content));
 
@@ -46,6 +86,7 @@ export const createMemoryItem = (memory: CreateMemoryItemInput): CompanionMemory
 
 const inferMemoryType = (content: string): MemoryCategory => {
   if (PROJECT_PATTERNS.some((pattern) => pattern.test(content))) return 'project_context';
+  if (isStableUserProfileStatement(content)) return 'user_profile';
   if (PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))) return 'user_preference';
   if (RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(content))) return 'relationship_context';
   return 'conversation_summary';
@@ -81,7 +122,8 @@ export const extractMemoryCandidates = (
   const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(content))
     || PROJECT_PATTERNS.some((pattern) => pattern.test(content))
     || RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(content))
-    || /je suis|j'habite|mon prénom|mon prenom|souviens-toi|remember my|retiens que/i.test(content)
+    || isStableUserProfileStatement(content)
+    || /mon prénom|mon prenom|souviens-toi|remember my|retiens que/i.test(content)
     || PRECISE_LOCATION_PATTERNS.some((pattern) => pattern.test(content));
 
   const likelySmallTalk = /^(ok|merci|salut|hello|bonjour)[!. ]*$/i.test(content);

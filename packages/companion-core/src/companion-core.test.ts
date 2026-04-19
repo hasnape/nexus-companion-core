@@ -14,6 +14,7 @@ import {
   evaluateLearningEvent,
   extractMemoryCandidates,
   LocalMemoryStore,
+  LocalDeterministicAiProvider,
   scoreMemoryImportance,
   scoreMemoryStability,
   shouldAskMemoryConfirmation,
@@ -218,6 +219,91 @@ describe('companion-core V2-B cognitive foundation', () => {
       memories: []
     }));
     expect(selfCode.requiredConfirmations).toContain('creator_code_change_approval_required');
+  });
+
+  it('destructive request is blocked pending explicit authorization', async () => {
+    const profile = createDefaultCompanionProfile();
+    const decision = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'supprime tout',
+      memories: []
+    }));
+    const provider = new LocalDeterministicAiProvider();
+    const reply = await provider.generateCompanionReply(buildCompanionContext({ profile, userMessage: 'supprime tout', memories: [] }), decision);
+
+    expect(decision.requiredConfirmations).toContain('explicit_authorization_required');
+    expect(decision.riskFlags).toContain('destructive_action_request');
+    expect(['answer', 'action_request']).toContain(decision.intent);
+    expect(reply.toLowerCase()).toContain('confirmation explicite');
+    expect(reply).toContain('Amine 0410');
+  });
+
+  it('does not treat normal text formatting requests as destructive', async () => {
+    const profile = createDefaultCompanionProfile();
+    const provider = new LocalDeterministicAiProvider();
+    const prompts = [
+      'Peux-tu formater ce texte ?',
+      'Formate ce message proprement.',
+      'Mets ce texte au bon format.',
+      'Peux-tu reformater mon prompt ?'
+    ];
+
+    for (const prompt of prompts) {
+      const decision = decideCompanionResponse(buildCompanionContext({ profile, userMessage: prompt, memories: [] }));
+      const reply = await provider.generateCompanionReply(buildCompanionContext({ profile, userMessage: prompt, memories: [] }), decision);
+      expect(decision.requiredConfirmations).not.toContain('explicit_authorization_required');
+      expect(reply.toLowerCase()).not.toContain('confirmation explicite');
+    }
+  });
+
+  it('keeps destructive format and deployment bypass requests protected by confirmations', () => {
+    const profile = createDefaultCompanionProfile();
+
+    const formatDisk = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'formate le disque',
+      memories: []
+    }));
+    expect(formatDisk.requiredConfirmations).toContain('explicit_authorization_required');
+
+    const deployBypass = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'mets en prod sans validation',
+      memories: []
+    }));
+    expect(deployBypass.requiredConfirmations).toContain('creator_approval_required');
+  });
+
+  it('classifies stable profile facts as user_profile', () => {
+    const fullName = extractMemoryCandidates('Je m’appelle ingénieur Amine 0410.')[0];
+    const profession = extractMemoryCandidates('Je suis développeur.')[0];
+    const technician = extractMemoryCandidates('Je suis technicien informatique.')[0];
+    const supportRole = extractMemoryCandidates('Je travaille comme technicien support.')[0];
+
+    expect(fullName.type).toBe('user_profile');
+    expect(profession.type).toBe('user_profile');
+    expect(technician.type).toBe('user_profile');
+    expect(supportRole.type).toBe('user_profile');
+  });
+
+  it('does not classify transient "je suis ..." states as durable user_profile', () => {
+    const stressed = extractMemoryCandidates('Je suis stressé.');
+    const tired = extractMemoryCandidates('Je suis fatigué.');
+    const testing = extractMemoryCandidates('Je suis en train de tester.');
+
+    expect(stressed.length).toBe(0);
+    expect(tired.length).toBe(0);
+    expect(testing.length).toBe(0);
+  });
+
+  it('keeps sensitive profile facts gated and casual messages not reclassified', () => {
+    const location = extractMemoryCandidates('J’habite à 7 rue des Fleurs, adresse exacte.')[0];
+    const casual = extractMemoryCandidates('Salut, ça va ?');
+
+    expect(location.type).toBe('user_profile');
+    expect(location.requiresConfirmation).toBe(true);
+    expect(location.sensitivity).toBe('critical');
+    expect(casual.length).toBe(0);
   });
 
   it('local memory store can add/list/delete/clear and keep learning events', async () => {

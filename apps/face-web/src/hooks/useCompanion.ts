@@ -31,6 +31,17 @@ export const useCompanion = () => {
     };
   }, [runtime, listener]);
 
+  const refreshCompanionMemoryState = async () => {
+    setMemory(runtime.getMemory());
+    setDisplayMemories(await runtime.listDisplayableMemories());
+    setMemoryCandidates(runtime.getMemoryCandidates());
+  };
+
+  const handleMessageAndRefreshState = async (message: string) => {
+    setSnapshot(await runtime.handleUserMessage(message));
+    await refreshCompanionMemoryState();
+  };
+
   return {
     snapshot,
     memory,
@@ -41,10 +52,7 @@ export const useCompanion = () => {
     voiceInputAvailable: listener.available,
     isListening,
     sendMessage: async (text: string) => {
-      setSnapshot(await runtime.handleUserMessage(text));
-      setMemory(runtime.getMemory());
-      setDisplayMemories(await runtime.listDisplayableMemories());
-      setMemoryCandidates(runtime.getMemoryCandidates());
+      await handleMessageAndRefreshState(text);
     },
     setTraining: (config: TrainingConfig) => runtime.setTraining(config),
     triggerAction: (name: (typeof snapshot.action)['name']) => setSnapshot(runtime.trigger(name)),
@@ -73,7 +81,7 @@ export const useCompanion = () => {
         setTranscript(nextTranscript);
         if (!isFinal || !nextTranscript) return;
         setListening(false);
-        setSnapshot(await runtime.handleUserMessage(nextTranscript));
+        await handleMessageAndRefreshState(nextTranscript);
       }, (message) => {
         setListenerError(message);
         setListening(false);

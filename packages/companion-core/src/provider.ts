@@ -1,7 +1,24 @@
 import type { CompanionAiProvider, CompanionContext, CompanionDecision } from './types';
 
+const BLOCKING_CONFIRMATION_FLAGS = new Set([
+  'explicit_authorization_required',
+  'creator_approval_required',
+  'environment_monitoring_consent_required',
+  'explicit_environment_scope_and_consent_required',
+  'self_code_modification_approval_required',
+  'creator_code_change_approval_required'
+]);
+
+const hasBlockingConfirmation = (decision: CompanionDecision): boolean => (
+  decision.requiredConfirmations.some((flag) => BLOCKING_CONFIRMATION_FLAGS.has(flag))
+);
+
 export class LocalDeterministicAiProvider implements CompanionAiProvider {
   async generateCompanionReply(context: CompanionContext, decision: CompanionDecision): Promise<string> {
+    if (hasBlockingConfirmation(decision)) {
+      return 'Je ne peux pas exécuter cette action automatiquement. Une confirmation explicite de l’ingénieur Amine 0410 est requise avant toute action sensible.';
+    }
+
     switch (decision.intent) {
       case 'safety_refusal':
         return 'Je ne peux pas aider pour une demande dangereuse ou illégale. Je peux proposer une alternative sûre.';

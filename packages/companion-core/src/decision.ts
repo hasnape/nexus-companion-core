@@ -16,6 +16,22 @@ const containsSelfModificationRequest = (text: string): boolean => (
   /modifier.*code|self[- ]?modify|auto[- ]?commit|auto[- ]?patch|modifie ton code tout seul/i.test(text)
 );
 
+const containsDestructiveFormatRequest = (text: string): boolean => {
+  const formatVerb = /format(e|er|age)?/i.test(text);
+  const destructiveTarget = /disque|disk|stockage|storage|m[ée]moire|memory|donn[ée]es|data|app state|[ée]tat de l['’]app/i.test(text);
+  const massOperation = /tout|toutes|all|entier|entière/i.test(text);
+  return formatVerb && destructiveTarget && (massOperation || /disque|disk|stockage|storage/.test(text));
+};
+
+const containsDestructiveActionRequest = (text: string): boolean => (
+  /supprime tout|efface (tout|toutes les donn[ée]es)|delete everything|wipe all|r[ée]initialise toute la m[ée]moire|vide toutes les m[ée]moires|delete user data|wipe app state/i.test(text)
+  || containsDestructiveFormatRequest(text)
+);
+
+const containsDeploymentBypassRequest = (text: string): boolean => (
+  /mets? en prod sans validation|d[ée]ploie sans validation|deploy without validation|bypass (la )?validation( du cr[ée]ateur)?/i.test(text)
+);
+
 const explicitLearnRequest = (text: string): boolean => /souviens-toi|retiens que|remember that|apprends/i.test(text);
 
 const buildSignalFromContext = (context: CompanionContext): EnvironmentSignal[] => {
@@ -85,6 +101,14 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
       requiresConfirmation: true,
       riskFlags: ['creator_approval_workflow_required']
     }));
+  }
+  if (containsDestructiveActionRequest(lowerText)) {
+    riskFlags.push('destructive_action_request');
+    requiresConfirmation.push('explicit_authorization_required');
+  }
+  if (containsDeploymentBypassRequest(lowerText)) {
+    riskFlags.push('deployment_validation_bypass_request');
+    requiresConfirmation.push('creator_approval_required');
   }
   if (/d[ée]sactive.*(s[ée]curit[ée]|safety)|ignore.*safety/i.test(lowerText)) {
     riskFlags.push('disable_safety_request');

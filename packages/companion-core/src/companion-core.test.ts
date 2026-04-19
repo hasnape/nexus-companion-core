@@ -315,7 +315,7 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(casual.length).toBe(0);
   });
 
-  it('local memory store can add/list/delete/clear and keep learning events', async () => {
+  it('local memory store can add/list/delete and clear local learning events during wipe', async () => {
     const store = new LocalMemoryStore('test-memory');
     const first = createMemoryItem({ type: 'project_context', layer: 'project_context', content: 'Roadmap trimestrielle', source: 'manual', confidence: 0.9, importance: 0.8 });
     await store.addMemory(first);
@@ -338,6 +338,7 @@ describe('companion-core V2-B cognitive foundation', () => {
 
     await store.clearMemories();
     expect((await store.listMemories()).length).toBe(0);
+    expect((await store.listLearningEvents?.())?.length).toBe(0);
   });
 
   it('stability score increases with occurrences', () => {

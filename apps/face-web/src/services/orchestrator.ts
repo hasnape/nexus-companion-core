@@ -90,6 +90,8 @@ export class CompanionRuntime {
     this.memoryState = { session: [], longTerm: [], behavioral: [] };
     this.memoryCandidates = [];
     this.brainSummary = undefined;
+    this.conversation = [];
+    this.logs = [];
     this.log('memory cleared by user');
   }
 

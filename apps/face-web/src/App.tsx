@@ -194,12 +194,12 @@ export default function App() {
     if (!isOnline || visualState === 'offline') return 'Mode hors ligne';
     if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
     if (!isSessionActive) return 'Micro désactivé';
-    if (wakeState === 'awake_listening_for_command' || visualState === 'listening_for_command') {
+    if (visualState === 'speaking') return 'Je réponds';
+    if (visualState === 'thinking') return 'Je réfléchis';
+    const isListeningForCommand = wakeState === 'awake_listening_for_command' || visualState === 'listening_for_command';
+    if (isListeningForCommand) {
       return transcript?.trim() ? 'J’écoute votre demande' : 'Réveil détecté — je vous écoute';
     }
-    if (transcript?.trim()) return 'J’écoute votre demande';
-    if (visualState === 'thinking') return 'Je réfléchis';
-    if (visualState === 'speaking') return 'Je réponds';
     return 'Micro actif — dites “Nexus”';
   })();
 

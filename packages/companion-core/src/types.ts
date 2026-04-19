@@ -85,22 +85,108 @@ export type MemoryCategory =
   | 'conversation_summary'
   | 'system_note';
 
-export type MemorySource = 'user_message' | 'conversation_inference' | 'system' | 'manual';
+export type MemorySource =
+  | 'user_message'
+  | 'conversation_inference'
+  | 'system'
+  | 'manual'
+  | 'creator_instruction'
+  | 'environment_signal';
+
+export type CognitiveMemoryLayer =
+  | 'episodic'
+  | 'semantic'
+  | 'preference'
+  | 'habit'
+  | 'project_context'
+  | 'relationship_context'
+  | 'environment_context'
+  | 'system_learning';
+
+export type MemorySensitivity = 'low' | 'medium' | 'high' | 'critical';
+
+export interface CognitiveMemoryEvidence {
+  id: string;
+  type: 'interaction' | 'correction' | 'signal' | 'manual_note' | 'system_rule';
+  source: MemorySource;
+  detail: string;
+  capturedAt: number;
+}
 
 export interface CompanionMemoryItem {
   id: string;
   type: MemoryCategory;
+  layer?: CognitiveMemoryLayer;
   content: string;
   source: MemorySource;
   confidence: number;
   importance: number;
+  stability?: number;
+  sensitivity?: MemorySensitivity;
   createdAt: number;
   updatedAt: number;
+  lastAccessedAt?: number;
   expiresAt?: number;
   tags?: string[];
+  evidence?: CognitiveMemoryEvidence[];
+  creatorApproved?: boolean;
   requiresConfirmation?: boolean;
   sensitive?: boolean;
   storagePreference?: CompanionStoragePreference;
+}
+
+export interface EnvironmentSignal {
+  id: string;
+  type:
+  | 'app_online_status'
+  | 'app_mode'
+  | 'visual_state'
+  | 'voice_state'
+  | 'local_time_bucket'
+  | 'device_capability'
+  | 'user_provided_context'
+  | 'project_context'
+  | 'camera_status'
+  | 'microphone_status'
+  | 'location_status';
+  value: string | number | boolean | Record<string, unknown>;
+  source: 'app_state' | 'voice_state' | 'user_input' | 'project_state' | 'device_capability';
+  capturedAt: number;
+  sensitivity: MemorySensitivity;
+  consentRequired: boolean;
+  storagePreference: CompanionStoragePreference;
+  ttl?: number;
+}
+
+export interface LearningEvent {
+  id: string;
+  type:
+  | 'user_correction'
+  | 'repeated_preference'
+  | 'confirmed_memory'
+  | 'environment_signal'
+  | 'project_update'
+  | 'interaction_outcome'
+  | 'safety_warning'
+  | 'creator_instruction';
+  input: string | EnvironmentSignal | CompanionMemoryItem;
+  source: MemorySource | EnvironmentSignal['source'];
+  createdAt: number;
+  confidence: number;
+  importance: number;
+  suggestedMemoryLayer: CognitiveMemoryLayer;
+  requiresConfirmation: boolean;
+  riskFlags: string[];
+}
+
+export interface CognitiveMemorySummary {
+  creatorUserContext: string[];
+  currentProjects: string[];
+  preferences: string[];
+  habits: string[];
+  relationshipContext: string[];
+  safetyConstraints: string[];
+  recentImportantEpisodic: string[];
 }
 
 export type ResponseIntent =
@@ -116,6 +202,9 @@ export interface CompanionContext {
   profile: CompanionProfile;
   userMessage: string;
   relevantMemories: CompanionMemoryItem[];
+  cognitiveMemorySummary?: CognitiveMemorySummary;
+  environmentSignals?: EnvironmentSignal[];
+  recentLearningEvents?: LearningEvent[];
   recentConversationSummary?: string;
   appState?: {
     isOnline?: boolean;
@@ -131,6 +220,7 @@ export interface CompanionContext {
 export interface CompanionDecision {
   intent: ResponseIntent;
   memoryCandidates: CompanionMemoryItem[];
+  learningEvents?: LearningEvent[];
   suggestedResponseStyle: 'warm' | 'clear' | 'protective' | 'practical' | 'empathetic';
   requiredConfirmations: string[];
   riskFlags: string[];
@@ -153,4 +243,13 @@ export interface MemoryStore {
   deleteMemory(id: string): Promise<void>;
   clearMemories(): Promise<void>;
   searchMemories(query: string): Promise<CompanionMemoryItem[]>;
+}
+
+export interface LearningStore {
+  addLearningEvent?(event: LearningEvent): Promise<void>;
+  listLearningEvents?(limit?: number): Promise<LearningEvent[]>;
+}
+
+export interface CognitiveMemoryStore {
+  consolidateMemories?(candidates: CompanionMemoryItem[]): Promise<CompanionMemoryItem[]>;
 }

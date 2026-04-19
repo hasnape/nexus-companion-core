@@ -10,7 +10,7 @@ export function CompanionMemoryPanel({ memories, memoryCandidates, onClearMemory
   return (
     <section className="panel nexus-memory-panel" aria-label="Mémoire de Nexus">
       <h3>Mémoire de Nexus</h3>
-      <p>Nexus peut retenir uniquement les informations utiles pour mieux vous accompagner. Vous gardez le contrôle.</p>
+      <p>Nexus retient le minimum utile pour mieux vous accompagner. Les informations sensibles nécessitent votre accord, et la mémoire peut être effacée à tout moment.</p>
       <p>Souvenirs enregistrés : {memories.length}</p>
       {memories.length === 0 ? (
         <p className="memory-empty">Aucun souvenir utile enregistré pour le moment.</p>

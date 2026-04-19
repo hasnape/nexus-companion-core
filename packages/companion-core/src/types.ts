@@ -1,8 +1,57 @@
 export type CompanionLanguagePreference = 'fr-FR' | 'en-US' | 'multilingual';
+export type CompanionStoragePreference = 'local' | 'cloud_allowed' | 'cloud_restricted';
+
+export interface CreatorIdentity {
+  creatorId: string;
+  role: 'creator';
+  authorityLevel: 'highest_product_local_authority';
+  description: string;
+}
+
+export interface SafetyConstitutionRule {
+  id: string;
+  description: string;
+}
+
+export interface SafetyConstitution {
+  title: string;
+  version: string;
+  rules: SafetyConstitutionRule[];
+}
+
+export interface StorageCloudPolicy {
+  localStoragePreferred: true;
+  cloudUseAllowedWhenJustified: true;
+  sensitiveDataDefaultPreference: 'local';
+  cloudDataRequirements: Array<'minimal' | 'purposeful' | 'deletable' | 'auditable'>;
+  offlineCapabilityPriority: 'high';
+}
+
+export interface SelfImprovementPolicy {
+  requiresCreatorApprovalForCodeChanges: true;
+  allowedWorkflow: Array<
+  | 'analyze_code'
+  | 'propose_changes'
+  | 'generate_patch_or_pr'
+  | 'run_tests'
+  | 'produce_risk_report'
+  | 'wait_for_creator_approval'
+  | 'apply_after_explicit_approval'
+  >;
+  disallowedActions: Array<
+  | 'autonomous_production_deploy'
+  | 'hidden_code_modification'
+  | 'bypass_tests'
+  | 'modify_safety_rules_without_creator_approval'
+  | 'execute_arbitrary_system_commands_without_authorization'
+  | 'silent_memory_or_privacy_policy_change'
+  >;
+}
 
 export interface CompanionProfile {
   name: string;
   role: string;
+  creatorIdentity: CreatorIdentity;
   personalityTraits: string[];
   toneRules: string[];
   languagePreference: CompanionLanguagePreference;
@@ -15,10 +64,16 @@ export interface CompanionProfile {
   };
   behaviorRules: string[];
   privacyRules: string[];
+  safetyConstitution: SafetyConstitution;
+  storageCloudPolicy: StorageCloudPolicy;
+  selfImprovementPolicy: SelfImprovementPolicy;
   memoryPolicy: {
     autoSaveCategories: MemoryCategory[];
     sensitiveCategoriesRequireConfirmation: true;
+    memoryMinimization: true;
+    defaultStoragePreference: CompanionStoragePreference;
   };
+  offlineCapabilityPreference: 'local_first';
   allowedCapabilities: Array<'chat' | 'memory' | 'voice' | 'project_assistance' | 'safety_refusal'>;
 }
 
@@ -45,6 +100,7 @@ export interface CompanionMemoryItem {
   tags?: string[];
   requiresConfirmation?: boolean;
   sensitive?: boolean;
+  storagePreference?: CompanionStoragePreference;
 }
 
 export type ResponseIntent =

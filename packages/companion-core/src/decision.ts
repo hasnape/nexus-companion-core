@@ -7,6 +7,49 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
   const text = context.userMessage.trim();
   const memoryCandidates = extractMemoryCandidates(text);
   const sensitive = isSensitiveMemoryContent(text);
+  const lowerText = text.toLowerCase();
+
+  const riskFlags: string[] = [];
+  const requiresConfirmation: string[] = sensitive ? ['sensitive_memory_confirmation'] : [];
+
+  if (/modifier.*code|self[- ]?modify|auto[- ]?commit|auto[- ]?patch/i.test(lowerText)) {
+    riskFlags.push('self_modification_request');
+    requiresConfirmation.push('creator_code_change_approval_required');
+  }
+  if (/d[ée]sactive.*(s[ée]curit[ée]|safety)|ignore.*safety/i.test(lowerText)) {
+    riskFlags.push('disable_safety_request');
+    return {
+      intent: 'safety_refusal',
+      memoryCandidates: [],
+      suggestedResponseStyle: 'protective',
+      requiredConfirmations: [],
+      riskFlags,
+      nextVisualState: 'speaking'
+    };
+  }
+  if (/deploy|production|mettre en prod/i.test(lowerText) && /sans validation|without approval|automatique/i.test(lowerText)) {
+    riskFlags.push('unauthorized_deployment_request');
+    requiresConfirmation.push('creator_deployment_approval_required');
+  }
+  if (/stocke (tout|toutes).*cloud|store everything.*cloud/i.test(lowerText)) {
+    riskFlags.push('cloud_overcollection_request');
+    requiresConfirmation.push('cloud_minimization_warning');
+  }
+  if (/surveillance cach[ée]e|hidden telemetry|espionne|spy on/i.test(lowerText)) {
+    riskFlags.push('hidden_surveillance_request');
+    return {
+      intent: 'safety_refusal',
+      memoryCandidates: [],
+      suggestedResponseStyle: 'protective',
+      requiredConfirmations: [],
+      riskFlags,
+      nextVisualState: 'speaking'
+    };
+  }
+  if (/supprime tout|delete all|destroy|efface irr[ée]versiblement/i.test(lowerText)) {
+    riskFlags.push('destructive_action_request');
+    requiresConfirmation.push('explicit_authorization_required');
+  }
 
   if (/hack|pirater|violence|illegal/i.test(text)) {
     return {
@@ -14,7 +57,7 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
       memoryCandidates: [],
       suggestedResponseStyle: 'protective',
       requiredConfirmations: [],
-      riskFlags: ['unsafe_request'],
+      riskFlags: [...riskFlags, 'unsafe_request'],
       nextVisualState: 'speaking'
     };
   }
@@ -24,8 +67,8 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
       intent: 'emotional_support',
       memoryCandidates,
       suggestedResponseStyle: 'empathetic',
-      requiredConfirmations: sensitive ? ['sensitive_memory_confirmation'] : [],
-      riskFlags: sensitive ? ['sensitive_topic'] : [],
+      requiredConfirmations: requiresConfirmation,
+      riskFlags: sensitive ? [...riskFlags, 'sensitive_topic'] : riskFlags,
       nextVisualState: 'speaking'
     };
   }
@@ -46,8 +89,8 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
     intent,
     memoryCandidates,
     suggestedResponseStyle: memoryCandidates.length > 0 ? 'practical' : 'clear',
-    requiredConfirmations: sensitive ? ['sensitive_memory_confirmation'] : [],
-    riskFlags: sensitive ? ['sensitive_topic'] : [],
+    requiredConfirmations: requiresConfirmation,
+    riskFlags: sensitive ? [...riskFlags, 'sensitive_topic'] : riskFlags,
     nextVisualState: 'speaking'
   };
 };

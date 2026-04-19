@@ -6,6 +6,7 @@ import {
   type NexusPersonalityProfile
 } from './personality';
 import type { BrainStateSummary, CompanionContext, CompanionDecision } from './types';
+import { isIncompleteMemoryCommand, stripWakePrefix } from './wake';
 
 export type NexusResponseMode = 'normal' | 'project_help' | 'supportive' | 'memory' | 'safety';
 export type NexusResponseTone = 'calm' | 'supportive' | 'professional' | 'firm' | 'protective';
@@ -249,6 +250,13 @@ const renderSafetyReply = (plan: NexusResponsePlan): string => {
 
 const renderMemoryReply = (plan: NexusResponsePlan): string => {
   const hint = plan.relevantMemoryHints[0];
+  if (plan.pendingConfirmations.includes('sensitive_memory_confirmation')) {
+    const stripped = stripWakePrefix(plan.userMessage);
+    const memoryContent = stripped.replace(/^(souviens-toi|souviens toi|retiens(?: que)?|m[eé]morise|garde en m[eé]moire)\s*/i, '').trim();
+    if (memoryContent) {
+      return `Tu veux que je retienne que ${memoryContent.replace(/^que\s+/i, '')} ?`;
+    }
+  }
   if (plan.pendingConfirmations.length > 0) {
     return `J’ai compris ceci: "${plan.userMessage}". Cette information semble sensible; je demande votre confirmation explicite avant mémorisation.`;
   }
@@ -260,6 +268,9 @@ const renderMemoryReply = (plan: NexusResponsePlan): string => {
 
 const renderNormalReply = (plan: NexusResponsePlan): string => {
   if (plan.shouldAskClarifyingQuestion) {
+    if (isIncompleteMemoryCommand(plan.userMessage)) {
+      return 'D’accord. Que veux-tu que je retienne exactement ?';
+    }
     if (plan.activeProject) {
       return `Pour clarifier: vous parlez de la suite pour ${plan.activeProject}, ou d’un autre point précis ?`;
     }

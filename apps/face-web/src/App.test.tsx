@@ -85,6 +85,7 @@ const mockVoiceInput = {
   listenerError: null as string | null,
   wakeState: 'inactive' as WakeListeningState,
   wakeStatus: 'Micro désactivé',
+  mediaState: { micActive: false, cameraActive: false },
   voiceProfile: { name: 'Compagnon Nexus' },
   voiceProfileLabel: 'Voix française détectée'
 };
@@ -229,9 +230,9 @@ describe('App voice and layout flows', () => {
     mockOfflineNote = '';
   });
 
-  it('keeps Activer l’écoute action wired to startListeningSession', () => {
+  it('keeps Démarrer Nexus action wired to startListeningSession', () => {
     const ui = App();
-    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Activer l’écoute')[0];
+    const startButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Démarrer Nexus')[0];
 
     startButton.props.onClick();
 
@@ -244,7 +245,7 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Micro désactivé');
     expect(textOf(ui)).toContain('Le micro ne démarre jamais tout seul.');
-    expect(textOf(ui)).toContain('Activer le micro');
+    expect(textOf(ui)).toContain('Démarrer Nexus');
   });
 
   it('keeps voice panel on Micro désactivé when companion is thinking but session is inactive', () => {
@@ -279,7 +280,7 @@ describe('App voice and layout flows', () => {
 
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Je réfléchis');
-    expect(textOf(ui)).toContain('Arrêter l’écoute');
+    expect(textOf(ui)).toContain('Arrêter la session Nexus');
   });
 
   it('keeps wake-phrase waiting label when session is active with stale transcript', () => {
@@ -314,7 +315,7 @@ describe('App voice and layout flows', () => {
 
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Je réponds');
-    expect(textOf(ui)).toContain('Arrêter l’écoute');
+    expect(textOf(ui)).toContain('Arrêter la session Nexus');
   });
 
   it('keeps Je réponds when speaking with stale transcript', () => {
@@ -329,10 +330,10 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).not.toContain('J’écoute votre demande');
   });
 
-  it('keeps Arrêter l’écoute action wired to stopListeningSession', () => {
+  it('keeps Arrêter la session Nexus action wired to stopListeningSession', () => {
     mockVoiceInput.isSessionActive = true;
     const ui = App();
-    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter l’écoute')[0];
+    const stopButton = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter la session Nexus')[0];
 
     stopButton.props.onClick();
 
@@ -344,7 +345,7 @@ describe('App voice and layout flows', () => {
     mockVoiceInput.isSessionActive = true;
     mockVoiceInput.wakeState = 'waiting_for_wake_phrase';
     const ui = App();
-    const stopButtons = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter l’écoute');
+    const stopButtons = findElements(ui, (element) => element.type === 'button' && textOf(element) === 'Arrêter la session Nexus');
 
     expect(textOf(ui)).toContain('Micro actif — dites “Nexus”');
     expect(textOf(ui)).toContain('En attente du mot “Nexus”');

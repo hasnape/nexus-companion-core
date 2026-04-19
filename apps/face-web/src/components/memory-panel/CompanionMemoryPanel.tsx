@@ -1,4 +1,4 @@
-import { isTechnicalMemoryContent, type CompanionMemoryItem } from '@nexus/companion-core';
+import { isTechnicalMemoryContent, isWakeFragmentNoise, type CompanionMemoryItem } from '@nexus/companion-core';
 
 type CompanionMemoryPanelProps = {
   memories: CompanionMemoryItem[];
@@ -18,6 +18,7 @@ const byGroup = (memories: CompanionMemoryItem[]) => {
     && memory.sensitivity !== 'high'
     && memory.sensitivity !== 'critical'
     && !isTechnicalMemoryContent(memory.content)
+    && !isWakeFragmentNoise(memory.content)
   ));
   return {
     preferences: nonSensitive.filter((memory) => memory.type === 'user_preference' || memory.layer === 'preference'),
@@ -31,8 +32,8 @@ const byGroup = (memories: CompanionMemoryItem[]) => {
 };
 
 export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary, onClearMemory }: CompanionMemoryPanelProps) {
-  const cleanMemories = memories.filter((memory) => !isTechnicalMemoryContent(memory.content));
-  const cleanCandidates = memoryCandidates.filter((candidate) => !isTechnicalMemoryContent(candidate.content));
+  const cleanMemories = memories.filter((memory) => !isTechnicalMemoryContent(memory.content) && !isWakeFragmentNoise(memory.content));
+  const cleanCandidates = memoryCandidates.filter((candidate) => !isTechnicalMemoryContent(candidate.content) && !isWakeFragmentNoise(candidate.content));
   const grouped = byGroup(cleanMemories);
 
   return (

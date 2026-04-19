@@ -5,7 +5,10 @@ import {
   isTechnicalMemoryContent,
   LocalMemoryStore,
   type CompanionMemoryItem,
-  type MemoryStore
+  type MemoryStore,
+  isWakeFragmentNoise,
+  isWakeOnlyInput,
+  stripWakePrefix
 } from '@nexus/companion-core';
 import { createAction, type CompanionAction, type InternalState, type MemoryRecord, type TrainingConfig } from '@nexus/shared';
 import { createDefaultState, transitionState } from '@nexus/decision';
@@ -107,11 +110,23 @@ export class CompanionRuntime {
 
   async handleUserMessage(text: string): Promise<CompanionSnapshot> {
     const now = Date.now();
+    const normalizedInput = text.trim();
+
+    if (isWakeOnlyInput(normalizedInput)) {
+      this.state = transitionState(this.state, { at: now, interacted: true, mode: 'attentive', attentionTarget: 'user', mood: 'warm' });
+      this.action = createAction('listen_attentive', this.training.emotionalIntensity);
+      this.conversation.push({ from: 'companion', text: 'Je t’écoute.' });
+      this.memoryCandidates = [];
+      this.log('wake-only input handled locally');
+      return this.getSnapshot();
+    }
+
+    const strippedInput = stripWakePrefix(normalizedInput);
     this.state = transitionState(this.state, { at: now, interacted: true, mode: 'thinking', attentionTarget: 'user', mood: 'curious' });
-    this.conversation.push({ from: 'user', text });
+    this.conversation.push({ from: 'user', text: strippedInput });
 
     const reply = await this.engine.processUserMessage({
-      userMessage: text,
+      userMessage: strippedInput,
       recentConversationSummary: this.conversation.slice(-6).map((line) => `${line.from}: ${line.text}`).join(' | '),
       appState: { isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true, visualMode: this.state.mode }
     });
@@ -147,7 +162,7 @@ export class CompanionRuntime {
 
   async listDisplayableMemories(): Promise<CompanionMemoryItem[]> {
     const memories = await this.engine.listMemories();
-    return memories.filter((memory) => !memory.sensitive && !isTechnicalMemoryContent(memory.content));
+    return memories.filter((memory) => !memory.sensitive && !isTechnicalMemoryContent(memory.content) && !isWakeFragmentNoise(memory.content));
   }
 
   trigger(actionName: CompanionAction['name']): CompanionSnapshot {

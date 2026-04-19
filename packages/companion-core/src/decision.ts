@@ -1,5 +1,6 @@
 import { createLearningEvent, evaluateLearningEvent } from './cognitive';
 import { extractMemoryCandidates, isSensitiveMemoryContent } from './memory';
+import { isIncompleteMemoryCommand, isWakeOnlyInput, stripWakePrefix } from './wake';
 import type { CompanionContext, CompanionDecision, EnvironmentSignal, LearningEvent } from './types';
 
 const hasQuestion = (text: string) => text.includes('?');
@@ -83,12 +84,37 @@ const buildSignalFromContext = (context: CompanionContext): EnvironmentSignal[] 
 };
 
 export const decideCompanionResponse = (context: CompanionContext): CompanionDecision => {
-  const text = context.userMessage.trim();
+  const strippedUserMessage = stripWakePrefix(context.userMessage);
+  const text = strippedUserMessage.trim();
   const memoryCandidates = extractMemoryCandidates(text);
   const sensitive = isSensitiveMemoryContent(text);
   const lowerText = text.toLowerCase();
 
   const riskFlags: string[] = [];
+
+  if (isWakeOnlyInput(context.userMessage)) {
+    return {
+      intent: 'ask_clarification',
+      memoryCandidates: [],
+      learningEvents: [],
+      suggestedResponseStyle: 'clear',
+      requiredConfirmations: [],
+      riskFlags: ['wake_only_input'],
+      nextVisualState: 'listening'
+    };
+  }
+
+  if (isIncompleteMemoryCommand(context.userMessage)) {
+    return {
+      intent: 'ask_clarification',
+      memoryCandidates: [],
+      learningEvents: [],
+      suggestedResponseStyle: 'clear',
+      requiredConfirmations: [],
+      riskFlags: ['incomplete_memory_command'],
+      nextVisualState: 'speaking'
+    };
+  }
   const requiresConfirmation: string[] = sensitive ? ['sensitive_memory_confirmation'] : [];
   const learningEvents: LearningEvent[] = [];
 

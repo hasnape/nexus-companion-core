@@ -1,4 +1,10 @@
-import { isTechnicalMemoryContent, isWakeFragmentNoise, type CompanionMemoryItem } from '@nexus/companion-core';
+import {
+  isTechnicalMemoryContent,
+  isWakeFragmentNoise,
+  normalizeMemoryCandidateContent,
+  normalizeMemoryContentKey,
+  type CompanionMemoryItem
+} from '@nexus/companion-core';
 
 type CompanionMemoryPanelProps = {
   memories: CompanionMemoryItem[];
@@ -31,22 +37,43 @@ const byGroup = (memories: CompanionMemoryItem[]) => {
   };
 };
 
+const lowerFirst = (value: string): string => value.length > 0 ? `${value[0].toLowerCase()}${value.slice(1)}` : value;
+
 export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary, onClearMemory }: CompanionMemoryPanelProps) {
-  const cleanMemories = memories.filter((memory) => !isTechnicalMemoryContent(memory.content) && !isWakeFragmentNoise(memory.content));
-  const cleanCandidates = memoryCandidates.filter((candidate) => !isTechnicalMemoryContent(candidate.content) && !isWakeFragmentNoise(candidate.content));
-  const grouped = byGroup(cleanMemories);
+  const cleanMemories = memories
+    .filter((memory) => !isTechnicalMemoryContent(memory.content) && !isWakeFragmentNoise(memory.content))
+    .map((memory) => ({ ...memory, content: normalizeMemoryCandidateContent(memory.content) }));
+  const confirmedMemories = cleanMemories.filter((memory) => memory.lifecycleState !== 'pending_confirmation' && !memory.requiresConfirmation);
+  const cleanCandidates = memoryCandidates
+    .filter((candidate) => !isTechnicalMemoryContent(candidate.content) && !isWakeFragmentNoise(candidate.content))
+    .map((candidate) => ({ ...candidate, content: normalizeMemoryCandidateContent(candidate.content) }))
+    .filter((candidate, index, all) => {
+      const key = normalizeMemoryContentKey(candidate.content);
+      if (!key) return false;
+      if (confirmedMemories.some((memory) => normalizeMemoryContentKey(memory.content) === key)) return false;
+      return all.findIndex((item) => normalizeMemoryContentKey(item.content) === key) === index;
+    });
+  const grouped = byGroup(confirmedMemories);
+  const pendingConfirmationLines = Array.from(new Set([
+    ...cleanMemories
+      .filter((memory) => memory.lifecycleState === 'pending_confirmation' || memory.requiresConfirmation)
+      .map((memory) => `Retenir que ${lowerFirst(memory.content.replace(/[.!?]+$/u, ''))} ?`),
+    ...cleanCandidates
+      .filter((candidate) => candidate.requiresConfirmation)
+      .map((candidate) => `Retenir que ${lowerFirst(candidate.content.replace(/[.!?]+$/u, ''))} ?`)
+  ]));
 
   return (
     <section className="panel nexus-memory-panel" aria-label="Mémoire de Nexus">
       <h3>Mémoire de Nexus</h3>
       <p>Nexus apprend progressivement à partir de vos échanges, de vos préférences et du contexte autorisé. Il retient le minimum utile, les informations sensibles nécessitent votre accord, et vous pouvez effacer la mémoire à tout moment.</p>
-      <p>Souvenirs enregistrés : {cleanMemories.length}</p>
-      {cleanMemories.length === 0 ? (
+      <p>Souvenirs enregistrés : {confirmedMemories.length}</p>
+      {confirmedMemories.length === 0 ? (
         <p className="memory-empty">Aucun souvenir utile enregistré pour le moment.</p>
       ) : (
         <>
           <ul className="memory-list">
-            {cleanMemories
+            {confirmedMemories
               .filter((memory) => !memory.sensitive && memory.sensitivity !== 'high' && memory.sensitivity !== 'critical')
               .slice(0, 8)
               .map((memory) => (
@@ -74,12 +101,20 @@ export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary,
           </ul>
         </div>
       )}
+      <div className="memory-confirmations">
+        <p><strong>Confirmations en attente</strong> :</p>
+        {pendingConfirmationLines.length === 0 ? <p>aucune</p> : (
+          <ul>
+            {pendingConfirmationLines.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+        )}
+      </div>
       {brainSummary && (
         <div className="brain-summary" aria-label="Résumé cognitif local">
           <p><strong>État actuel</strong> : {brainSummary.mode}</p>
           <p><strong>Focus</strong> : {brainSummary.focus}</p>
           <p><strong>Objectif actif</strong> : {brainSummary.currentUserNeed}</p>
-          <p><strong>Confirmations en attente</strong> : {brainSummary.pendingConfirmations.length === 0 ? 'aucune' : brainSummary.pendingConfirmations.join(', ')}</p>
+          <p><strong>Signaux de confirmation</strong> : {brainSummary.pendingConfirmations.length === 0 ? 'aucune' : brainSummary.pendingConfirmations.join(', ')}</p>
         </div>
       )}
       <button type="button" onClick={() => void onClearMemory()}>Effacer la mémoire locale</button>

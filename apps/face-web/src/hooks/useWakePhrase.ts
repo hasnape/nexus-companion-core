@@ -1,4 +1,4 @@
-import { isWakeOnlyInput, normalizeWakePhrase, stripWakePrefix } from '@nexus/companion-core';
+import { isWakeOnlyInputWithOptions, normalizeWakePhrase, stripWakePrefix } from '@nexus/companion-core';
 
 export type WakeListeningState =
   | 'inactive'
@@ -9,9 +9,9 @@ export type WakeListeningState =
 
 export const normalizeWakePhraseText = normalizeWakePhrase;
 
-export const isWakePhrase = (value: string): boolean => isWakeOnlyInput(value);
+export const isWakePhrase = (value: string): boolean => isWakeOnlyInputWithOptions(value, { allowFullNameWake: true });
 
-export const stripWakePhrasePrefix = (value: string): string => stripWakePrefix(value);
+export const stripWakePhrasePrefix = (value: string): string => stripWakePrefix(value, { allowFullNameWake: true });
 
 export const wakeStateLabel = (state: WakeListeningState): string => {
   switch (state) {

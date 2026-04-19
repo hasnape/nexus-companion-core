@@ -1,5 +1,10 @@
 import { createLearningEvent, evaluateLearningEvent } from './cognitive';
-import { extractMemoryCandidates, isSensitiveMemoryContent } from './memory';
+import {
+  extractMemoryCandidates,
+  isSensitiveMemoryContent,
+  normalizeMemoryCandidateContent,
+  normalizeMemoryContentKey
+} from './memory';
 import { isIncompleteMemoryCommand, isWakeOnlyInput, stripWakePrefix } from './wake';
 import type { CompanionContext, CompanionDecision, EnvironmentSignal, LearningEvent } from './types';
 
@@ -244,6 +249,16 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
     }
   }
 
+  const existingKeys = new Set(context.relevantMemories.map((memory) => normalizeMemoryContentKey(memory.content)));
+  const dedupedCandidates = memoryCandidates.filter((candidate, index, all) => {
+    candidate.content = normalizeMemoryCandidateContent(candidate.content);
+    const key = normalizeMemoryContentKey(candidate.content);
+    if (!key) return false;
+    if (existingKeys.has(key)) return false;
+    if (/^le cr[ée]ateur est ing[ée]nieur amine 0410\.$/i.test(candidate.content)) return false;
+    return all.findIndex((item) => normalizeMemoryContentKey(item.content) === key) === index;
+  });
+
   if (/hack|pirater|violence|illegal/i.test(text)) {
     return {
       intent: 'safety_refusal',
@@ -259,7 +274,7 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
   if (/je me sens|triste|anxieux|angoissé|anxieuse|stressé|stressée/i.test(text)) {
     return {
       intent: 'emotional_support',
-      memoryCandidates,
+      memoryCandidates: dedupedCandidates,
       learningEvents,
       suggestedResponseStyle: 'empathetic',
       requiredConfirmations: requiresConfirmation,
@@ -268,7 +283,7 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
     };
   }
 
-  const intent = memoryCandidates.length > 0
+  const intent = dedupedCandidates.length > 0
     ? 'remember_candidate'
     : hasQuestion(text)
       ? 'answer'
@@ -282,9 +297,9 @@ export const decideCompanionResponse = (context: CompanionContext): CompanionDec
 
   return {
     intent,
-    memoryCandidates,
+    memoryCandidates: dedupedCandidates,
     learningEvents,
-    suggestedResponseStyle: memoryCandidates.length > 0 ? 'practical' : 'clear',
+    suggestedResponseStyle: dedupedCandidates.length > 0 ? 'practical' : 'clear',
     requiredConfirmations: Array.from(new Set(requiresConfirmation)),
     riskFlags: sensitive ? [...riskFlags, 'sensitive_topic'] : riskFlags,
     nextVisualState: 'speaking'

@@ -1,4 +1,10 @@
 import { consolidateMemoryCandidates, isTechnicalMemoryContent } from './cognitive';
+import {
+  isSensitiveMemoryContent,
+  normalizeMemoryCandidateContent,
+  normalizeMemoryContentKey,
+  shouldRequireLocationConfirmation
+} from './memory';
 import type { BrainStateStore, CompanionBrainState, CompanionMemoryItem, LearningEvent, MemoryStore } from './types';
 
 interface KeyValueStorage {
@@ -40,17 +46,46 @@ export class LocalMemoryStore implements MemoryStore, BrainStateStore {
       const parsed = JSON.parse(raw) as CompanionMemoryItem[];
       let mutated = false;
       const now = Date.now();
-      const sanitized = parsed.map((memory) => {
-        if (!isTechnicalMemoryContent(memory.content)) return memory;
+      const normalized = parsed.map((memory) => {
+        if (isTechnicalMemoryContent(memory.content)) {
+          mutated = true;
+          return {
+            ...memory,
+            lifecycleState: 'archived' as const,
+            archivedAt: memory.archivedAt ?? now,
+            updatedAt: now,
+            tags: Array.from(new Set([...(memory.tags ?? []), 'internal_technical_signal', 'hidden_from_ui']))
+          };
+        }
+        const nextContent = normalizeMemoryCandidateContent(memory.content);
+        const locationSensitive = shouldRequireLocationConfirmation(nextContent);
+        const shouldBePending = locationSensitive || isSensitiveMemoryContent(nextContent);
+        const contentChanged = nextContent && nextContent !== memory.content;
+        if (!contentChanged && !shouldBePending) return memory;
         mutated = true;
         return {
           ...memory,
-          lifecycleState: 'archived' as const,
-          archivedAt: memory.archivedAt ?? now,
-          updatedAt: now,
-          tags: Array.from(new Set([...(memory.tags ?? []), 'internal_technical_signal', 'hidden_from_ui']))
+          content: nextContent || memory.content,
+          requiresConfirmation: shouldBePending ? true : memory.requiresConfirmation,
+          sensitive: shouldBePending ? true : memory.sensitive,
+          lifecycleState: shouldBePending ? 'pending_confirmation' : memory.lifecycleState,
+          tags: Array.from(new Set([...(memory.tags ?? []), ...(shouldBePending ? ['sensitive_pending_confirmation'] : [])])),
+          updatedAt: now
         };
       });
+      const dedupedByKey = new Map<string, CompanionMemoryItem>();
+      for (const memory of normalized) {
+        const key = normalizeMemoryContentKey(memory.content);
+        if (!key) continue;
+        const previous = dedupedByKey.get(key);
+        if (!previous || previous.updatedAt < memory.updatedAt) {
+          if (previous) mutated = true;
+          dedupedByKey.set(key, memory);
+        } else {
+          mutated = true;
+        }
+      }
+      const sanitized = Array.from(dedupedByKey.values());
       this.cache = sanitized;
       if (mutated) {
         this.storage.setItem(this.key, JSON.stringify(sanitized));

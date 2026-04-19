@@ -61,6 +61,7 @@ const renderFace = (overrides?: {
   companionVisualState?: CompanionVisualState;
   companionVisualStateLabel?: string;
   voiceSessionStatusLabel?: string;
+  onFaceInteraction?: () => void;
 }) => CompanionFaceScreen({
   state: overrides?.state ?? baseState,
   action: overrides?.action ?? baseAction,
@@ -70,7 +71,8 @@ const renderFace = (overrides?: {
   subtitle: overrides?.subtitle,
   isListening: overrides?.isListening ?? false,
   transcript: overrides?.transcript,
-  isOnline: overrides?.isOnline
+  isOnline: overrides?.isOnline,
+  onFaceInteraction: overrides?.onFaceInteraction
 });
 
 describe('CompanionFaceScreen', () => {
@@ -183,5 +185,19 @@ describe('CompanionFaceScreen', () => {
     const ui = renderFace({ state: { ...baseState, attentionTarget: 'screen' } });
     const eyes = findFirstByClass(ui, 'eyes');
     expect(eyes?.props.style?.['--eye-offset-x']).toBe('-7px');
+  });
+
+  it('wires face click interactions without affecting rendering', () => {
+    let interactionCount = 0;
+    const ui = renderFace({
+      onFaceInteraction: () => {
+        interactionCount += 1;
+      }
+    });
+    const face = findFirstByClass(ui, 'face ');
+    face?.props.onClick();
+
+    expect(interactionCount).toBe(1);
+    expect(face?.props['data-testid']).toBe('nexus-face-core');
   });
 });

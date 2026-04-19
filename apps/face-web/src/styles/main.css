@@ -749,6 +749,28 @@ label {
   background: linear-gradient(130deg, rgba(92, 119, 255, 0.7), rgba(61, 86, 172, 0.9));
 }
 
+.creator-mode-status {
+  display: grid;
+  gap: 8px;
+}
+
+.creator-mode-status p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.creator-code-dialog h3 {
+  margin: 0 0 8px;
+}
+
+.creator-code-dialog p {
+  margin: 0 0 8px;
+}
+
+.creator-code-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .face-only-shell {
   min-height: 100vh;
   height: 100vh;

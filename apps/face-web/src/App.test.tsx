@@ -32,6 +32,7 @@ const getOfflineFallbackReply = vi.fn(() => 'Réponse locale hors ligne');
 let mockOfflineQueue: OfflineQueueEntry[] = [];
 let mockOfflineNote = '';
 let forceFaceOnlyMode = false;
+let forceCreatorMode = false;
 let stateCallCounter = 0;
 
 const snapshotState: InternalState = {
@@ -95,6 +96,9 @@ vi.mock('react', async () => {
     useState: vi.fn((initialValue?: unknown) => {
       stateCallCounter += 1;
       if (forceFaceOnlyMode && stateCallCounter === 8) {
+        return [true, vi.fn()];
+      }
+      if (forceCreatorMode && stateCallCounter === 9) {
         return [true, vi.fn()];
       }
       return [typeof initialValue === 'function' ? (initialValue as () => unknown)() : initialValue, vi.fn()];
@@ -208,6 +212,7 @@ describe('App voice and layout flows', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     forceFaceOnlyMode = false;
+    forceCreatorMode = false;
     stateCallCounter = 0;
     mockVoiceInput.voiceInputAvailable = true;
     mockVoiceInput.isSessionActive = false;
@@ -413,6 +418,7 @@ describe('App voice and layout flows', () => {
   });
 
   it('renders local memory summary with safe local stats', () => {
+    forceCreatorMode = true;
     mockVoiceInput.wakeState = 'processing_command';
     mockVoiceInput.wakeStatus = 'Traitement de la demande…';
     const ui = App();
@@ -426,6 +432,7 @@ describe('App voice and layout flows', () => {
   });
 
   it('shows Aucune interaction when there are no local messages', () => {
+    forceCreatorMode = true;
     mockCompanion.snapshot.conversation = [];
     mockCompanion.snapshot.state.lastInteractionAt = Date.now();
 
@@ -434,6 +441,25 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Mémoire locale du compagnon');
     expect(textOf(ui)).toContain('Messages locaux : 0');
     expect(textOf(ui)).toContain('Dernière interaction : Aucune interaction');
+  });
+
+  it('hides advanced developer panels by default when creator mode is disabled', () => {
+    const ui = App();
+
+    expect(textOf(ui)).not.toContain('Outils avancés');
+    expect(textOf(ui)).not.toContain('Réglages du comportement');
+    expect(textOf(ui)).not.toContain('Contrôles développeur');
+    expect(textOf(ui)).not.toContain('Mémoire locale du compagnon');
+  });
+
+  it('shows advanced developer panels when creator mode is active', () => {
+    forceCreatorMode = true;
+    const ui = App();
+
+    expect(textOf(ui)).toContain('Mode créateur actif');
+    expect(textOf(ui)).toContain('Quitter le mode créateur');
+    expect(textOf(ui)).toContain('Outils avancés');
+    expect(textOf(ui)).toContain('Réglages du comportement');
   });
 
   it('does not auto-send queued messages when back online', () => {

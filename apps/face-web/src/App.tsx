@@ -10,6 +10,7 @@ import { useConnectivity } from './hooks/useConnectivity';
 import { usePwaShell } from './hooks/usePwaShell';
 import { useVoiceInput } from './hooks/useVoiceInput';
 import { useFullscreenMode } from './hooks/useFullscreenMode';
+import { useCreatorMode } from './hooks/useCreatorMode';
 import { enqueueOfflineMessage, loadOfflineNote, loadOfflineQueue, saveOfflineNote, saveOfflineQueue } from './services/offline/persistence';
 import { getOfflineFallbackReply } from './services/offline/offlineResponses';
 import type { TrainingConfig } from '@nexus/shared';
@@ -140,6 +141,17 @@ export default function App() {
   const [isFlushingOfflineQueue, setIsFlushingOfflineQueue] = useState(false);
   const [offlineConversation, setOfflineConversation] = useState<CompanionConversationLine[]>([]);
   const [isFaceOnlyMode, setIsFaceOnlyMode] = useState(false);
+  const {
+    creatorMode,
+    creatorCodeDialogOpen,
+    creatorCodeInput,
+    creatorCodeError,
+    registerFaceTap,
+    setCreatorCodeInput,
+    submitCreatorCode,
+    closeCreatorCodeDialog,
+    exitCreatorMode
+  } = useCreatorMode();
 
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
@@ -253,6 +265,7 @@ export default function App() {
           isListening={isSessionActive}
           transcript={transcript}
           isOnline={isOnline}
+          onFaceInteraction={registerFaceTap}
         />
         <div className="voice-session-controls panel" aria-label="Contrôle de session vocale">
           <p className="voice-session-copy">
@@ -274,6 +287,42 @@ export default function App() {
         <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>
           Mode visage
         </button>
+        {creatorMode ? (
+          <section className="panel creator-mode-status" aria-label="Mode créateur actif">
+            <p>Mode créateur actif</p>
+            <button type="button" onClick={exitCreatorMode}>
+              Quitter le mode créateur
+            </button>
+          </section>
+        ) : null}
+        {creatorCodeDialogOpen ? (
+          <section className="panel creator-code-dialog" aria-label="Code créateur">
+            <h3>Code créateur</h3>
+            <p>Accès réservé au créateur.</p>
+            <div className="row creator-code-row">
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Code"
+                value={creatorCodeInput}
+                onChange={(event) => {
+                  setCreatorCodeInput(event.target.value);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  submitCreatorCode();
+                }}
+              >
+                Valider
+              </button>
+              <button type="button" onClick={closeCreatorCodeDialog}>Fermer</button>
+            </div>
+            {creatorCodeError ? <p className="voice-error">{creatorCodeError}</p> : null}
+          </section>
+        ) : null}
         <CompanionChatPanel
           visibleConversation={visibleConversation}
           message={message}
@@ -325,24 +374,26 @@ export default function App() {
           brainSummary={snapshot.brainSummary}
           onClearMemory={clearCompanionMemory}
         />
-        <DeveloperPanels
-          training={training}
-          onTrainingChange={(next) => {
-            updateTraining(next);
-            setTraining(next);
-          }}
-          snapshot={snapshot}
-          onTriggerAction={triggerAction}
-          memory={memory}
-          onAddPreference={addPreference}
-          onRemoveMemory={removeMemory}
-          localMessagesCount={visibleConversation.length}
-          queuedMessagesCount={offlineQueue.length}
-          lastInteractionAt={snapshot.state.lastInteractionAt}
-          wakeStatus={wakeStatus}
-          isOnline={isOnline}
-          companionVisualStateLabel={visualStateLabel}
-        />
+        {creatorMode ? (
+          <DeveloperPanels
+            training={training}
+            onTrainingChange={(next) => {
+              updateTraining(next);
+              setTraining(next);
+            }}
+            snapshot={snapshot}
+            onTriggerAction={triggerAction}
+            memory={memory}
+            onAddPreference={addPreference}
+            onRemoveMemory={removeMemory}
+            localMessagesCount={visibleConversation.length}
+            queuedMessagesCount={offlineQueue.length}
+            lastInteractionAt={snapshot.state.lastInteractionAt}
+            wakeStatus={wakeStatus}
+            isOnline={isOnline}
+            companionVisualStateLabel={visualStateLabel}
+          />
+        ) : null}
       </section>
     </main>
   );

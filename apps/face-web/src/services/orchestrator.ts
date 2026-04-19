@@ -89,6 +89,7 @@ export class CompanionRuntime {
     await this.engine.clearMemories();
     this.memoryState = { session: [], longTerm: [], behavioral: [] };
     this.memoryCandidates = [];
+    this.brainSummary = undefined;
     this.log('memory cleared by user');
   }
 

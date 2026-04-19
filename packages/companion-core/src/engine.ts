@@ -46,7 +46,10 @@ export const createCompanionEngine = ({
   listMemories: async () => memoryStore.listMemories(),
   getBrainState: async () => (memoryStore as import('./types').BrainStateStore).getBrainState?.(),
   clearBrainState: async () => (memoryStore as import('./types').BrainStateStore).clearBrainState?.(),
-  clearMemories: async () => memoryStore.clearMemories(),
+  clearMemories: async () => {
+    await memoryStore.clearMemories();
+    await (memoryStore as import('./types').BrainStateStore).clearBrainState?.();
+  },
   deleteMemory: async (id: string) => memoryStore.deleteMemory(id),
   processUserMessage: async ({ userMessage, recentConversationSummary, appState, voiceState }) => {
     const now = Date.now();

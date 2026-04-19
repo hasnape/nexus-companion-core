@@ -77,6 +77,7 @@ export class LocalMemoryStore implements MemoryStore, BrainStateStore {
   async clearMemories(): Promise<void> {
     this.persist([]);
     this.learningEvents = [];
+    await this.clearBrainState();
   }
 
   async getBrainState(): Promise<CompanionBrainState | undefined> {

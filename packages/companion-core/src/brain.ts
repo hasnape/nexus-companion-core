@@ -87,8 +87,7 @@ export const updateWorkingMemory = (state: WorkingMemoryState, input: { userMess
     shortTermFacts,
     unresolvedQuestions,
     pendingActions,
-    activeProjectContext,
-    decay: { ...state.decay, lastDecayAt: input.now }
+    activeProjectContext
   };
 };
 
@@ -208,11 +207,12 @@ export const updateBrainFromDecision = (
         ? 'learning'
         : 'responding';
 
-  const nextWorking = decayWorkingMemory(updateWorkingMemory(state.workingMemory, {
+  const decayedWorking = decayWorkingMemory(state.workingMemory, context.now);
+  const nextWorking = updateWorkingMemory(decayedWorking, {
     userMessage: context.userMessage,
     assistantMessage: context.assistantMessage,
     now: context.now
-  }), context.now);
+  });
 
   return {
     ...state,

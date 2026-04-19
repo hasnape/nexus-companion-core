@@ -4,6 +4,7 @@ import {
   buildBrainStateSummary,
   buildCompanionContext,
   consolidateMemoryCandidates,
+  MAX_CONSOLIDATED_MEMORIES,
   createDefaultCreatorIdentity,
   createDefaultCompanionProfile,
   createDefaultSafetyConstitution,
@@ -444,5 +445,131 @@ describe('companion-core V2-B cognitive foundation', () => {
     if (firstId) await store.deleteMemory(firstId);
     const afterDelete = await store.listMemories();
     expect(afterDelete.some((memory) => memory.id === firstId)).toBe(false);
+  });
+
+  it('clearMemories wipes persisted brain state and short-term recent text', async () => {
+    const store = new LocalMemoryStore('clear-brain-test');
+    const engine = createCompanionEngine({ memoryStore: store });
+    await engine.processUserMessage({ userMessage: 'Nexus, garde ce contexte projet pour plus tard.' });
+    const beforeClear = await engine.getBrainState();
+    expect(beforeClear?.workingMemory.recentUserMessage).toContain('contexte projet');
+
+    await engine.clearMemories();
+
+    const afterClear = await engine.getBrainState();
+    expect(afterClear).toBeUndefined();
+
+    await engine.processUserMessage({ userMessage: 'Nouvelle session locale.' });
+    const afterNextTurn = await engine.getBrainState();
+    expect(afterNextTurn?.workingMemory.recentAssistantMessage).toBeDefined();
+    expect(afterNextTurn?.workingMemory.recentUserMessage).toBe('Nouvelle session locale.');
+    expect(afterNextTurn?.workingMemory.recentUserMessage).not.toContain('contexte projet');
+  });
+
+  it('engine clearMemories remains backward-compatible without clearBrainState support', async () => {
+    const minimalStore = {
+      listMemories: async () => [],
+      addMemory: async () => {},
+      updateMemory: async () => {},
+      deleteMemory: async () => {},
+      clearMemories: async () => {},
+      searchMemories: async () => []
+    };
+    const engine = createCompanionEngine({ memoryStore: minimalStore });
+    await expect(engine.clearMemories()).resolves.toBeUndefined();
+  });
+
+  it('decay is evaluated before working-memory update in updateBrainFromDecision', () => {
+    const now = 1000;
+    const state = createDefaultBrainState({ now: 0 });
+    state.workingMemory.shortTermFacts = ['ancien 1', 'ancien 2', 'ancien 3', 'ancien 4'];
+    state.workingMemory.decay.lastDecayAt = 0;
+    state.workingMemory.decay.ttlMs = 10;
+
+    const next = updateBrainFromDecision(
+      state,
+      {
+        intent: 'answer',
+        memoryCandidates: [],
+        suggestedResponseStyle: 'clear',
+        requiredConfirmations: [],
+        riskFlags: [],
+        nextVisualState: 'speaking'
+      },
+      {
+        userMessage: 'Ajoute ce nouveau fait de session',
+        assistantMessage: 'bien noté',
+        profile: createDefaultCompanionProfile(),
+        now
+      }
+    );
+
+    expect(next.workingMemory.decay.lastDecayAt).toBe(now);
+    expect(next.workingMemory.shortTermFacts).toContain('Ajoute ce nouveau fait de session');
+    expect(next.workingMemory.shortTermFacts.length).toBeLessThanOrEqual(3);
+  });
+
+  it('consolidation cap is deterministic and keeps high-priority records', () => {
+    const lowValue = Array.from({ length: 240 }).map((_, index) => createMemoryItem({
+      id: `low-${index}`,
+      type: 'conversation_summary',
+      layer: 'episodic',
+      content: `note faible ${index}`,
+      source: 'manual',
+      confidence: 0.3,
+      importance: 0.2,
+      stability: 0.2,
+      createdAt: index + 1,
+      updatedAt: index + 1,
+      lifecycleState: 'dormant'
+    }));
+    const mustKeep = [
+      createMemoryItem({
+        id: 'pending-important',
+        type: 'project_context',
+        layer: 'project_context',
+        content: 'Validation explicite requise pour information sensible',
+        source: 'user_message',
+        confidence: 0.8,
+        importance: 0.95,
+        stability: 0.7,
+        requiresConfirmation: true,
+        createdAt: 9990,
+        updatedAt: 9990
+      }),
+      createMemoryItem({
+        id: 'active-important',
+        type: 'user_profile',
+        content: 'Je suis développeur.',
+        source: 'user_message',
+        confidence: 0.9,
+        importance: 0.95,
+        stability: 0.9,
+        createdAt: 9991,
+        updatedAt: 9991
+      }),
+      createMemoryItem({
+        id: 'conflict-important',
+        type: 'project_context',
+        layer: 'project_context',
+        content: 'Le projet fonctionne avec Internet.',
+        source: 'user_message',
+        confidence: 0.7,
+        importance: 0.8,
+        stability: 0.7,
+        lifecycleState: 'conflict',
+        createdAt: 9992,
+        updatedAt: 9992
+      })
+    ];
+
+    const consolidated = consolidateMemoryCandidates([...lowValue, ...mustKeep], []);
+    const secondRun = consolidateMemoryCandidates([...lowValue, ...mustKeep], []);
+
+    expect(consolidated.length).toBe(MAX_CONSOLIDATED_MEMORIES);
+    expect(secondRun.map((memory) => memory.id)).toEqual(consolidated.map((memory) => memory.id));
+    expect(consolidated.some((memory) => memory.id === 'pending-important')).toBe(true);
+    expect(consolidated.some((memory) => memory.id === 'active-important')).toBe(true);
+    expect(consolidated.some((memory) => memory.id === 'conflict-important')).toBe(true);
   });
 });

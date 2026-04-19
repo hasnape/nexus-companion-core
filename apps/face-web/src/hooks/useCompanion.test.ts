@@ -31,9 +31,22 @@ describe('useCompanion message refresh behavior', () => {
     useStateSetters = [];
 
     (globalThis as unknown as { window?: TestWindow }).window = {
-      setInterval: ((_handler: TimerHandler) => 1),
-      clearInterval: (_id: number) => {},
-      localStorage: { getItem: (_key: string) => null, setItem: (_key: string, _value: string) => {} }
+      setInterval: ((...args: unknown[]) => {
+        void args;
+        return 1;
+      }) as TestWindow['setInterval'],
+      clearInterval: ((...args: unknown[]) => {
+        void args;
+      }) as TestWindow['clearInterval'],
+      localStorage: {
+        getItem: ((...args: unknown[]) => {
+          void args;
+          return null;
+        }) as TestWindow['localStorage']['getItem'],
+        setItem: ((...args: unknown[]) => {
+          void args;
+        }) as TestWindow['localStorage']['setItem']
+      }
     };
 
     runtimeMock = {

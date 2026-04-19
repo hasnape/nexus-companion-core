@@ -829,3 +829,14 @@ label {
     opacity: var(--state-halo-opacity);
   }
 }
+
+.nexus-memory-panel .memory-list,
+.nexus-memory-panel .memory-candidates ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.nexus-memory-panel .memory-empty {
+  opacity: 0.8;
+  font-style: italic;
+}

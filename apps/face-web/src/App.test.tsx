@@ -9,6 +9,7 @@ const setTraining = vi.fn();
 const sendMessage = vi.fn(async () => {});
 const addPreference = vi.fn(async () => {});
 const removeMemory = vi.fn(async () => {});
+const clearCompanionMemory = vi.fn(async () => {});
 const saveOfflineQueue = vi.fn();
 const saveOfflineNote = vi.fn();
 const enterFullscreen = vi.fn(async () => true);
@@ -64,11 +65,14 @@ const mockCompanion = {
     longTerm: [{ id: 'l1' }],
     behavioral: [{ id: 'b1' }]
   },
+  displayMemories: [],
+  memoryCandidates: [],
   sendMessage,
   triggerAction,
   setTraining,
   addPreference,
-  removeMemory
+  removeMemory,
+  clearCompanionMemory
 };
 
 const mockVoiceInput = {

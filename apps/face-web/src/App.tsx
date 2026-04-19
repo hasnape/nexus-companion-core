@@ -3,6 +3,7 @@ import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
 import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
+import { CompanionMemoryPanel } from './components/memory-panel/CompanionMemoryPanel';
 import { companionVisualStateLabel, deriveCompanionVisualState } from './components/face/companionVisualState';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
@@ -116,7 +117,16 @@ export const flushOfflineQueueManually = async ({
 
 export default function App() {
   const {
-    snapshot, memory, sendMessage, triggerAction, setTraining, addPreference, removeMemory
+    snapshot,
+    memory,
+    displayMemories,
+    memoryCandidates,
+    sendMessage,
+    triggerAction,
+    setTraining,
+    addPreference,
+    removeMemory,
+    clearCompanionMemory
   } = useCompanion();
   const { isOnline, wasOffline } = useConnectivity();
   const { enterFullscreen, exitFullscreen } = useFullscreenMode();
@@ -308,6 +318,11 @@ export default function App() {
           companionMood={snapshot.state.mood}
           currentActionName={snapshot.action.name}
           memoryCount={memoryCount}
+        />
+        <CompanionMemoryPanel
+          memories={displayMemories}
+          memoryCandidates={memoryCandidates}
+          onClearMemory={clearCompanionMemory}
         />
         <DeveloperPanels
           training={training}

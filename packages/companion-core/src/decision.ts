@@ -3,9 +3,10 @@ import {
   extractMemoryCandidates,
   isSensitiveMemoryContent,
   normalizeMemoryCandidateContent,
-  normalizeMemoryContentKey
+  normalizeMemoryContentKey,
+  shouldRequireLocationConfirmation
 } from './memory';
-import { isIncompleteMemoryCommand, isWakeOnlyInput, stripWakePrefix } from './wake';
+import { isIncompleteMemoryCommand, isWakeOnlyInputWithOptions, stripWakePrefix } from './wake';
 import type { CompanionContext, CompanionDecision, EnvironmentSignal, LearningEvent } from './types';
 
 const hasQuestion = (text: string) => text.includes('?');
@@ -89,15 +90,21 @@ const buildSignalFromContext = (context: CompanionContext): EnvironmentSignal[] 
 };
 
 export const decideCompanionResponse = (context: CompanionContext): CompanionDecision => {
-  const strippedUserMessage = stripWakePrefix(context.userMessage);
+  const strippedUserMessage = stripWakePrefix(context.userMessage, { allowFullNameWake: true });
   const text = strippedUserMessage.trim();
+  const normalizedText = normalizeMemoryCandidateContent(text);
   const memoryCandidates = extractMemoryCandidates(text);
-  const sensitive = isSensitiveMemoryContent(text);
+  const sensitive = (
+    isSensitiveMemoryContent(text)
+    || isSensitiveMemoryContent(normalizedText)
+    || shouldRequireLocationConfirmation(text)
+    || shouldRequireLocationConfirmation(normalizedText)
+  );
   const lowerText = text.toLowerCase();
 
   const riskFlags: string[] = [];
 
-  if (isWakeOnlyInput(context.userMessage)) {
+  if (isWakeOnlyInputWithOptions(context.userMessage, { allowFullNameWake: true })) {
     return {
       intent: 'ask_clarification',
       memoryCandidates: [],

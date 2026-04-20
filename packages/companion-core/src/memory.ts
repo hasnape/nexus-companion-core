@@ -58,8 +58,16 @@ const STABLE_ROLE_KEYWORDS = /(d[ée]veloppeur|developpeur|ing[ée]nieur|ingenie
 const PRECISE_LOCATION_PATTERNS = [/adresse exacte|exact address|coordonn[ée]es gps|latitude|longitude|localisation exacte/i];
 const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le cloud|store everything.*cloud/i];
 const CREATOR_CANONICAL_IDENTITY = 'ingénieur Amine 0410';
-const MEMORY_WRAPPER_PREFIX = /^(?:souviens(?:-| )toi(?:\s+que)?|retiens(?:\s+que)?|m[ée]morise(?:\s+que)?|garde en m[ée]moire(?:\s+que)?)\s+/i;
-const SENSITIVE_LOCATION_PATTERNS = [/j['’]habite\s+[àa]\s+/i, /je vis\s+[àa]\s+/i, /localisation|adresse/i];
+const MEMORY_WRAPPER_PREFIX = /^(?:(?:nexus(?:\s+companion)?|companion)\s+)?(?:souviens(?:-| )toi(?:\s+que)?|retiens(?:\s+que)?|m[ée]morise(?:\s+que)?|garde en m[ée]moire(?:\s+que)?)\s+/i;
+const SENSITIVE_LOCATION_PATTERNS = [
+  /j['’]habite\s+[àa]\s+/i,
+  /je vis\s+[àa]\s+/i,
+  /vous habitez\s+[àa]\s+/i,
+  /vous vivez\s+[àa]\s+/i,
+  /\bhabite\s+[àa]\s+/i,
+  /\bvit\s+[àa]\s+/i,
+  /localisation|adresse/i
+];
 
 const isStableJeSuisProfile = (content: string): boolean => {
   const match = content.match(/je suis\s+([^,.!?]+)/i);
@@ -107,6 +115,8 @@ const normalizeMemoryFact = (fact: string): string => {
 
   const project = cleaned.match(/^mon projet actuel est\s+(.+)$/i)?.[1]?.trim();
   if (project) return `Le projet actuel est ${cleanMemoryFactText(project)}.`;
+  const looseProject = cleaned.match(/^(.+)\s+est mon projet[.!?]?$/i)?.[1]?.trim();
+  if (looseProject) return `Le projet actuel est ${cleanMemoryFactText(looseProject)}.`;
 
   const creatorPref = cleaned.match(/^je pr[ée]f[èe]re\s+(.+)$/i)?.[1]?.trim();
   if (creatorPref) return `Le créateur préfère ${cleanMemoryFactText(creatorPref)}.`;
@@ -119,7 +129,7 @@ const normalizeMemoryFact = (fact: string): string => {
 };
 
 const stripMemoryCommandWrapper = (input: string): string => {
-  const wakeStripped = stripWakePrefix(input).trim();
+  const wakeStripped = stripWakePrefix(input, { allowFullNameWake: true }).trim();
   return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, '').trim();
 };
 
@@ -192,7 +202,7 @@ export const extractMemoryCandidates = (
   userMessage: string,
   source: MemorySource = 'user_message'
 ): CompanionMemoryItem[] => {
-  const raw = stripWakePrefix(userMessage).trim();
+  const raw = stripWakePrefix(userMessage, { allowFullNameWake: true }).trim();
   const rawForDetection = stripMemoryCommandWrapper(raw);
   const content = normalizeMemoryCandidateContent(raw);
   if (!content || content.length < 12) return [];

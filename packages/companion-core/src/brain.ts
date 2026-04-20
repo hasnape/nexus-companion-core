@@ -8,6 +8,7 @@ import type {
   PersonalityState,
   WorkingMemoryState
 } from './types';
+import { normalizeMemoryCandidateContent } from './memory';
 import { isIncompleteMemoryCommand, isWakeFragmentNoise } from './wake';
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -20,6 +21,16 @@ const EMPTY_ATTENTION: AttentionFocus = {
   source: 'memory',
   reason: 'mode local-first conservateur',
   expiresAt: 0
+};
+const MEMORY_COMMAND_WRAPPER = /(?:^|\s)(?:nexus(?:\s+companion)?|companion)?\s*(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire)\b/i;
+
+const sanitizeBrainText = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  if (MEMORY_COMMAND_WRAPPER.test(trimmed)) {
+    return normalizeMemoryCandidateContent(trimmed);
+  }
+  return trimmed;
 };
 
 const createDefaultWorkingMemory = (now: number): WorkingMemoryState => ({
@@ -62,7 +73,7 @@ export const createDefaultBrainState = (options?: { now?: number; creatorId?: st
 };
 
 export const updateWorkingMemory = (state: WorkingMemoryState, input: { userMessage?: string; assistantMessage?: string; now: number }): WorkingMemoryState => {
-  const normalized = input.userMessage?.trim() ?? '';
+  const normalized = sanitizeBrainText(input.userMessage ?? '');
   const ignorableUserMessage = isWakeFragmentNoise(normalized) || isIncompleteMemoryCommand(normalized);
   const shortTermFacts = /je suis stress[ée]|je suis fatigu[ée]/i.test(normalized)
     ? state.shortTermFacts
@@ -190,9 +201,12 @@ export const shouldPersistBrainStateUpdate = (previous: CompanionBrainState, nex
 export const buildBrainStateSummary = (state: CompanionBrainState): BrainStateSummary => ({
   mode: state.currentMode,
   focus: state.attentionFocus.topic,
-  activeProject: state.attentionFocus.project ?? state.workingMemory.activeProjectContext,
+  activeProject: sanitizeBrainText(state.attentionFocus.project ?? state.workingMemory.activeProjectContext ?? ''),
   currentUserNeed: state.activeGoals[0]?.title ?? state.workingMemory.recentUserMessage ?? 'continuité conversationnelle locale',
-  safeMemoryHints: state.workingMemory.shortTermFacts.slice(-3).map((item) => item.slice(0, 120)),
+  safeMemoryHints: state.workingMemory.shortTermFacts
+    .slice(-3)
+    .map((item) => sanitizeBrainText(item).slice(0, 120))
+    .filter(Boolean),
   pendingConfirmations: [...state.pendingConfirmations],
   safetyNotes: state.pendingConfirmations.length > 0
     ? ['aucune action sensible sans validation explicite du créateur ingénieur Amine 0410']

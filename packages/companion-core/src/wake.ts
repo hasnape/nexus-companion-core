@@ -103,7 +103,9 @@ export const stripWakePrefix = (input: string, options?: { allowFullNameWake?: b
   return match.command;
 };
 
-const normalizeMemoryCommand = (input: string): string => normalizeWakePhrase(stripWakePrefix(input));
+const normalizeMemoryCommand = (input: string): string => normalizeWakePhrase(
+  stripWakePrefix(input, { allowFullNameWake: true }).replace(/^(?:companion|nexus)\s+/i, '')
+);
 
 export const isIncompleteMemoryCommand = (input: string): boolean => {
   const normalized = normalizeMemoryCommand(input);

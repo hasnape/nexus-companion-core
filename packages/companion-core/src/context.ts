@@ -30,10 +30,21 @@ export const buildCompanionContext = ({
   brainSummary?: CompanionContext['brainSummary'];
   includeCognitiveSummary?: boolean;
 }): CompanionContext => ({
+  ...(() => {
+    const confirmedMemories = memories.filter((memory) => (
+      memory.lifecycleState !== 'pending_confirmation'
+      && !memory.requiresConfirmation
+      && !memory.sensitive
+      && memory.sensitivity !== 'high'
+      && memory.sensitivity !== 'critical'
+    ));
+    return {
+      relevantMemories: confirmedMemories.slice(0, 8),
+      cognitiveMemorySummary: includeCognitiveSummary ? buildCognitiveMemorySummary(confirmedMemories) : undefined
+    };
+  })(),
   profile,
   userMessage,
-  relevantMemories: memories.slice(0, 8),
-  cognitiveMemorySummary: includeCognitiveSummary ? buildCognitiveMemorySummary(memories) : undefined,
   environmentSignals,
   recentLearningEvents,
   brainSummary,

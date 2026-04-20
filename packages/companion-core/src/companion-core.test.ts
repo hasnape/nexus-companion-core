@@ -361,6 +361,8 @@ describe('companion-core V2-B cognitive foundation', () => {
   it('normalizes memory command wrappers into clean facts', () => {
     expect(normalizeMemoryCandidateContent('Souviens-toi que mon projet actuel est Nexus Companion"')).toBe('Le projet actuel est Nexus Companion.');
     expect(normalizeMemoryCandidateContent('Nexus souviens-toi que je préfère les solutions long terme')).toBe('Le créateur préfère les solutions long terme.');
+    expect(normalizeMemoryCandidateContent('Companion souviens-toi que mon projet actuel est Nexus Companion')).toBe('Le projet actuel est Nexus Companion.');
+    expect(normalizeMemoryCandidateContent('Nexus Companion est mon projet')).toBe('Le projet actuel est Nexus Companion.');
     expect(normalizeMemoryCandidateContent('Souviens-toi que je m’appelle ingénieur amine 0410')).toBe('Le créateur est ingénieur Amine 0410.');
   });
 
@@ -378,9 +380,13 @@ describe('companion-core V2-B cognitive foundation', () => {
   it('does not create memories for incomplete memory commands', () => {
     expect(isIncompleteMemoryCommand('Souviens-toi')).toBe(true);
     expect(isIncompleteMemoryCommand('Nexus souviens-toi')).toBe(true);
+    expect(isIncompleteMemoryCommand('Nexus Companion souviens-toi')).toBe(true);
+    expect(isIncompleteMemoryCommand('Companion souviens-toi')).toBe(true);
     expect(isIncompleteMemoryCommand('Retiens ça')).toBe(true);
     expect(extractMemoryCandidates('Souviens-toi')).toEqual([]);
     expect(extractMemoryCandidates('Nexus souviens-toi')).toEqual([]);
+    expect(extractMemoryCandidates('Nexus Companion souviens-toi')).toEqual([]);
+    expect(extractMemoryCandidates('Companion souviens-toi')).toEqual([]);
   });
 
   it('decision pipeline handles required scenario requests', () => {
@@ -395,10 +401,11 @@ describe('companion-core V2-B cognitive foundation', () => {
 
     const location = decideCompanionResponse(buildCompanionContext({
       profile,
-      userMessage: 'Souviens-toi de mon adresse exacte',
+      userMessage: 'Souviens-toi que j’habite à Lyon',
       memories: []
     }));
     expect(location.requiredConfirmations).toContain('sensitive_memory_confirmation');
+    expect(location.intent).toBe('remember_candidate');
 
     const selfCode = decideCompanionResponse(buildCompanionContext({
       profile,
@@ -790,5 +797,30 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(consolidated.some((memory) => memory.id === 'pending-important')).toBe(true);
     expect(consolidated.some((memory) => memory.id === 'active-important')).toBe(true);
     expect(consolidated.some((memory) => memory.id === 'conflict-important')).toBe(true);
+  });
+
+  it('sanitizes brain summary context from command-wrapper pollution', () => {
+    const now = Date.now();
+    const initial = createDefaultBrainState({ now });
+    const next = updateBrainFromDecision(
+      initial,
+      {
+        intent: 'remember_candidate',
+        memoryCandidates: [],
+        suggestedResponseStyle: 'practical',
+        requiredConfirmations: [],
+        riskFlags: [],
+        nextVisualState: 'speaking'
+      },
+      {
+        userMessage: 'Companion souviens-toi que mon projet actuel est Nexus Companion',
+        assistantMessage: 'Bien noté',
+        profile: createDefaultCompanionProfile(),
+        now: now + 1
+      }
+    );
+    const summary = buildBrainStateSummary(next);
+    expect(summary.activeProject).toBe('Le projet actuel est Nexus Companion.');
+    expect(summary.safeMemoryHints.join(' | ')).not.toContain('Companion souviens-toi');
   });
 });

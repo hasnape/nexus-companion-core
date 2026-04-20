@@ -64,7 +64,7 @@ describe('V2-D response planning', () => {
 
     expect(plan.responseMode).toBe('project_help');
     expect(plan.responseStrategy).toBe('structured_next_steps');
-    expect(plan.activeProject).toBe('Nexus Companion Core');
+    expect(plan.activeProject).toBe('Nexus Companion Core.');
     expect(plan.relevantMemoryHints[0]).toContain('concrètes');
   });
 

@@ -43,19 +43,24 @@ export function CompanionMemoryPanel({ memories, memoryCandidates, brainSummary,
   const cleanMemories = memories
     .filter((memory) => !isTechnicalMemoryContent(memory.content) && !isWakeFragmentNoise(memory.content))
     .map((memory) => ({ ...memory, content: normalizeMemoryCandidateContent(memory.content) }));
-  const confirmedMemories = cleanMemories.filter((memory) => memory.lifecycleState !== 'pending_confirmation' && !memory.requiresConfirmation);
+  const dedupedMemories = cleanMemories.filter((memory, index, all) => {
+    const key = normalizeMemoryContentKey(memory.content);
+    if (!key) return false;
+    return all.findIndex((item) => normalizeMemoryContentKey(item.content) === key) === index;
+  });
+  const confirmedMemories = dedupedMemories.filter((memory) => memory.lifecycleState !== 'pending_confirmation' && !memory.requiresConfirmation);
   const cleanCandidates = memoryCandidates
     .filter((candidate) => !isTechnicalMemoryContent(candidate.content) && !isWakeFragmentNoise(candidate.content))
     .map((candidate) => ({ ...candidate, content: normalizeMemoryCandidateContent(candidate.content) }))
     .filter((candidate, index, all) => {
       const key = normalizeMemoryContentKey(candidate.content);
       if (!key) return false;
-      if (confirmedMemories.some((memory) => normalizeMemoryContentKey(memory.content) === key)) return false;
+      if (dedupedMemories.some((memory) => normalizeMemoryContentKey(memory.content) === key)) return false;
       return all.findIndex((item) => normalizeMemoryContentKey(item.content) === key) === index;
     });
   const grouped = byGroup(confirmedMemories);
   const pendingConfirmationLines = Array.from(new Set([
-    ...cleanMemories
+    ...dedupedMemories
       .filter((memory) => memory.lifecycleState === 'pending_confirmation' || memory.requiresConfirmation)
       .map((memory) => `Retenir que ${lowerFirst(memory.content.replace(/[.!?]+$/u, ''))} ?`),
     ...cleanCandidates

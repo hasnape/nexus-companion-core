@@ -60,12 +60,8 @@ const CLOUD_EVERYTHING_PATTERNS = [/stocke (toutes|tout) mes donn[ée]es dans le
 const CREATOR_CANONICAL_IDENTITY = 'ingénieur Amine 0410';
 const MEMORY_WRAPPER_PREFIX = /^(?:(?:nexus(?:\s+companion)?|companion)\s+)?(?:souviens(?:-| )toi(?:\s+que)?|retiens(?:\s+que)?|m[ée]morise(?:\s+que)?|garde en m[ée]moire(?:\s+que)?)\s+/i;
 const SENSITIVE_LOCATION_PATTERNS = [
-  /j['’]habite\s+[àa]\s+/i,
-  /je vis\s+[àa]\s+/i,
-  /vous habitez\s+[àa]\s+/i,
-  /vous vivez\s+[àa]\s+/i,
-  /\bhabite\s+[àa]\s+/i,
-  /\bvit\s+[àa]\s+/i,
+  /^(?:j['’]habite|je vis|vous habitez|vous vivez)\s+[àa]\s+/i,
+  /^(?:habite|vit)\s+[àa]\s+/i,
   /localisation|adresse/i
 ];
 

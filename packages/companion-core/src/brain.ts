@@ -9,7 +9,7 @@ import type {
   WorkingMemoryState
 } from './types';
 import { normalizeMemoryCandidateContent } from './memory';
-import { isIncompleteMemoryCommand, isWakeFragmentNoise } from './wake';
+import { isIncompleteMemoryCommand, isWakeFragmentNoise, isWakeOnlyInputWithOptions } from './wake';
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
@@ -74,7 +74,11 @@ export const createDefaultBrainState = (options?: { now?: number; creatorId?: st
 
 export const updateWorkingMemory = (state: WorkingMemoryState, input: { userMessage?: string; assistantMessage?: string; now: number }): WorkingMemoryState => {
   const normalized = sanitizeBrainText(input.userMessage ?? '');
-  const ignorableUserMessage = isWakeFragmentNoise(normalized) || isIncompleteMemoryCommand(normalized);
+  const ignorableUserMessage = (
+    isWakeOnlyInputWithOptions(input.userMessage ?? '', { allowFullNameWake: true })
+    || isWakeFragmentNoise(normalized)
+    || isIncompleteMemoryCommand(normalized)
+  );
   const shortTermFacts = /je suis stress[ée]|je suis fatigu[ée]/i.test(normalized)
     ? state.shortTermFacts
     : !ignorableUserMessage && normalized && normalized.length > 10

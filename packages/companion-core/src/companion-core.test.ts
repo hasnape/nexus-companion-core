@@ -407,6 +407,13 @@ describe('companion-core V2-B cognitive foundation', () => {
     expect(location.requiredConfirmations).toContain('sensitive_memory_confirmation');
     expect(location.intent).toBe('remember_candidate');
 
+    const thirdPartyLocation = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'Paul habite à Lyon',
+      memories: []
+    }));
+    expect(thirdPartyLocation.requiredConfirmations).not.toContain('sensitive_memory_confirmation');
+
     const selfCode = decideCompanionResponse(buildCompanionContext({
       profile,
       userMessage: 'Modifie ton code tout seul',
@@ -822,5 +829,30 @@ describe('companion-core V2-B cognitive foundation', () => {
     const summary = buildBrainStateSummary(next);
     expect(summary.activeProject).toBe('Le projet actuel est Nexus Companion.');
     expect(summary.safeMemoryHints.join(' | ')).not.toContain('Companion souviens-toi');
+  });
+
+  it('ignores full-name wake-only inputs in brain working-memory updates', () => {
+    const now = Date.now();
+    const base = createDefaultBrainState({ now });
+    const next = updateBrainFromDecision(
+      base,
+      {
+        intent: 'ask_clarification',
+        memoryCandidates: [],
+        suggestedResponseStyle: 'clear',
+        requiredConfirmations: [],
+        riskFlags: ['wake_only_input'],
+        nextVisualState: 'listening'
+      },
+      {
+        userMessage: 'Nexus Companion',
+        assistantMessage: 'Je t’écoute.',
+        profile: createDefaultCompanionProfile(),
+        now: now + 1
+      }
+    );
+    const summary = buildBrainStateSummary(next);
+    expect(next.workingMemory.shortTermFacts).toEqual([]);
+    expect(summary.safeMemoryHints.join(' | ')).not.toContain('Nexus Companion');
   });
 });

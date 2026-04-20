@@ -270,6 +270,29 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('accepts full-name wake-prefixed questions and memory commands in the same command path', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+
+    let hook = render();
+    await hook.startListeningSession();
+    hook = render();
+    const recognition = recognitionInstances[0];
+
+    emitFinal(recognition, 'Nexus Companion quelle est la prochaine étape ?');
+    await Promise.resolve();
+    hook = render();
+
+    expect(callbacks.onCommand).toHaveBeenCalledWith('quelle est la prochaine étape ?');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+
+    emitFinal(recognition, 'Nexus Companion souviens-toi que mon projet actuel est Nexus Companion');
+    await Promise.resolve();
+    hook = render();
+
+    expect(callbacks.onCommand).toHaveBeenCalledWith('souviens-toi que mon projet actuel est Nexus Companion');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+  });
+
   it('cleans media/session when recognition.start throws and avoids leaking tracks across retries', async () => {
     const { render, recognitionInstances, trackStopCalls, getUserMedia } = await createHookHarness();
 

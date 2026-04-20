@@ -7,7 +7,7 @@ import {
   type CompanionMemoryItem,
   type MemoryStore,
   isWakeFragmentNoise,
-  isWakeOnlyInput,
+  isWakeOnlyInputWithOptions,
   stripWakePrefix
 } from '@nexus/companion-core';
 import { createAction, type CompanionAction, type InternalState, type MemoryRecord, type TrainingConfig } from '@nexus/shared';
@@ -112,7 +112,7 @@ export class CompanionRuntime {
     const now = Date.now();
     const normalizedInput = text.trim();
 
-    if (isWakeOnlyInput(normalizedInput)) {
+    if (isWakeOnlyInputWithOptions(normalizedInput, { allowFullNameWake: true })) {
       this.state = transitionState(this.state, { at: now, interacted: true, mode: 'attentive', attentionTarget: 'user', mood: 'warm' });
       this.action = createAction('listen_attentive', this.training.emotionalIntensity);
       this.conversation.push({ from: 'companion', text: 'Je t’écoute.' });
@@ -121,7 +121,7 @@ export class CompanionRuntime {
       return this.getSnapshot();
     }
 
-    const strippedInput = stripWakePrefix(normalizedInput);
+    const strippedInput = stripWakePrefix(normalizedInput, { allowFullNameWake: true });
     this.state = transitionState(this.state, { at: now, interacted: true, mode: 'thinking', attentionTarget: 'user', mood: 'curious' });
     this.conversation.push({ from: 'user', text: strippedInput });
 

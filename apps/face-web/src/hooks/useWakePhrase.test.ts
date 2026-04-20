@@ -25,6 +25,8 @@ describe('wake phrase detection', () => {
     expect(stripWakePhrasePrefix('Nexus Companion lance la suite')).toBe('lance la suite');
     expect(stripWakePhrasePrefix('Nexus Companion, lance la suite')).toBe('lance la suite');
     expect(stripWakePhrasePrefix('Nexus Companion: lance la suite')).toBe('lance la suite');
+    expect(stripWakePhrasePrefix('Nexus Companion quelle est la prochaine étape ?')).toBe('quelle est la prochaine étape ?');
+    expect(stripWakePhrasePrefix('Nexus Companion souviens-toi que mon projet actuel est Nexus Companion')).toBe('souviens-toi que mon projet actuel est Nexus Companion');
     expect(stripWakePhrasePrefix('Nexus, quelle est la suite ?')).toBe('quelle est la suite ?');
   });
 

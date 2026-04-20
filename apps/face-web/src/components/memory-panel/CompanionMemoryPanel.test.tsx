@@ -180,6 +180,43 @@ describe('CompanionMemoryPanel', () => {
     expect(text).toContain('Retenir que vous habitez à Lyon ?');
   });
 
+  it('normalizes orphan Companion wrappers and deduplicates project memories in display', () => {
+    const now = Date.now();
+    const ui = CompanionMemoryPanel({
+      memories: [
+        {
+          id: 'proj-a',
+          type: 'project_context',
+          layer: 'project_context',
+          content: 'Nexus Companion est mon projet.',
+          source: 'user_message',
+          confidence: 0.8,
+          importance: 0.8,
+          createdAt: now,
+          updatedAt: now
+        },
+        {
+          id: 'proj-b',
+          type: 'project_context',
+          layer: 'project_context',
+          content: 'Companion souviens-toi que mon projet actuel est Nexus Companion',
+          source: 'user_message',
+          confidence: 0.9,
+          importance: 0.9,
+          createdAt: now + 1,
+          updatedAt: now + 1
+        }
+      ],
+      memoryCandidates: [],
+      onClearMemory: async () => {}
+    });
+
+    const text = textOf(ui);
+    expect(text).toContain('Souvenirs enregistrés : 1');
+    expect(text).toContain('Le projet actuel est Nexus Companion.');
+    expect(text).not.toContain('Companion souviens-toi');
+  });
+
   it('clear memory button still calls onClearMemory', () => {
     const onClearMemory = vi.fn(async () => {});
     const ui = CompanionMemoryPanel({

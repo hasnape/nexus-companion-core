@@ -74,6 +74,16 @@ const DANGEROUS_RISK_FLAGS = new Set([
 ]);
 
 const isExplicitProjectHelpMessage = (text: string): boolean => (/peux-tu|aide-moi|plan|architecture|roadmap|refactor|projet|project/i.test(text) && !/souviens-toi|retiens|remember/i.test(text));
+const POLLUTED_MEMORY_WRAPPER_PATTERN = /(?:^|\s)(?:nexus(?:\s+companion)?|companion)?\s*(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire)\b/i;
+
+const sanitizeContextMemoryHint = (value?: string): string | null => {
+  if (!value) return null;
+  const normalized = normalizeMemoryCandidateContent(value);
+  if (!normalized) return null;
+  if (POLLUTED_MEMORY_WRAPPER_PATTERN.test(normalized)) return null;
+  if (isIncompleteMemoryCommand(normalized)) return null;
+  return normalized;
+};
 
 const summarizeBrain = (brainSummary?: BrainStateSummary): string | undefined => {
   if (!brainSummary) {
@@ -161,13 +171,24 @@ export const selectResponseTone = (
   return 'calm';
 };
 
-export const buildResponseContextHints = (context: CompanionContext): NexusResponseContextHints => ({
-  activeProject: context.brainSummary?.activeProject,
-  memoryHints: context.brainSummary?.safeMemoryHints ?? context.relevantMemories.map((memory) => memory.content).slice(0, 3),
-  pendingConfirmations: context.brainSummary?.pendingConfirmations ?? [],
-  safetyNotes: context.brainSummary?.safetyNotes ?? [],
-  brainSummaryNotes: context.brainSummary?.nonSensitiveSummary ?? []
-});
+export const buildResponseContextHints = (context: CompanionContext): NexusResponseContextHints => {
+  const safeMemories = context.relevantMemories.filter((memory) => (
+    memory.lifecycleState !== 'pending_confirmation'
+    && !memory.requiresConfirmation
+    && !memory.sensitive
+    && memory.sensitivity !== 'high'
+    && memory.sensitivity !== 'critical'
+  ));
+  return {
+    activeProject: sanitizeContextMemoryHint(context.brainSummary?.activeProject) ?? undefined,
+    memoryHints: (context.brainSummary?.safeMemoryHints ?? safeMemories.map((memory) => memory.content).slice(0, 3))
+      .map((item) => sanitizeContextMemoryHint(item))
+      .filter((item): item is string => Boolean(item)),
+    pendingConfirmations: context.brainSummary?.pendingConfirmations ?? [],
+    safetyNotes: context.brainSummary?.safetyNotes ?? [],
+    brainSummaryNotes: context.brainSummary?.nonSensitiveSummary ?? []
+  };
+};
 
 export const createResponsePlan = ({ context, decision, personality = createDefaultNexusPersonalityProfile() }: CreateResponsePlanInput): NexusResponsePlan => {
   const audienceMode = selectAudienceMode(context.userMessage, context);
@@ -256,7 +277,8 @@ const renderMemoryReply = (plan: NexusResponsePlan): string => {
   const hint = plan.relevantMemoryHints[0];
   if (plan.pendingConfirmations.includes('sensitive_memory_confirmation')) {
     const stripped = stripWakePrefix(plan.userMessage);
-    const memoryContent = normalizeMemoryCandidateContent(stripped).replace(/[.!?]+$/u, '').trim();
+    const wakeNormalized = stripWakePrefix(plan.userMessage, { allowFullNameWake: true });
+    const memoryContent = normalizeMemoryCandidateContent(wakeNormalized || stripped).replace(/[.!?]+$/u, '').trim();
     if (memoryContent) {
       return `Tu veux que je retienne que ${memoryContent} ?`;
     }

@@ -413,6 +413,23 @@ describe('companion-core V2-B cognitive foundation', () => {
       memories: []
     }));
     expect(thirdPartyLocation.requiredConfirmations).not.toContain('sensitive_memory_confirmation');
+    expect(thirdPartyLocation.intent).toBe('answer');
+
+    const thirdPartyLocationAlt = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'Marie vit à Paris',
+      memories: []
+    }));
+    expect(thirdPartyLocationAlt.requiredConfirmations).not.toContain('sensitive_memory_confirmation');
+    expect(thirdPartyLocationAlt.intent).toBe('answer');
+
+    const thirdPartyLocationQuestion = decideCompanionResponse(buildCompanionContext({
+      profile,
+      userMessage: 'Est-ce que Paul habite à Lyon ?',
+      memories: []
+    }));
+    expect(thirdPartyLocationQuestion.requiredConfirmations).not.toContain('sensitive_memory_confirmation');
+    expect(thirdPartyLocationQuestion.intent).toBe('answer');
 
     const selfCode = decideCompanionResponse(buildCompanionContext({
       profile,
@@ -854,5 +871,26 @@ describe('companion-core V2-B cognitive foundation', () => {
     const summary = buildBrainStateSummary(next);
     expect(next.workingMemory.shortTermFacts).toEqual([]);
     expect(summary.safeMemoryHints.join(' | ')).not.toContain('Nexus Companion');
+
+    const heyWake = updateBrainFromDecision(
+      base,
+      {
+        intent: 'ask_clarification',
+        memoryCandidates: [],
+        suggestedResponseStyle: 'clear',
+        requiredConfirmations: [],
+        riskFlags: ['wake_only_input'],
+        nextVisualState: 'listening'
+      },
+      {
+        userMessage: 'Hey Nexus Companion',
+        assistantMessage: 'Je t’écoute.',
+        profile: createDefaultCompanionProfile(),
+        now: now + 2
+      }
+    );
+    const heySummary = buildBrainStateSummary(heyWake);
+    expect(heyWake.workingMemory.shortTermFacts).toEqual([]);
+    expect(heySummary.safeMemoryHints.join(' | ')).not.toContain('Hey Nexus Companion');
   });
 });

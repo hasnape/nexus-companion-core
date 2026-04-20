@@ -124,6 +124,7 @@ export const isWakeFragmentNoise = (input: string): boolean => {
   const normalized = normalizeWakePhrase(input);
   if (!normalized) return true;
   if (isWakeOnlyInput(input)) return true;
+  if (isWakeOnlyInputWithOptions(input, { allowFullNameWake: true })) return true;
   if (isIncompleteMemoryCommand(input)) return true;
   if (/^nexus\s+comment$/.test(normalized)) return true;
   return false;

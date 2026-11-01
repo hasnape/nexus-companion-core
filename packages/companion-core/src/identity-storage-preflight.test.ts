@@ -19,6 +19,16 @@ describe('identity storage preflight', () => {
       ready: false, reason: 'legacy-data-requires-consent'
     });
   });
+  it('protects legacy brain state even when memory list is absent', () => {
+    expect(inspectIdentityStorage(identity, storage({ 'nexus-companion-core-memory-v2a-brain-v2b': '{}' }))).toEqual({
+      ready: false, reason: 'legacy-data-requires-consent'
+    });
+  });
+  it('protects occupied V3 brain namespace even with no memories', () => {
+    expect(inspectIdentityStorage(identity, storage({ [`${companionMemoryStorageKey('alif-001')}-brain-v2b`]: '{}' }))).toEqual({
+      ready: false, reason: 'existing-scoped-data'
+    });
+  });
   it('protects existing scoped memories from overwrite', () => {
     expect(inspectIdentityStorage(identity, storage({ [companionMemoryStorageKey('alif-001')]: '[]' }))).toEqual({
       ready: false, reason: 'existing-scoped-data'

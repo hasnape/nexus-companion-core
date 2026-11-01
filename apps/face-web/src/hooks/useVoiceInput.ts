@@ -87,9 +87,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       setUsesFrenchVoice(hasFrenchVoice(voices));
     };
     refreshVoiceInfo();
-    window.speechSynthesis.onvoiceschanged = refreshVoiceInfo;
+    window.speechSynthesis.addEventListener('voiceschanged', refreshVoiceInfo);
     return () => {
-      window.speechSynthesis.onvoiceschanged = null;
+      window.speechSynthesis.removeEventListener('voiceschanged', refreshVoiceInfo);
     };
   }, []);
 

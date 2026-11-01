@@ -8,7 +8,10 @@ export interface CompanionIdentityV1 {
 
 const validId = (id: unknown): id is string =>
   typeof id === 'string' && id.length > 0 && id.length <= 128 &&
-  id === id.trim() && !/[\u0000-\u001f\u007f]/.test(id);
+  id === id.trim() && Array.from(id).every((char) => {
+    const code = char.charCodeAt(0);
+    return code >= 0x20 && code !== 0x7f;
+  });
 
 export function isCompanionIdentityV1(input: unknown): input is CompanionIdentityV1 {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return false;

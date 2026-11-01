@@ -38,7 +38,7 @@ describe('companion memory session resolution', () => {
     });
   });
   it('fails closed if browser storage access throws', () => {
-    const inaccessible = { getItem: (_key: string): string | null => { throw new Error('SecurityError'); } };
+    const inaccessible = { getItem: (): string | null => { throw new Error('SecurityError'); } };
     expect(resolveCompanionMemorySession(id, inaccessible)).toEqual({ mode: 'storage-unavailable' });
   });
   it('does not resume another companion namespace', () => {

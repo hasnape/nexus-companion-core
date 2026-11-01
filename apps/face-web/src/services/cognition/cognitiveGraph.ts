@@ -29,12 +29,15 @@ export interface CognitiveConnection {
 }
 
 export interface CognitiveGraph {
+  /** Immutable identity of the companion whose cognitive state this graph contains. */
+  readonly companionId: string;
   readonly nodes: readonly CognitiveNode[];
   readonly connections: readonly CognitiveConnection[];
 }
 
-export function emptyCognitiveGraph(): CognitiveGraph {
-  return { nodes: [], connections: [] };
+export function emptyCognitiveGraph(companionId: string): CognitiveGraph {
+  if (!companionId.trim()) throw new Error('Companion identity is required');
+  return { companionId, nodes: [], connections: [] };
 }
 
 export function addCognitiveNode(graph: CognitiveGraph, node: CognitiveNode): CognitiveGraph {
@@ -45,7 +48,7 @@ export function addCognitiveNode(graph: CognitiveGraph, node: CognitiveNode): Co
       graph.nodes.some((existing) => existing.id === node.id)) {
     throw new Error('Invalid or duplicate cognitive node');
   }
-  return { nodes: [...graph.nodes, { ...node }], connections: [...graph.connections] };
+  return { companionId: graph.companionId, nodes: [...graph.nodes, { ...node }], connections: [...graph.connections] };
 }
 
 export function connectCognitiveNodes(
@@ -67,7 +70,7 @@ export function connectCognitiveNodes(
       (from.scope === 'owner-private' && from.ownerId !== to.ownerId)) {
     throw new Error('Cognitive connection crosses a privacy boundary');
   }
-  return { nodes: [...graph.nodes], connections: [...graph.connections, { ...connection }] };
+  return { companionId: graph.companionId, nodes: [...graph.nodes], connections: [...graph.connections, { ...connection }] };
 }
 
 /** Public export excludes private nodes and their edges, including indirect references. */
@@ -75,6 +78,7 @@ export function generalKnowledgeGraph(graph: CognitiveGraph): CognitiveGraph {
   const nodes = graph.nodes.filter((node) => node.scope === 'companion-general');
   const allowed = new Set(nodes.map((node) => node.id));
   return {
+    companionId: graph.companionId,
     nodes: nodes.map((node) => ({ ...node })),
     connections: graph.connections.filter((edge) =>
       allowed.has(edge.fromId) && allowed.has(edge.toId)).map((edge) => ({ ...edge }))

@@ -58,6 +58,18 @@ describe('offline persistence', () => {
     expect(loadOfflineQueue()).toEqual([]);
   });
 
+  it('filters invalid queued messages without discarding valid entries', () => {
+    localStorageMock.setItem('face-web-offline-queue-v1', JSON.stringify([
+      { id: 'valid', text: 'keep', createdAt: 1 },
+      { id: '', text: 'drop', createdAt: 2 },
+      { id: 'future', text: 'drop', createdAt: null },
+      { id: 'negative', text: 'drop', createdAt: -1 },
+      { id: 'string-date', text: 'drop', createdAt: '1' },
+      null
+    ]));
+    expect(loadOfflineQueue()).toEqual([{ id: 'valid', text: 'keep', createdAt: 1 }]);
+  });
+
   it('does not crash if window.localStorage access throws', () => {
     const originalWindow = globalThis.window;
     const brokenWindow = {};

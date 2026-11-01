@@ -302,7 +302,7 @@ export default function App() {
         {creatorCodeDialogOpen ? (
           <section className="panel creator-code-dialog" aria-label="Code créateur">
             <h3>Code créateur</h3>
-            <p>Accès réservé au créateur.</p>
+            <p>Mode créateur local : ce code ne constitue pas une authentification sécurisée et ne doit pas protéger des données sensibles.</p>
             <div className="row creator-code-row">
               <input
                 type="password"

@@ -16,3 +16,4 @@ export * from './response';
 export * from './wake';
 export * from './scoped-store';
 export * from './companion-identity';
+export * from './identity-storage-preflight';

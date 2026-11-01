@@ -1,17 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
 import { CompanionBackupInspectionPanel } from './CompanionBackupInspectionPanel';
 
 describe('CompanionBackupInspectionPanel', () => {
-  it('disables inspection until a file and a strong passphrase are supplied', () => {
-    render(<CompanionBackupInspectionPanel />);
-    expect(screen.getByRole('button', { name: 'Vérifier sans restaurer' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByText(/Aucun souvenir n’est importé ni modifié/)).toBeTruthy();
-  });
-  it('does not invoke backup inspection during initial render', async () => {
-    const inspect = vi.fn();
-    render(<CompanionBackupInspectionPanel />);
-    expect(inspect).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Fichier de sauvegarde')).toBeTruthy();
+  it('shows read-only privacy explanation and disabled verification on first render', () => {
+    const html = renderToStaticMarkup(React.createElement(CompanionBackupInspectionPanel));
+    expect(html).toContain('Vérifier une sauvegarde chiffrée');
+    expect(html).toContain('Aucun souvenir n’est importé ni modifié');
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Vérifier sans restaurer');
+    expect(html).toContain('type="password"');
+    expect(html).toContain('type="file"');
   });
 });

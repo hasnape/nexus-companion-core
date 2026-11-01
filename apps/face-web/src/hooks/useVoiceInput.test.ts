@@ -84,6 +84,8 @@ const createHookHarness = async () => {
     speechSynthesis: {
       getVoices: () => [] as SpeechSynthesisVoice[],
       speak: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       onvoiceschanged: null as null | (() => void)
     }
   } as unknown as Window & typeof globalThis;
@@ -153,13 +155,27 @@ const createHookHarness = async () => {
     });
   };
 
-  return { render, callbacks, recognitionInstances, emitFinal, getUserMedia, trackStopCalls, unmount };
+  return { render, callbacks, recognitionInstances, emitFinal, getUserMedia, trackStopCalls, unmount, mockWindow };
 };
 
 describe('useVoiceInput reliability', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.resetModules();
+  });
+
+  it('registers and removes only its own voice-change listener', async () => {
+    const { render, unmount, mockWindow } = await createHookHarness();
+    const existingListener = vi.fn();
+    mockWindow.speechSynthesis.onvoiceschanged = existingListener;
+
+    render();
+    expect(mockWindow.speechSynthesis.addEventListener).toHaveBeenCalledWith('voiceschanged', expect.any(Function));
+    const handler = vi.mocked(mockWindow.speechSynthesis.addEventListener).mock.calls[0][1];
+
+    unmount();
+    expect(mockWindow.speechSynthesis.removeEventListener).toHaveBeenCalledWith('voiceschanged', handler);
+    expect(mockWindow.speechSynthesis.onvoiceschanged).toBe(existingListener);
   });
 
   it('uses latest wake state for final transcripts (no stale inactive closure)', async () => {

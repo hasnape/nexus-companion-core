@@ -11,6 +11,7 @@ type SpeechRecognitionLike = {
   onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string } & { confidence?: number }> & { isFinal?: boolean }> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
@@ -34,6 +35,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionEnabledRef = useRef(false);
   const fatalErrorRef = useRef(false);
+  const recognitionRunningRef = useRef(false);
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
 
@@ -108,6 +110,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
   const cleanupMediaSession = useCallback((options?: { setWakeInactive?: boolean }) => {
     sessionEnabledRef.current = false;
+    recognitionRunningRef.current = false;
     setSessionActive(false);
     restartCountRef.current = 0;
     clearRestartTimer();
@@ -136,8 +139,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     restartTimerRef.current = window.setTimeout(() => {
       if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
       try {
-        setListenerError(null);
-        setWakeListeningState('waiting_for_wake_phrase');
         recognitionRef.current.start();
       } catch {
         setWakeListeningState('error');
@@ -237,7 +238,16 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         }
       };
 
+      recognitionRef.current.onstart = () => {
+        if (!sessionEnabledRef.current) return;
+        recognitionRunningRef.current = true;
+        restartCountRef.current = 0;
+        setListenerError(null);
+        setWakeListeningState('waiting_for_wake_phrase');
+      };
+
       recognitionRef.current.onerror = (event) => {
+        recognitionRunningRef.current = false;
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           fatalErrorRef.current = true;
           cleanupMediaSession({ setWakeInactive: false });
@@ -245,11 +255,24 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           setListenerError('Autorisation micro refusée.');
           return;
         }
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        if (event.error === 'network' || event.error === 'audio-capture' || event.error === 'language-not-supported') {
+          fatalErrorRef.current = true;
+          cleanupMediaSession({ setWakeInactive: false });
+          setWakeListeningState('error');
+          setListenerError(event.error === 'network'
+            ? 'Reconnaissance vocale indisponible : service réseau du navigateur. Essayez Chrome ou Samsung Internet directement.'
+            : event.error === 'audio-capture'
+              ? 'Aucune entrée audio accessible. Vérifiez les autorisations du microphone.'
+              : 'Langue française non prise en charge par ce navigateur.');
+          return;
+        }
         setWakeListeningState('error');
-        setListenerError('Erreur micro');
+        setListenerError('Erreur de reconnaissance vocale (' + event.error + ').');
       };
 
       recognitionRef.current.onend = () => {
+        recognitionRunningRef.current = false;
         if (sessionEnabledRef.current && !fatalErrorRef.current) {
           scheduleRestart();
         }
@@ -258,7 +281,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
     sessionEnabledRef.current = true;
     setSessionActive(true);
-    setWakeListeningState('waiting_for_wake_phrase');
+    setWakeListeningState('inactive');
     try {
       recognitionRef.current.start();
     } catch {

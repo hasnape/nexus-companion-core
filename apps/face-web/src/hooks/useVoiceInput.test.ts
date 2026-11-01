@@ -12,6 +12,7 @@ type MockRecognition = {
   onresult: ((event: MockResultEvent) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 };
@@ -99,7 +100,8 @@ const createHookHarness = async () => {
     onresult: ((event: MockResultEvent) => void) | null = null;
     onerror: ((event: { error: string }) => void) | null = null;
     onend: (() => void) | null = null;
-    start = vi.fn();
+    onstart: (() => void) | null = null;
+    start = vi.fn(() => { this.onstart?.(); });
     stop = vi.fn();
 
     constructor() {
@@ -381,5 +383,20 @@ describe('useVoiceInput reliability', () => {
 
     expect(() => hook.stopListeningSession()).not.toThrow();
     expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mobile speech recognition diagnostics', () => {
+  it('stops the session on recognition network failure and explains browser limitation', async () => {
+    const { render, recognitionInstances, trackStopCalls } = await createHookHarness();
+    let hook = render();
+    await hook.startListeningSession();
+    const recognition = recognitionInstances[0];
+    recognition.onerror?.({ error: 'network' });
+    hook = render();
+    expect(hook.isSessionActive).toBe(false);
+    expect(hook.wakeState).toBe('error');
+    expect(hook.listenerError).toContain('service réseau');
+    expect(trackStopCalls[0]).toHaveBeenCalled();
   });
 });

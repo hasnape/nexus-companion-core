@@ -6,7 +6,7 @@ import {
 
 describe('companion identity', () => {
   it('creates an individual Alif Nexus Companion with stable identity', () => {
-    const identity = createCompanionIdentity(() => 'companion-a', () => 100);
+    const identity = createCompanionIdentity(() => 'companion-a', () => 100, 'Alif');
     expect(identity).toEqual({
       schemaVersion: 1, companionId: 'companion-a', givenName: 'Alif',
       familyName: 'Nexus Companion', createdAt: 100, presentation: 'neutral'
@@ -15,13 +15,14 @@ describe('companion identity', () => {
   });
 
   it('creates distinct individuals from separate installations', () => {
-    const first = createCompanionIdentity(() => 'first', () => 1);
-    const second = createCompanionIdentity(() => 'second', () => 2);
+    const first = createCompanionIdentity(() => 'first', () => 1, 'Alif');
+    const second = createCompanionIdentity(() => 'second', () => 2, 'Nora');
     expect(first.companionId).not.toBe(second.companionId);
+    expect(second.givenName).toBe('Nora');
   });
 
   it('requires ordered, resumable first-awakening transitions', () => {
-    const identity = createCompanionIdentity(() => 'id', () => 10);
+    const identity = createCompanionIdentity(() => 'id', () => 10, 'Alif');
     const initial = beginAwakening(identity, 10);
     const next = advanceAwakening(initial, 'human-introduction', 11);
     expect(next.stage).toBe('human-introduction');
@@ -43,7 +44,7 @@ describe('companion identity', () => {
   });
 
   it('rejects empty names and missing identity identifiers', () => {
-    expect(() => createCompanionIdentity(() => '', () => 1)).toThrow();
+    expect(() => createCompanionIdentity(() => '', () => 1, 'Alif')).toThrow();
     expect(() => createCompanionIdentity(() => 'id', () => 1, '  ')).toThrow();
   });
 });

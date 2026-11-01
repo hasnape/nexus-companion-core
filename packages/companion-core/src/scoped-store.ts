@@ -14,7 +14,7 @@ export interface CompanionKeyValueStorage {
 export function companionMemoryStorageKey(companionId: string): string {
   if (typeof companionId !== 'string' || !companionId ||
       companionId !== companionId.trim() || companionId.length > 128 ||
-      !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(companionId)) {
+      /[\u0000-\u001F\u007F]/.test(companionId)) {
     throw new Error('A valid immutable companion ID is required');
   }
   return `nexus-companion-core-memory-v3/${encodeURIComponent(companionId)}`;

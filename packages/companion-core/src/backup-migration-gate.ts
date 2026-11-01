@@ -2,7 +2,7 @@ import type { LegacyMigrationPlan } from './legacy-migration-plan';
 import type { MigrationSourceSnapshot } from './migration-source-snapshot';
 import { isLegacyMigrationSourceUnchanged } from './migration-source-snapshot';
 import { isLegacyMigrationDestinationEmpty } from './migration-target-guard';
-import { decryptCompanionBackup } from './encrypted-companion-backup';
+import { decryptCompanionBackup, type CompanionBackupPayloadV1 } from './encrypted-companion-backup';
 import { companionMemoryStorageKey } from './scoped-store';
 
 export type BackupMigrationCheck =
@@ -36,7 +36,7 @@ export async function verifyLegacyMigrationBackup(
     return { ready: false, reason: 'storage-unavailable' };
   }
 
-  let payload;
+  let payload: CompanionBackupPayloadV1;
   try {
     payload = await decryptCompanionBackup(encryptedBackup, passphrase);
   } catch {

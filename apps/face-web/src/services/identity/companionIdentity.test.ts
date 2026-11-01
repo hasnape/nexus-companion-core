@@ -21,6 +21,12 @@ describe('companion identity', () => {
     expect(second.givenName).toBe('Nora');
   });
 
+  it('rejects empty generated IDs and trims surrounding whitespace', () => {
+    expect(() => createCompanionIdentity(() => '   ', () => 1, 'Alif')).toThrow();
+    const identity = createCompanionIdentity(() => '  companion-x  ', () => 1, 'Alif');
+    expect(identity.companionId).toBe('companion-x');
+  });
+
   it('requires ordered, resumable first-awakening transitions', () => {
     const identity = createCompanionIdentity(() => 'id', () => 10, 'Alif');
     const initial = beginAwakening(identity, 10);

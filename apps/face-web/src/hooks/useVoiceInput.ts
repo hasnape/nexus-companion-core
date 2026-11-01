@@ -95,12 +95,12 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     };
   }, []);
 
-  const clearRestartTimer = () => {
+  const clearRestartTimer = useCallback(() => {
     if (restartTimerRef.current) {
       window.clearTimeout(restartTimerRef.current);
       restartTimerRef.current = null;
     }
-  };
+  }, []);
 
   const stopAndClearMediaStream = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -124,7 +124,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (options?.setWakeInactive ?? true) {
       setWakeListeningState('inactive');
     }
-  }, [setWakeListeningState, stopAndClearMediaStream]);
+  }, [clearRestartTimer, setWakeListeningState, stopAndClearMediaStream]);
 
   const scheduleRestart = useCallback(() => {
     clearRestartTimer();
@@ -146,7 +146,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         cleanupMediaSession({ setWakeInactive: false });
       }
     }, 550);
-  }, [cleanupMediaSession, setWakeListeningState]);
+  }, [cleanupMediaSession, clearRestartTimer, setWakeListeningState]);
 
   const stopListeningSession = useCallback(() => {
     cleanupMediaSession();

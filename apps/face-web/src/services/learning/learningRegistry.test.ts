@@ -8,8 +8,18 @@ const makeLesson = (owner: string, id: string, category: 'object' | 'person' = '
   });
 
 describe('owner-partitioned learning registry', () => {
+  it('keeps different companions in separate registries', () => {
+    expect(() => new LearningRegistry(' ')).toThrow('Companion identity');
+    const first = new LearningRegistry('companion-a');
+    const second = new LearningRegistry('companion-b');
+    first.put('alice', makeLesson('alice', 'shared-id'));
+    expect(first.companionId).toBe('companion-a');
+    expect(second.companionId).toBe('companion-b');
+    expect(second.get('alice', 'shared-id')).toBeUndefined();
+  });
+
   it('keeps lessons of different owners isolated', () => {
-    const registry = new LearningRegistry();
+    const registry = new LearningRegistry('companion-a');
     registry.put('alice', makeLesson('alice', 'lesson'));
     expect(registry.get('bob', 'lesson')).toBeUndefined();
     expect(registry.list('bob')).toEqual([]);
@@ -17,7 +27,7 @@ describe('owner-partitioned learning registry', () => {
   });
 
   it('stores confirmed updates and refuses stale overwrites', () => {
-    const registry = new LearningRegistry();
+    const registry = new LearningRegistry('companion-a');
     const lesson = makeLesson('alice', 'lesson');
     registry.put('alice', lesson);
     const confirmed = reviewLesson(lesson, 'confirm', 3);
@@ -27,7 +37,7 @@ describe('owner-partitioned learning registry', () => {
   });
 
   it('forgets a single lesson or an entire owner partition', () => {
-    const registry = new LearningRegistry();
+    const registry = new LearningRegistry('companion-a');
     registry.put('alice', makeLesson('alice', 'one'));
     registry.put('alice', makeLesson('alice', 'two'));
     registry.put('bob', makeLesson('bob', 'one'));
@@ -39,7 +49,7 @@ describe('owner-partitioned learning registry', () => {
   });
 
   it('returns copies so consumers cannot mutate stored lessons', () => {
-    const registry = new LearningRegistry();
+    const registry = new LearningRegistry('companion-a');
     registry.put('alice', makeLesson('alice', 'one'));
     const result = registry.get('alice', 'one');
     if (!result) throw new Error('Missing lesson');
@@ -48,7 +58,7 @@ describe('owner-partitioned learning registry', () => {
   });
 
   it('rejects a lesson about a person marked general', () => {
-    const registry = new LearningRegistry();
+    const registry = new LearningRegistry('companion-a');
     const lesson = makeLesson('alice', 'one', 'person');
     expect(() => registry.put('alice', { ...lesson, scope: 'general' })).toThrow();
     expect(() => registry.list('')).toThrow();

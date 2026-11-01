@@ -44,7 +44,7 @@ export function createCompanionIdentity(
   givenName: string,
   presentation: Presentation = 'neutral'
 ): CompanionIdentity {
-  const companionId = generateId();
+  const companionId = generateId().trim();
   const timestamp = now();
   const name = givenName.trim();
   if (!companionId || !name || !Number.isFinite(timestamp)) {

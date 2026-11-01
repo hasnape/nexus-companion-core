@@ -4,6 +4,7 @@ import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
 import { CompanionMemoryPanel } from './components/memory-panel/CompanionMemoryPanel';
+import { CompanionBackupInspectionPanel } from './components/backup/CompanionBackupInspectionPanel';
 import { companionVisualStateLabel, deriveCompanionVisualState } from './components/face/companionVisualState';
 import { useCompanion } from './hooks/useCompanion';
 import { useConnectivity } from './hooks/useConnectivity';
@@ -378,6 +379,7 @@ export default function App() {
           brainSummary={snapshot.brainSummary}
           onClearMemory={clearCompanionMemory}
         />
+        <CompanionBackupInspectionPanel />
         {creatorMode ? (
           <DeveloperPanels
             training={training}

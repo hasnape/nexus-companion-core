@@ -15,3 +15,4 @@ export * from './response';
 
 export * from './wake';
 export * from './scoped-store';
+export * from './companion-identity';

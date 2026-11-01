@@ -68,6 +68,13 @@ function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (character) => character.charCodeAt(0));
 }
 
+/** WebCrypto requires an ArrayBuffer, never a SharedArrayBuffer-backed view. */
+function toCryptoBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 function verifyPassphrase(passphrase: string): void {
   if (typeof passphrase !== 'string' || Array.from(passphrase).length < 12) {
     throw new Error('Backup passphrase must contain at least 12 characters');
@@ -77,9 +84,9 @@ function verifyPassphrase(passphrase: string): void {
 async function deriveKey(
   passphrase: string, salt: Uint8Array, provider: Crypto
 ): Promise<CryptoKey> {
-  const material = await provider.subtle.importKey('raw', encoder.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const material = await provider.subtle.importKey('raw', toCryptoBuffer(encoder.encode(passphrase)), 'PBKDF2', false, ['deriveKey']);
   return provider.subtle.deriveKey(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: ITERATIONS },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: toCryptoBuffer(salt), iterations: ITERATIONS },
     material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
   );
 }
@@ -97,7 +104,7 @@ export async function encryptCompanionBackup(
   const salt = provider.getRandomValues(new Uint8Array(16));
   const nonce = provider.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(passphrase, salt, provider);
-  const ciphertext = new Uint8Array(await provider.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, plaintext));
+  const ciphertext = new Uint8Array(await provider.subtle.encrypt({ name: 'AES-GCM', iv: toCryptoBuffer(nonce) }, key, toCryptoBuffer(plaintext)));
   return {
     format: FORMAT,
     schemaVersion: 1,
@@ -133,7 +140,7 @@ export async function decryptCompanionBackup(
     if (salt.length !== 16 || nonce.length !== 12) throw new Error('Invalid backup header');
     const key = await deriveKey(passphrase, salt, provider);
     const decrypted = await provider.subtle.decrypt(
-      { name: 'AES-GCM', iv: nonce }, key, fromBase64(envelope.ciphertext)
+      { name: 'AES-GCM', iv: toCryptoBuffer(nonce) }, key, toCryptoBuffer(fromBase64(envelope.ciphertext))
     );
     if (decrypted.byteLength > MAX_PLAINTEXT_BYTES) throw new Error('Backup is too large');
     const payload: unknown = JSON.parse(decoder.decode(decrypted));

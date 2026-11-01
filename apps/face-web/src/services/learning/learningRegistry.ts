@@ -1,11 +1,18 @@
 import type { LearningLesson } from './guidedLearning';
 
 /**
- * Volatile, owner-partitioned lesson registry.
+ * Volatile, companion-scoped and owner-partitioned lesson registry.
  * This is NOT durable or encrypted storage, and does NOT authenticate callers.
  * The ownerId must come from a future authenticated session, never raw UI input.
  */
 export class LearningRegistry {
+  readonly companionId: string;
+
+  constructor(companionId: string) {
+    if (!companionId.trim()) throw new Error('Companion identity required');
+    this.companionId = companionId;
+  }
+
   private readonly ownerLessons = new Map<string, Map<string, LearningLesson>>();
 
   put(ownerId: string, lesson: LearningLesson): void {

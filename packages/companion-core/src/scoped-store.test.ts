@@ -45,9 +45,9 @@ describe('individual companion storage namespaces', () => {
   });
 
   it('rejects missing, invalid and ambiguous companion identifiers', () => {
-    for (const invalid of ['', ' ', ' a', 'a ', '../a', 'a/b', 'a?b']) {
+    for (const invalid of ['', ' ', ' a', 'a ', 'a\nb', 'a\tb']) {
       expect(() => companionMemoryStorageKey(invalid)).toThrow();
     }
-    expect(companionMemoryStorageKey('nora-001')).not.toBe(companionMemoryStorageKey('alif-001'));
+    expect(companionMemoryStorageKey('nora-001')).not.toBe(companionMemoryStorageKey('alif-001'));\n    expect(companionMemoryStorageKey('nora/one')).toContain('%2F');
   });
 });

@@ -31,7 +31,7 @@ export const loadOfflineQueue = (): OfflineQueueEntry[] => {
   try {
     const parsed = safeParse<OfflineQueueEntry[]>(storage.getItem(OFFLINE_QUEUE_KEY), []);
     return Array.isArray(parsed)
-      ? parsed.filter((entry) => typeof entry?.id === 'string' && typeof entry?.text === 'string' && typeof entry?.createdAt === 'number')
+      ? parsed.filter((entry) => typeof entry?.id === 'string' && entry.id.length > 0 && typeof entry?.text === 'string' && Number.isFinite(entry?.createdAt) && entry.createdAt >= 0)
       : [];
   } catch {
     return [];

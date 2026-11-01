@@ -14,3 +14,4 @@ export * from './personality';
 export * from './response';
 
 export * from './wake';
+export * from './scoped-store';

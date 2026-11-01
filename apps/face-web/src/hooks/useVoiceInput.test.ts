@@ -84,6 +84,8 @@ const createHookHarness = async () => {
     speechSynthesis: {
       getVoices: () => [] as SpeechSynthesisVoice[],
       speak: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
       onvoiceschanged: null as null | (() => void)
     }
   } as unknown as Window & typeof globalThis;

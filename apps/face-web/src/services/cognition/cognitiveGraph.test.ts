@@ -11,8 +11,19 @@ const node = (id: string, scope: 'companion-general' | 'owner-private' = 'compan
 });
 
 describe('local cognitive graph', () => {
+  it('requires and preserves individual companion identity across transformations', () => {
+    expect(() => emptyCognitiveGraph('  ')).toThrow('Companion identity');
+    const first = emptyCognitiveGraph('companion-a');
+    const second = emptyCognitiveGraph('companion-b');
+    const updated = addCognitiveNode(first, node('a'));
+    expect(updated.companionId).toBe('companion-a');
+    expect(generalKnowledgeGraph(updated).companionId).toBe('companion-a');
+    expect(second.companionId).toBe('companion-b');
+    expect(second.nodes).toHaveLength(0);
+  });
+
   it('creates connected general knowledge across regions', () => {
-    const a = addCognitiveNode(emptyCognitiveGraph(), node('cat'));
+    const a = addCognitiveNode(emptyCognitiveGraph('companion-a'), node('cat'));
     const b = addCognitiveNode(a, { ...node('animal'), region: 'perception' });
     const connected = connectCognitiveNodes(b, {
       fromId: 'cat', toId: 'animal', relation: 'is-a', weight: 0.9, updatedAt: 2
@@ -23,7 +34,7 @@ describe('local cognitive graph', () => {
   });
 
   it('blocks connections between different owners or public and private memories', () => {
-    const a = addCognitiveNode(emptyCognitiveGraph(), node('private-a', 'owner-private', 'alice'));
+    const a = addCognitiveNode(emptyCognitiveGraph('companion-a'), node('private-a', 'owner-private', 'alice'));
     const b = addCognitiveNode(a, node('private-b', 'owner-private', 'bob'));
     const c = addCognitiveNode(b, node('public'));
     for (const toId of ['private-b', 'public']) {
@@ -34,7 +45,7 @@ describe('local cognitive graph', () => {
   });
 
   it('exports only general knowledge and safe edges', () => {
-    let graph = emptyCognitiveGraph();
+    let graph = emptyCognitiveGraph('companion-a');
     graph = addCognitiveNode(graph, node('a'));
     graph = addCognitiveNode(graph, node('b'));
     graph = addCognitiveNode(graph, node('private', 'owner-private', 'alice'));
@@ -48,7 +59,7 @@ describe('local cognitive graph', () => {
   });
 
   it('rejects invalid confidence, duplicate nodes and connections', () => {
-    const graph = addCognitiveNode(emptyCognitiveGraph(), node('a'));
+    const graph = addCognitiveNode(emptyCognitiveGraph('companion-a'), node('a'));
     expect(() => addCognitiveNode(graph, node('a'))).toThrow();
     expect(() => addCognitiveNode(graph, { ...node('b'), confidence: 2 })).toThrow();
     expect(() => addCognitiveNode(graph, node('private', 'owner-private'))).toThrow();

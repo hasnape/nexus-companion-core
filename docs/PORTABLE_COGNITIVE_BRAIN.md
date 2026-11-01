@@ -2,9 +2,15 @@
 
 Status: accepted architectural requirement, initial pure cognitive graph foundation only. 2026-11-01.
 
+## Product scope: the entire Nexus Companion family
+
+**Nexus Companion is the product family and reusable cognitive architecture. Alif is only the first individual instance, not the architecture itself.** Every installation creates a distinct companion with its own immutable companion ID, owner relationship, personality, private and general memories, knowledge graph, learned connections, skills and development history. No individual companion's identity or memory may be hardcoded into shared cognitive modules. Shared software versions, brain regions, adapters, schemas, migration procedures and safety policies belong to the family platform; individual cognitive state belongs to one companion. New companions start with the shared capabilities and independent state, not a copy of Alif's personal history.
+
+**Design invariant:** family-level code and models are reusable across all companions; companion-level data is explicitly keyed by companion ID, and owner-private data is further scoped by authorized owner. Cross-companion knowledge transfer must be explicit, consented, provenance-aware and privacy-reviewed; it must never silently copy personal memories.
+
 ## Identity and portability
 
-Each companion has its **own** individual software identity, personality, memory, learned knowledge, skills and configuration. The owner can move the **same individual** from a phone/PC to a different computer or future robot using a secure, versioned brain package. A move differs from installing a new companion (new identity) and from owner handover (same companion, different authorized human).
+Each Nexus Companion individual has its **own** individual software identity, personality, memory, learned knowledge, skills and configuration. The owner can move the **same individual** from a phone/PC to a different computer or future robot using a secure, versioned brain package. A move differs from installing a new companion (new identity) and from owner handover (same companion, different authorized human).
 
 An exportable brain package is not simply a ZIP of unencrypted browser storage. The future package needs a versioned manifest, companion ID, compatible software/runtime metadata, model references and license information, encrypted owner-private memories and secrets handled separately, integrity checks, owner authorization, migrations, backup and recovery. Never include plaintext credentials, biometric voiceprints, third-party tokens or private memories by default.
 

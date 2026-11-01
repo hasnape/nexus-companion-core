@@ -41,7 +41,7 @@ const STAGES: readonly AwakeningStage[] = [
 export function createCompanionIdentity(
   generateId: () => string,
   now: () => number,
-  givenName = 'Alif',
+  givenName: string,
   presentation: Presentation = 'neutral'
 ): CompanionIdentity {
   const companionId = generateId();

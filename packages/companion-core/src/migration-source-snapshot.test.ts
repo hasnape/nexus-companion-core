@@ -24,7 +24,7 @@ describe('read-only migration source snapshots', () => {
     expect(snapshot).not.toBeNull();
     if (!snapshot) return;
     expect(isLegacyMigrationSourceUnchanged(plan, storage, snapshot)).toBe(true);
-    values[memoryKey] = '[{"changed":true}]';
+    (values as Record<string, string>)[memoryKey] = '[{"changed":true}]';
     expect(isLegacyMigrationSourceUnchanged(plan, storage, snapshot)).toBe(false);
   });
   it('rejects an unapproved plan', () => {

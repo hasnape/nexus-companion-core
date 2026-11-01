@@ -16,6 +16,7 @@ export function inspectIdentityStorage(
   const identity = parseCompanionIdentityV1(rawIdentity);
   if (!identity) return { ready: false, reason: 'missing-or-invalid-identity' };
   const key = companionMemoryStorageKey(identity.companionId);
+  // Presence of either namespace key, even an empty value, blocks destructive reuse.
   if (storage.getItem(key) !== null || storage.getItem(`${key}-brain-v2b`) !== null) {
     return { ready: false, reason: 'existing-scoped-data' };
   }

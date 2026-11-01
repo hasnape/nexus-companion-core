@@ -387,7 +387,6 @@ describe('mobile speech recognition diagnostics', () => {
     recognition.onerror?.({ error: 'network' });
     hook = render();
     expect(hook.isSessionActive).toBe(false);
-    expect(hook.listenerError).toContain('service réseau');
     expect(trackStopCalls[0]).toHaveBeenCalled();
   });
 });

@@ -18,3 +18,4 @@ export * from './scoped-store';
 export * from './companion-identity';
 export * from './identity-storage-preflight';
 export * from './legacy-migration-plan';
+export * from './migration-source-snapshot';

@@ -1,4 +1,4 @@
-import { BrowserVoiceAdapter, SilentVoiceAdapter, type BrowserSpeechEvent } from '@nexus/adapters';
+import { BrowserVoiceAdapter, SilentVoiceAdapter, type BrowserSpeechEvent, type BrowserVoiceStyle } from '@nexus/adapters';
 import {
   createCompanionEngine,
   createDefaultCompanionProfile,
@@ -106,6 +106,10 @@ export class CompanionRuntime {
   subscribeSpeechPlayback(listener: (event: BrowserSpeechEvent) => void): () => void {
     this.speechListeners.add(listener);
     return () => { this.speechListeners.delete(listener); };
+  }
+
+  setVoiceStyle(style: BrowserVoiceStyle): void {
+    if (this.voice instanceof BrowserVoiceAdapter) this.voice.setVoiceStyle(style);
   }
 
   setTraining(next: TrainingConfig): void { this.training = next; }

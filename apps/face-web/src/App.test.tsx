@@ -244,7 +244,7 @@ describe('App voice and layout flows', () => {
     const ui = App();
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Micro désactivé');
-    expect(textOf(ui)).toContain('Le micro ne démarre jamais tout seul.');
+    expect(textOf(ui)).toContain('Vous démarrez la session vocale manuellement.');
     expect(textOf(ui)).toContain('Démarrer Nexus');
   });
 

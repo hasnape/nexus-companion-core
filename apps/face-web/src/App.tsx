@@ -138,8 +138,6 @@ export default function App() {
   usePwaShell();
 
   const [message, setMessage] = useState('');
-  const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
-  const [appearanceStatus, setAppearanceStatus] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
   const [offlineQueue, setOfflineQueue] = useState(loadOfflineQueue);
   const [offlineNote, setOfflineNote] = useState(loadOfflineNote);
@@ -158,6 +156,9 @@ export default function App() {
     closeCreatorCodeDialog,
     exitCreatorMode
   } = useCreatorMode();
+
+  const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
+  const [appearanceStatus, setAppearanceStatus] = useState('');
 
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline

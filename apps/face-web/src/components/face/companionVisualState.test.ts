@@ -47,11 +47,24 @@ describe('companionVisualState', () => {
       wakeState: 'processing_command',
       isListening: true,
       listenerError: null,
-      companionMode: 'speaking'
+      companionMode: 'speaking',
+      speechAudible: true
     });
 
     expect(state).toBe('speaking');
     expect(companionVisualStateLabel(state, null)).toBe('Je réponds');
+  });
+
+  it('does not keep the mouth speaking when the engine state is stale but audio has ended', () => {
+    const state = deriveCompanionVisualState({
+      isOnline: true,
+      wakeState: 'inactive',
+      isListening: false,
+      listenerError: null,
+      companionMode: 'speaking',
+      speechAudible: false
+    });
+    expect(state).not.toBe('speaking');
   });
 
   it('keeps thinking when processing_command and companion is not speaking', () => {

@@ -8,7 +8,7 @@ type Props = {
 };
 
 export function VoiceDiagnosticPanel({ enabled, events, onEnabledChange, onClear }: Props) {
-  const text = events.map((event) => `${event.at} | ${event.type}${event.detail ? ' | ' + event.detail : ''}`).join('\n');
+  const text = (events ?? []).map((event) => `${event.at} | ${event.type}${event.detail ? ' | ' + event.detail : ''}`).join('\n');
   return (
     <section className="panel" aria-label="Diagnostic vocal">
       <h3>Diagnostic vocal</h3>
@@ -19,7 +19,7 @@ export function VoiceDiagnosticPanel({ enabled, events, onEnabledChange, onClear
       </label>
       {enabled ? (
         <>
-          <p aria-live="polite">Événements reçus : {events.length} (80 maximum)</p>
+          <p aria-live="polite">Événements reçus : {(events?.length ?? 0)} (80 maximum)</p>
           <pre role="log" aria-label="Événements vocaux" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '18rem', overflowY: 'auto', fontSize: '0.8rem' }}>
             {text || 'Aucun événement. Appuyez sur « Démarrer Nexus » pour tester.'}
           </pre>

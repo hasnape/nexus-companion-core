@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
+import { hasCompanionAppearancePreference, loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
+import { CompanionSetupScreen } from './components/appearance/CompanionSetupScreen';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
 import { CompanionAppearanceSettings } from './components/appearance/CompanionAppearanceSettings';
 import { FaceOnlyMode } from './components/face/FaceOnlyMode';
@@ -160,6 +161,7 @@ export default function App() {
 
   const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
   const [appearanceStatus, setAppearanceStatus] = useState('');
+  const [setupOpen, setSetupOpen] = useState(() => !hasCompanionAppearancePreference());
 
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
@@ -243,6 +245,19 @@ export default function App() {
     ? (visualState === 'listening_for_command' ? 'Écoute active' : 'En attente du mot “Nexus”')
     : 'Micro inactif';
 
+  const chooseAppearance = (next: CompanionAppearance) => {
+    const saved = saveCompanionAppearance(next);
+    setAppearance(next);
+    setAppearanceStatus(saved
+      ? 'Apparence enregistrée sur cet appareil.'
+      : 'Apparence appliquée temporairement : le stockage local est indisponible.');
+    setSetupOpen(false);
+  };
+
+  if (setupOpen) {
+    return <CompanionSetupScreen onChoose={chooseAppearance} status={appearanceStatus} />;
+  }
+
   if (isFaceOnlyMode) {
     return (
       <FaceOnlyMode
@@ -304,14 +319,7 @@ export default function App() {
         <CompanionAppearanceSettings
           appearance={appearance}
           status={appearanceStatus}
-          onChoose={(value) => {
-            if (saveCompanionAppearance(value)) {
-              setAppearance(value);
-              setAppearanceStatus('Apparence enregistrée sur cet appareil.');
-            } else {
-              setAppearanceStatus('Enregistrement impossible sur cet appareil.');
-            }
-          }}
+          onChoose={chooseAppearance}
         />
         <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>
           Mode visage

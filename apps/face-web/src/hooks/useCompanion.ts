@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CompanionRuntime } from '../services/orchestrator';
 import type { TrainingConfig } from '@nexus/shared';
-import { BrowserVoiceListenerAdapter, SilentVoiceListenerAdapter, type BrowserSpeechEvent } from '@nexus/adapters';
+import { BrowserVoiceListenerAdapter, SilentVoiceListenerAdapter, type BrowserSpeechEvent, type BrowserVoiceStyle } from '@nexus/adapters';
 import type { CompanionMemoryItem } from '@nexus/companion-core';
 
 export const useCompanion = () => {
@@ -48,6 +48,7 @@ export const useCompanion = () => {
   return {
     snapshot,
     speechPlayback,
+    setCompanionVoiceStyle: (style: BrowserVoiceStyle) => runtime.setVoiceStyle(style),
     memory,
     displayMemories,
     memoryCandidates,

@@ -262,7 +262,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
   }, [cleanupMediaSession]);
 
   const handleFinalTranscript = useCallback(async (nextTranscript: string) => {
-    if (!nextTranscript || !sessionEnabledRef.current || playbackPauseReasonsRef.current.size) return;
+    if (!nextTranscript || !sessionEnabledRef.current) return;
 
     const currentWakeState = wakeStateRef.current;
     logDiagnostic('wake:state', currentWakeState);
@@ -392,7 +392,10 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
         recognitionRunningRef.current = true;
         if (playbackPauseReasonsRef.current.size) {
           setRecognizerStatus('paused');
-          try { recognitionRef.current?.abort?.() ?? recognitionRef.current?.stop(); } catch { /* already stopped */ }
+          try {
+            if (recognitionRef.current?.abort) recognitionRef.current.abort();
+            else recognitionRef.current?.stop();
+          } catch { /* already stopped */ }
           return;
         }
         setRecognizerStatus('listening');

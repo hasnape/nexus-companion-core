@@ -10,6 +10,9 @@ export const useCompanion = () => {
     const adapter = new BrowserVoiceListenerAdapter();
     return adapter.available ? adapter : new SilentVoiceListenerAdapter();
   }, []);
+  const subscribeSpeechPlayback = useMemo(() => (
+    listener: (event: BrowserSpeechEvent) => void
+  ) => runtime.subscribeSpeechPlayback?.(listener) ?? (() => {}), [runtime]);
   const [snapshot, setSnapshot] = useState(runtime.getSnapshot());
   const [speechPlayback, setSpeechPlayback] = useState<BrowserSpeechEvent>({ phase: 'end' });
   const [memory, setMemory] = useState(runtime.getMemory());
@@ -32,7 +35,7 @@ export const useCompanion = () => {
     };
   }, [runtime, listener]);
 
-  useEffect(() => runtime.subscribeSpeechPlayback?.(setSpeechPlayback), [runtime]);
+  useEffect(() => subscribeSpeechPlayback(setSpeechPlayback), [subscribeSpeechPlayback]);
 
   const refreshCompanionMemoryState = async () => {
     setMemory(runtime.getMemory());
@@ -48,6 +51,7 @@ export const useCompanion = () => {
   return {
     snapshot,
     speechPlayback,
+    subscribeSpeechPlayback,
     setCompanionVoiceStyle: (style: BrowserVoiceStyle) => runtime.setVoiceStyle(style),
     memory,
     displayMemories,

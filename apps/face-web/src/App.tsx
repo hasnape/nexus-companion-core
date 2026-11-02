@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hasCompanionAppearancePreference, loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
 import { CompanionSetupScreen } from './components/appearance/CompanionSetupScreen';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
@@ -126,6 +126,7 @@ export default function App() {
   const {
     snapshot,
     speechPlayback,
+    setCompanionVoiceStyle,
     memory,
     displayMemories,
     memoryCandidates,
@@ -163,6 +164,11 @@ export default function App() {
   const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
   const [appearanceStatus, setAppearanceStatus] = useState('');
   const [setupOpen, setSetupOpen] = useState(() => !hasCompanionAppearancePreference());
+
+  const voiceStyle = appearance === 'kawaii-feminine' ? 'feminine' : appearance === 'kawaii-masculine' ? 'masculine' : 'neutral';
+  useEffect(() => {
+    setCompanionVoiceStyle?.(voiceStyle);
+  }, [voiceStyle, setCompanionVoiceStyle]);
 
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
@@ -209,7 +215,8 @@ export default function App() {
     onCommand: submitRecognizedMessage,
     onWake: () => triggerAction('listen_attentive'),
     requestCamera: config.enableCamera,
-    isCompanionSpeaking: speechPlayback.phase !== 'end'
+    isCompanionSpeaking: speechPlayback.phase !== 'end',
+    voiceStyle
   });
 
   const flushOfflineQueue = async () => {

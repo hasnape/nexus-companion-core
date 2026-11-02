@@ -233,6 +233,42 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('preserves awake state across Android recognizer restarts', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+    let hook = render();
+    await hook.startListeningSession();
+    const recognition = recognitionInstances[0];
+    emitFinal(recognition, 'Nexus');
+    hook = render();
+    expect(hook.wakeState).toBe('awake_listening_for_command');
+    recognition.onend?.();
+    vi.advanceTimersByTime(600);
+    hook = render();
+    expect(hook.wakeState).toBe('awake_listening_for_command');
+    emitFinal(recognition, 'bonjour');
+    await Promise.resolve();
+    expect(callbacks.onCommand).toHaveBeenCalledWith('bonjour');
+  });
+
+  it('does not process repeated Android final result events twice', async () => {
+    const { render, callbacks, recognitionInstances } = await createHookHarness();
+    await render().startListeningSession();
+    const recognition = recognitionInstances[0];
+    const wakeEvent = { resultIndex: 0, results: [{ 0: { transcript: 'Nexus' }, isFinal: true, length: 1 }] };
+    recognition.onresult?.(wakeEvent);
+    recognition.onresult?.(wakeEvent);
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
+    const commandEvent = { resultIndex: 1, results: [
+      { 0: { transcript: 'Nexus' }, isFinal: true, length: 1 },
+      { 0: { transcript: 'bonjour' }, isFinal: true, length: 1 }
+    ] };
+    recognition.onresult?.(commandEvent);
+    recognition.onresult?.(commandEvent);
+    await Promise.resolve();
+    expect(callbacks.onCommand).toHaveBeenCalledTimes(1);
+    expect(callbacks.onCommand).toHaveBeenCalledWith('bonjour');
+  });
+
   it('uses latest onCommand callback after rerender', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
     const firstOnCommand = callbacks.onCommand;

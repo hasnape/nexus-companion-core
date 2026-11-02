@@ -41,6 +41,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
   const resultSeenSinceStartRef = useRef(false);
+  const handledFinalResultsRef = useRef(new Set<string>());
 
   const [isSessionActive, setSessionActive] = useState(false);
   const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
@@ -131,6 +132,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setSessionActive(false);
     restartCountRef.current = 0;
     resultSeenSinceStartRef.current = false;
+    handledFinalResultsRef.current.clear();
     clearRestartTimer();
     try {
       recognitionRef.current?.stop();
@@ -280,7 +282,16 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           logDiagnostic(result.isFinal ? 'recognition:final' : 'recognition:interim', 'caractères=' + nextTranscript.length);
           setTranscript(nextTranscript);
           if (result.isFinal) {
-            void handleFinalTranscript(nextTranscript);
+            // Android can emit the same final result several times as the
+            // result list grows. Index-based dedupe prevents duplicate wake
+            // callbacks and commands without suppressing later identical speech.
+            const key = String(index) + ':' + nextTranscript;
+            if (!handledFinalResultsRef.current.has(key)) {
+              handledFinalResultsRef.current.add(key);
+              void handleFinalTranscript(nextTranscript);
+            } else {
+              logDiagnostic('recognition:duplicate-final-ignored');
+            }
           }
         }
       };
@@ -290,8 +301,12 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
         resultSeenSinceStartRef.current = false;
+        handledFinalResultsRef.current.clear();
         setListenerError(null);
-        setWakeListeningState('waiting_for_wake_phrase');
+        // A browser recognizer restart must not erase a successful wake.
+        if (wakeStateRef.current === 'inactive' || wakeStateRef.current === 'error') {
+          setWakeListeningState('waiting_for_wake_phrase');
+        }
       };
 
       recognitionRef.current.onerror = (event) => {

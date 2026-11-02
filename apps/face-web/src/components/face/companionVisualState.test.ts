@@ -79,6 +79,17 @@ describe('companionVisualState', () => {
     expect(state).toBe('thinking');
   });
 
+  it('animates actual speech even when the local companion is offline', () => {
+    expect(deriveCompanionVisualState({
+      isOnline: false,
+      wakeState: 'inactive',
+      isListening: false,
+      listenerError: null,
+      companionMode: 'idle',
+      speechAudible: true
+    })).toBe('speaking');
+  });
+
   it('returns offline label when disconnected', () => {
     const state = deriveCompanionVisualState({
       isOnline: false,

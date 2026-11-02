@@ -12,6 +12,7 @@ import {
   inferResponseMode,
   LocalDeterministicAiProvider,
   renderDeterministicNexusReply,
+  renderLocalSmallTalk,
   selectAudienceMode,
   selectResponseTone
 } from './index';
@@ -151,6 +152,31 @@ describe('V2-D improved deterministic replies', () => {
     expect(plan.responseMode).toBe('normal');
     expect(reply.toLowerCase()).toContain('pour clarifier');
     expect(reply.toLowerCase()).not.toContain('prochaines étapes');
+  });
+});
+
+describe('natural offline small talk without project context leakage', () => {
+  it.each([
+    ['Bonjour', 'Bonjour !'],
+    ['Salut Nexus', 'Bonjour !'],
+    ['Comment vas-tu ?', 'Ça va, merci !'],
+    ['Bonjour Nexus, comment ça va ?', 'Ça va, merci !'],
+    ['comment', 'Je n’ai pas entendu la fin.'],
+    ['Merci beaucoup', 'Avec plaisir !'],
+    ['Au revoir', 'À bientôt !']
+  ])('responds conversationally to %s', (message, expected) => {
+    const context = mkContext(message, 'Nexus Companion Core');
+    const decision = decideCompanionResponse(context);
+    const reply = renderDeterministicNexusReply(createResponsePlan({ context, decision }));
+    expect(reply).toContain(expected);
+    expect(reply).not.toContain('checklist');
+    expect(reply).not.toContain('Projet actif');
+    expect(reply).not.toContain('Contexte utile');
+  });
+
+  it('does not hijack genuine technical questions', () => {
+    expect(renderLocalSmallTalk('Comment organiser le module mémoire ?')).toBeNull();
+    expect(renderLocalSmallTalk('Bonjour, peux-tu planifier le sprint ?')).toBeNull();
   });
 });
 

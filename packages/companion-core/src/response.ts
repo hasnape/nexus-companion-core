@@ -292,7 +292,43 @@ const renderMemoryReply = (plan: NexusResponsePlan): string => {
     : `J’ai compris votre demande de mémoire: "${plan.userMessage}". Je peux le retenir de manière locale et minimale.`;
 };
 
+/**
+ * Conversational exchanges must not inherit project/checklist templates from
+ * unrelated long-term memories. This is a small, deterministic offline layer,
+ * not a claim to unrestricted natural-language understanding.
+ */
+export const renderLocalSmallTalk = (input: string): string | null => {
+  const normalized = stripWakePrefix(input, { allowFullNameWake: true })
+    .toLocaleLowerCase('fr')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’']/g, ' ')
+    .replace(/[-!?.,;:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(bonjour|salut|coucou|hello|bonsoir) nexus (?=comment|ca va)/, '$1 ');
+  if (!normalized) return null;
+  if (/^(?:comment|comment ca|comment tu)$/.test(normalized)) {
+    return 'Je n’ai pas entendu la fin. Tu peux répéter ta question ?';
+  }
+  if (/^(?:(?:bonjour|salut|coucou|hello|bonsoir)\s+)*(?:comment\s+(?:ca\s+va|vas\s+tu|tu\s+vas)|ca\s+va|tu\s+vas\s+bien)(?:\s+(?:aujourd hui|nexus))?$/.test(normalized)) {
+    return 'Ça va, merci ! Je suis content de discuter avec toi. Et toi, comment vas-tu ?';
+  }
+  if (/^(?:bonjour|salut|coucou|hello|bonsoir)(?:\s+nexus)?$/.test(normalized)) {
+    return 'Bonjour ! Je t’écoute. Comment vas-tu ?';
+  }
+  if (/^(?:merci|merci beaucoup|je te remercie)(?:\s+nexus)?$/.test(normalized)) {
+    return 'Avec plaisir !';
+  }
+  if (/^(?:au revoir|a bientot|bonne nuit|a plus)(?:\s+nexus)?$/.test(normalized)) {
+    return 'À bientôt !';
+  }
+  return null;
+};
+
 const renderNormalReply = (plan: NexusResponsePlan): string => {
+  const smallTalk = renderLocalSmallTalk(plan.userMessage);
+  if (smallTalk) return smallTalk;
   if (plan.shouldAskClarifyingQuestion) {
     if (isIncompleteMemoryCommand(plan.userMessage)) {
       return 'D’accord. Que veux-tu que je retienne exactement ?';

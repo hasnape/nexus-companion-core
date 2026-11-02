@@ -348,8 +348,9 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Arrêter la session Nexus');
   });
 
-  it('keeps Je réponds when speaking with stale transcript', () => {
+  it('keeps Je réponds when speech is audible with a stale transcript', () => {
     mockCompanion.snapshot.state.mode = 'speaking';
+    mockCompanion.speechPlayback.phase = 'start';
     mockVoiceInput.isSessionActive = true;
     mockVoiceInput.transcript = 'commande précédente';
 

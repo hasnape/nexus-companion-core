@@ -84,7 +84,10 @@ const createHookHarness = async () => {
     webkitSpeechRecognition: undefined,
     speechSynthesis: {
       getVoices: () => [] as SpeechSynthesisVoice[],
-      speak: vi.fn(),
+      speak: vi.fn((utterance: { onstart?: () => void; onend?: () => void }) => {
+        utterance.onstart?.();
+        utterance.onend?.();
+      }),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       onvoiceschanged: null as null | (() => void)
@@ -138,12 +141,13 @@ const createHookHarness = async () => {
 
   const callbacks = {
     onWake: vi.fn(),
-    onCommand: vi.fn(async () => {})
+    onCommand: vi.fn(async () => {}),
+    isCompanionSpeaking: false
   };
 
   const render = () => {
     hookIndex = 0;
-    return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake });
+    return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake, isCompanionSpeaking: callbacks.isCompanionSpeaking });
   };
 
   const unmount = () => {
@@ -421,6 +425,38 @@ describe('useVoiceInput reliability', () => {
     expect(hook.mediaState.micActive).toBe(false);
     expect(trackStopCalls[2]).toHaveBeenCalled();
     expect(getUserMedia).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects cumulative Android final transcripts and processes only fresh wake/command suffixes', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+    await render().startListeningSession();
+    const recognition = recognitionInstances[0];
+    const repeatedNoise = 'Aujourd hui je parle sans mot de reveil '.repeat(6);
+    emitFinal(recognition, repeatedNoise);
+    emitFinal(recognition, repeatedNoise);
+    expect(callbacks.onWake).not.toHaveBeenCalled();
+    emitFinal(recognition, repeatedNoise + ' Nexus');
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
+    emitFinal(recognition, repeatedNoise + ' Nexus bonjour');
+    await Promise.resolve();
+    expect(callbacks.onCommand).toHaveBeenCalledTimes(1);
+    expect(callbacks.onCommand).toHaveBeenCalledWith('bonjour');
+  });
+
+  it('suspends microphone recognition while the companion voice is playing', async () => {
+    const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
+    await render().startListeningSession();
+    const recognition = recognitionInstances[0];
+    callbacks.isCompanionSpeaking = true;
+    render();
+    expect(render().recognizerStatus).toBe('paused');
+    emitFinal(recognition, 'Nexus');
+    expect(callbacks.onWake).not.toHaveBeenCalled();
+    callbacks.isCompanionSpeaking = false;
+    render();
+    vi.advanceTimersByTime(600);
+    emitFinal(recognition, 'Nexus');
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
   });
 
   it('manual stop and unmount stop media tracks idempotently', async () => {

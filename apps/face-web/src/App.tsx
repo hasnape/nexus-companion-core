@@ -245,6 +245,7 @@ export default function App() {
   if (isFaceOnlyMode) {
     return (
       <FaceOnlyMode
+        appearance={appearance}
         state={snapshot.state}
         action={snapshot.action}
         companionVisualState={visualState}

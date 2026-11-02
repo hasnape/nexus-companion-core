@@ -46,6 +46,8 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const [isSessionActive, setSessionActive] = useState(false);
   const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
   const [transcript, setTranscript] = useState('');
+  const [recognizerStatus, setRecognizerStatus] = useState<'inactive' | 'starting' | 'listening' | 'restarting'>('inactive');
+  const [showLocalTranscript, setShowLocalTranscript] = useState(false);
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
   const diagnosticsEnabledRef = useRef(false);
   const [diagnosticEvents, setDiagnosticEvents] = useState<VoiceDiagnosticEvent[]>([]);
@@ -130,6 +132,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     sessionEnabledRef.current = false;
     recognitionRunningRef.current = false;
     setSessionActive(false);
+    setRecognizerStatus('inactive');
+    setShowLocalTranscript(false);
+    setTranscript('');
     restartCountRef.current = 0;
     resultSeenSinceStartRef.current = false;
     handledFinalResultsRef.current.clear();
@@ -158,6 +163,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       return;
     }
     restartCountRef.current += 1;
+    setRecognizerStatus('restarting');
     logDiagnostic('recognition:restart-scheduled', String(restartCountRef.current));
     restartTimerRef.current = window.setTimeout(() => {
       if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
@@ -303,6 +309,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         logDiagnostic('recognition:onstart');
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
+        setRecognizerStatus('listening');
         resultSeenSinceStartRef.current = false;
         handledFinalResultsRef.current.clear();
         setListenerError(null);
@@ -315,6 +322,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.onerror = (event) => {
         logDiagnostic('recognition:onerror', event.error);
         recognitionRunningRef.current = false;
+        setRecognizerStatus('restarting');
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           fatalErrorRef.current = true;
           cleanupMediaSession({ setWakeInactive: false });
@@ -341,6 +349,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.onend = () => {
         logDiagnostic('recognition:onend', resultSeenSinceStartRef.current ? 'résultat reçu' : 'aucun résultat');
         recognitionRunningRef.current = false;
+        setRecognizerStatus(sessionEnabledRef.current ? 'restarting' : 'inactive');
         if (sessionEnabledRef.current && !fatalErrorRef.current) {
           scheduleRestart();
         }
@@ -349,6 +358,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
     sessionEnabledRef.current = true;
     setSessionActive(true);
+    setRecognizerStatus('starting');
     setWakeListeningState('inactive');
     try {
       logDiagnostic('recognition:start-attempt');
@@ -375,6 +385,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     startListeningSession,
     stopListeningSession,
     transcript,
+    recognizerStatus,
+    showLocalTranscript,
+    setShowLocalTranscript,
     listenerError,
     wakeState,
     wakeStatus: wakeStateLabel(wakeState),

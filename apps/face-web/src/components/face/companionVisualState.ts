@@ -26,10 +26,10 @@ export const deriveCompanionVisualState = ({
   companionMode,
   speechAudible = false
 }: DeriveCompanionVisualStateParams): CompanionVisualState => {
+  // Actual audio playback takes priority, including while offline.
+  if (speechAudible) return 'speaking';
   if (listenerError || wakeState === 'error') return 'error';
   if (!isOnline) return 'offline';
-  // The reasoning state cannot prove that audio is actually being played.
-  if (speechAudible) return 'speaking';
   if (wakeState === 'processing_command' || companionMode === 'thinking' || companionMode === 'speaking') return 'thinking';
   if (wakeState === 'awake_listening_for_command') return 'listening_for_command';
   if (wakeState === 'waiting_for_wake_phrase' || isListening) return 'waiting_for_wake_phrase';

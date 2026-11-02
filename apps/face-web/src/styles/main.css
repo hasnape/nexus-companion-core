@@ -921,6 +921,16 @@ label {
 }
 .face .eyes::before { left: 0; transform: rotate(-6deg); }
 .face .eyes::after { right: 0; transform: rotate(6deg); }
+/* Keep the existing listening and wake-state visual feedback visible. */
+.face.mode-listening .eye,
+.face.state-listening .eye,
+.face.visual-listening_for_command .eye {
+  background: radial-gradient(ellipse at 42% 30%, #f3fff9 0%, #c8fbe8 64%, #8bdcc3 100%);
+  box-shadow: 0 0 14px rgba(145, 255, 228, 0.45);
+}
+.face.visual-waiting_for_wake_phrase .eye {
+  box-shadow: 0 0 14px rgba(145, 255, 228, 0.34);
+}
 .face .mouth {
   width: min(var(--state-mouth-width), 88px);
   height: 24px;
@@ -939,8 +949,4 @@ label {
   background: rgba(89, 160, 236, 0.2);
   border-radius: 45% 45% 55% 55%;
 }
-@media (prefers-reduced-motion: reduce) {
-  .face, .face .eye, .face .gaze-float, .face .mouth {
-    animation: none !important;
-  }
-}
+/* The existing global reduced-motion rules above also cover this face. */

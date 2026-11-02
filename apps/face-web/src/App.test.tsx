@@ -34,6 +34,8 @@ let mockOfflineNote = '';
 let forceFaceOnlyMode = false;
 let forceCreatorMode = false;
 let stateCallCounter = 0;
+let mockHasAppearance = true;
+const saveAppearanceChoice = vi.fn(() => true);
 
 const snapshotState: InternalState = {
   mode: 'idle',
@@ -108,6 +110,12 @@ vi.mock('react', async () => {
     useRef: vi.fn((initialValue?: unknown) => ({ current: initialValue ?? null }))
   };
 });
+
+vi.mock('./services/appearance/companionAppearance', () => ({
+  hasCompanionAppearancePreference: () => mockHasAppearance,
+  loadCompanionAppearance: () => 'classic',
+  saveCompanionAppearance: saveAppearanceChoice
+}));
 
 vi.mock('./hooks/useCompanion', () => ({
   useCompanion: () => mockCompanion
@@ -215,6 +223,7 @@ describe('App voice and layout flows', () => {
     forceFaceOnlyMode = false;
     forceCreatorMode = false;
     stateCallCounter = 0;
+    mockHasAppearance = true;
     mockVoiceInput.voiceInputAvailable = true;
     mockVoiceInput.isSessionActive = false;
     mockVoiceInput.transcript = '';
@@ -228,6 +237,20 @@ describe('App voice and layout flows', () => {
     mockConnectivity.wasOffline = false;
     mockOfflineQueue = [];
     mockOfflineNote = '';
+  });
+
+  it('shows the first-run appearance selection without touching companion memory', () => {
+    mockHasAppearance = false;
+    const ui = App();
+    expect(textOf(ui)).toContain('Choisissez votre Nexus Companion');
+    expect(textOf(ui)).toContain('Nexus Femme');
+    expect(textOf(ui)).toContain('Nexus Homme');
+    const cards = findElements(ui, (element) => element.type === 'button' && element.props['aria-pressed'] === false);
+    const feminineCard = cards.find((card) => textOf(card).includes('Nexus Femme'));
+    expect(feminineCard).toBeDefined();
+    feminineCard?.props.onClick();
+    expect(saveAppearanceChoice).toHaveBeenCalledWith('kawaii-feminine');
+    expect(clearCompanionMemory).not.toHaveBeenCalled();
   });
 
   it('keeps Démarrer Nexus action wired to startListeningSession', () => {

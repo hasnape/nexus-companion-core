@@ -36,7 +36,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const sessionEnabledRef = useRef(false);
   const fatalErrorRef = useRef(false);
   const recognitionRunningRef = useRef(false);
-  const recognitionHasResultRef = useRef(false);
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
 
@@ -236,7 +235,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           const result = event.results[index];
           const nextTranscript = result?.[0]?.transcript?.trim() ?? '';
           if (!nextTranscript) continue;
-          recognitionHasResultRef.current = true;
           setTranscript(nextTranscript);
           if (result.isFinal) {
             void handleFinalTranscript(nextTranscript);
@@ -247,7 +245,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.onstart = () => {
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
-        recognitionHasResultRef.current = false;
         restartCountRef.current = 0;
         setListenerError(null);
         setWakeListeningState('waiting_for_wake_phrase');

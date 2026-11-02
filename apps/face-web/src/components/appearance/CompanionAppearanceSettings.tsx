@@ -4,6 +4,7 @@ import { KawaiiCompanionFace } from '../face/KawaiiCompanionFace';
 type AppearanceChooserProps = {
   appearance: CompanionAppearance;
   onChoose: (appearance: CompanionAppearance) => void;
+  showClassicSelected?: boolean;
 };
 
 type CompanionAppearanceSettingsProps = AppearanceChooserProps & { status: string };
@@ -14,7 +15,7 @@ const options = [
 ] as const;
 
 /** Shared selectable cards, used for first-run setup and later settings. */
-export function CompanionAppearanceChoices({ appearance, onChoose }: AppearanceChooserProps) {
+export function CompanionAppearanceChoices({ appearance, onChoose, showClassicSelected = true }: AppearanceChooserProps) {
   return (
     <>
       <div className="appearance-choices" role="group" aria-label="Apparence de Nexus">
@@ -38,10 +39,10 @@ export function CompanionAppearanceChoices({ appearance, onChoose }: AppearanceC
       <button
         className="appearance-classic-choice"
         type="button"
-        aria-pressed={appearance === 'classic'}
+        aria-pressed={appearance === 'classic' && showClassicSelected}
         onClick={() => onChoose('classic')}
       >
-        {appearance === 'classic' ? '✓ ' : ''}Conserver le visage classique
+        {appearance === 'classic' && showClassicSelected ? '✓ ' : ''}Conserver le visage classique
       </button>
     </>
   );

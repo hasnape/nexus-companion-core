@@ -13,6 +13,7 @@ type FaceOnlyModeProps = {
   voiceSessionStatusLabel: string;
   subtitle?: string;
   transcript?: string;
+  speechShape?: 'neutral' | 'round' | 'wide';
   isListening: boolean;
   isOnline: boolean;
   onExit: () => void;
@@ -28,6 +29,7 @@ export function FaceOnlyMode({
   voiceSessionStatusLabel,
   subtitle,
   transcript,
+  speechShape,
   isListening,
   isOnline,
   onExit,
@@ -56,6 +58,7 @@ export function FaceOnlyMode({
           subtitle={subtitle}
           isListening={isListening}
           transcript={transcript}
+          speechShape={speechShape}
           isOnline={isOnline}
         />
       </section>

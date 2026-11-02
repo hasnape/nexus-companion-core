@@ -236,11 +236,22 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (navigator.mediaDevices?.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: requestCamera });
-        mediaStreamRef.current = stream;
         logDiagnostic('permission:micro-granted');
+        // SpeechRecognition acquires its own audio input. Keeping a second
+        // getUserMedia microphone stream open can compete for capture on Android.
+        // Permission is checked with a short-lived stream, then released before
+        // starting recognition. A camera stream remains active only when requested.
+        stream.getAudioTracks().forEach((track) => track.stop());
+        if (requestCamera && stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled)) {
+          mediaStreamRef.current = stream;
+        } else {
+          stream.getVideoTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
+        logDiagnostic('permission:micro-released-before-recognition');
         setMediaState({
-          micActive: stream.getAudioTracks().some((track) => track.readyState === 'live' && track.enabled),
-          cameraActive: stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled)
+          micActive: false,
+          cameraActive: Boolean(mediaStreamRef.current)
         });
       } catch {
         logDiagnostic('permission:micro-failed');

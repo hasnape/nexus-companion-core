@@ -287,8 +287,8 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
         } catch {
           setWakeListeningState('error');
           setListenerError('Erreur micro');
-          return;
         }
+        return;
       }
       // Do not retain private transcript text in diagnostics. This marker
       // distinguishes a recognition result from a matched wake phrase.

@@ -14,6 +14,7 @@ type SpeechRecognitionLike = {
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
   onstart: (() => void) | null;
+  abort?: () => void;
 };
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
@@ -26,13 +27,35 @@ const getSpeechRecognitionCtor = (): SpeechRecognitionCtor | null => {
   return browserWindow.SpeechRecognition ?? browserWindow.webkitSpeechRecognition ?? null;
 };
 
+/**
+ * Android recognizers can repeatedly emit the entire accumulated sentence.
+ * Only forward new, word-separated material; ignore repeats and interim
+ * revisions instead of treating a 200-character transcript as a new command.
+ */
+export const extractRecognitionIncrement = (previous: string, current: string): string => {
+  const before = previous.trim();
+  const after = current.trim();
+  if (!after || after === before) return '';
+  if (before && after.startsWith(before)) {
+    const suffix = after.slice(before.length);
+    return /^(?:[\s,;:.!?-]+|$)/.test(suffix) ? suffix.replace(/^[\s,;:.!?-]+/, '').trim() : '';
+  }
+  if (before && before.startsWith(after) && after.length >= 8) return '';
+  let common = 0;
+  while (common < Math.min(before.length, after.length) && before[common] === after[common]) common += 1;
+  // A revision in the middle of a long cumulative result is not a new utterance.
+  if (common >= 24 && common >= Math.min(before.length, after.length) * 0.6) return '';
+  return after;
+};
+
 type UseVoiceInputParams = {
   onCommand: (text: string) => Promise<void>;
   onWake: () => void;
   requestCamera?: boolean;
+  isCompanionSpeaking?: boolean;
 };
 
-export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseVoiceInputParams) => {
+export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isCompanionSpeaking = false }: UseVoiceInputParams) => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionEnabledRef = useRef(false);
@@ -42,11 +65,15 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const restartCountRef = useRef(0);
   const resultSeenSinceStartRef = useRef(false);
   const handledFinalResultsRef = useRef(new Set<string>());
+  const lastFinalTranscriptRef = useRef('');
+  const playbackPauseReasonsRef = useRef(new Set<'ack' | 'reply'>());
+  const ackTimeoutRef = useRef<number | null>(null);
 
   const [isSessionActive, setSessionActive] = useState(false);
   const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
   const [transcript, setTranscript] = useState('');
-  const [recognizerStatus, setRecognizerStatus] = useState<'inactive' | 'starting' | 'listening' | 'restarting'>('inactive');
+  const [acknowledgementSpeaking, setAcknowledgementSpeaking] = useState(false);
+  const [recognizerStatus, setRecognizerStatus] = useState<'inactive' | 'starting' | 'listening' | 'restarting' | 'paused'>('inactive');
   const [showLocalTranscript, setShowLocalTranscript] = useState(false);
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
   const diagnosticsEnabledRef = useRef(false);
@@ -76,18 +103,6 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setWakeState(next);
   }, []);
 
-  const speakAcknowledgement = useCallback(() => {
-    if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance('Je t’écoute.');
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = selectPreferredVoice(voices);
-    if (preferredVoice) utterance.voice = preferredVoice;
-    utterance.lang = defaultCompanionVoiceProfile.language;
-    utterance.rate = defaultCompanionVoiceProfile.rate;
-    utterance.pitch = defaultCompanionVoiceProfile.pitch;
-    utterance.volume = defaultCompanionVoiceProfile.volume;
-    window.speechSynthesis.speak(utterance);
-  }, []);
 
   useEffect(() => {
     wakeStateRef.current = wakeState;
@@ -135,6 +150,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setRecognizerStatus('inactive');
     setShowLocalTranscript(false);
     setTranscript('');
+    setAcknowledgementSpeaking(false);
+    if (ackTimeoutRef.current !== null) window.clearTimeout(ackTimeoutRef.current);
+    ackTimeoutRef.current = null;
+    playbackPauseReasonsRef.current.clear();
+    lastFinalTranscriptRef.current = '';
     restartCountRef.current = 0;
     resultSeenSinceStartRef.current = false;
     handledFinalResultsRef.current.clear();
@@ -153,7 +173,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
   const scheduleRestart = useCallback(() => {
     clearRestartTimer();
-    if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
+    if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current || playbackPauseReasonsRef.current.size) return;
     if (restartCountRef.current >= 5) {
       setWakeListeningState('error');
       cleanupMediaSession({ setWakeInactive: false });
@@ -178,12 +198,71 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     }, 550);
   }, [cleanupMediaSession, clearRestartTimer, logDiagnostic, setWakeListeningState]);
 
+  const pauseForPlayback = useCallback((reason: 'ack' | 'reply') => {
+    if (!sessionEnabledRef.current || playbackPauseReasonsRef.current.has(reason)) return;
+    playbackPauseReasonsRef.current.add(reason);
+    clearRestartTimer();
+    setRecognizerStatus('paused');
+    logDiagnostic('recognition:paused-for-speech', reason);
+    if (recognitionRunningRef.current) {
+      try {
+        // abort discards any audio still buffered while Nexus starts talking.
+        if (recognitionRef.current?.abort) recognitionRef.current.abort();
+        else recognitionRef.current?.stop();
+      } catch {
+        // The browser may already have ended this recognition segment.
+      }
+      recognitionRunningRef.current = false;
+    }
+  }, [clearRestartTimer, logDiagnostic]);
+
+  const resumeAfterPlayback = useCallback((reason: 'ack' | 'reply') => {
+    if (!playbackPauseReasonsRef.current.delete(reason) || playbackPauseReasonsRef.current.size) return;
+    if (!sessionEnabledRef.current || fatalErrorRef.current) return;
+    restartCountRef.current = 0;
+    logDiagnostic('recognition:resumed-after-speech', reason);
+    scheduleRestart();
+  }, [logDiagnostic, scheduleRestart]);
+
+  useEffect(() => {
+    if (isCompanionSpeaking) pauseForPlayback('reply');
+    else resumeAfterPlayback('reply');
+  }, [isCompanionSpeaking, pauseForPlayback, resumeAfterPlayback]);
+
+  const speakAcknowledgement = useCallback(() => {
+    if (!('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance('Je t’écoute.');
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = selectPreferredVoice(voices);
+    if (preferredVoice) utterance.voice = preferredVoice;
+    utterance.lang = defaultCompanionVoiceProfile.language;
+    utterance.rate = defaultCompanionVoiceProfile.rate;
+    utterance.pitch = defaultCompanionVoiceProfile.pitch;
+    utterance.volume = defaultCompanionVoiceProfile.volume;
+    const finish = () => {
+      if (ackTimeoutRef.current !== null) window.clearTimeout(ackTimeoutRef.current);
+      ackTimeoutRef.current = null;
+      setAcknowledgementSpeaking(false);
+      resumeAfterPlayback('ack');
+    };
+    utterance.onstart = () => setAcknowledgementSpeaking(true);
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    pauseForPlayback('ack');
+    ackTimeoutRef.current = window.setTimeout(finish, 4000);
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      finish();
+    }
+  }, [pauseForPlayback, resumeAfterPlayback]);
+
   const stopListeningSession = useCallback(() => {
     cleanupMediaSession();
   }, [cleanupMediaSession]);
 
   const handleFinalTranscript = useCallback(async (nextTranscript: string) => {
-    if (!nextTranscript || !sessionEnabledRef.current) return;
+    if (!nextTranscript || !sessionEnabledRef.current || playbackPauseReasonsRef.current.size) return;
 
     const currentWakeState = wakeStateRef.current;
     logDiagnostic('wake:state', currentWakeState);
@@ -208,6 +287,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         } catch {
           setWakeListeningState('error');
           setListenerError('Erreur micro');
+          return;
         }
       }
       // Do not retain private transcript text in diagnostics. This marker
@@ -280,6 +360,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event) => {
+        if (playbackPauseReasonsRef.current.size) return;
         // Some Android engines batch several results in a single callback.
         // Process every new final result, not just the first resultIndex.
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -288,20 +369,20 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           if (!nextTranscript) continue;
           resultSeenSinceStartRef.current = true;
           restartCountRef.current = 0;
-          logDiagnostic(result.isFinal ? 'recognition:final' : 'recognition:interim', 'caractères=' + nextTranscript.length);
-          setTranscript(nextTranscript);
-          if (result.isFinal) {
-            // Android can emit the same final result several times as the
-            // result list grows. Index-based dedupe prevents duplicate wake
-            // callbacks and commands without suppressing later identical speech.
-            const key = String(index) + ':' + nextTranscript;
-            if (!handledFinalResultsRef.current.has(key)) {
-              handledFinalResultsRef.current.add(key);
-              void handleFinalTranscript(nextTranscript);
-            } else {
-              logDiagnostic('recognition:duplicate-final-ignored');
-            }
+          setTranscript(nextTranscript.slice(-250));
+          if (!result.isFinal) continue;
+          const key = String(index) + ':' + nextTranscript;
+          if (handledFinalResultsRef.current.has(key)) continue;
+          handledFinalResultsRef.current.add(key);
+          const increment = extractRecognitionIncrement(lastFinalTranscriptRef.current, nextTranscript);
+          lastFinalTranscriptRef.current = nextTranscript;
+          if (!increment) continue;
+          if (increment.length > 180) {
+            logDiagnostic('recognition:long-final-ignored', 'caractères=' + increment.length);
+            continue;
           }
+          logDiagnostic('recognition:final', 'caractères=' + increment.length);
+          void handleFinalTranscript(increment);
         }
       };
 
@@ -309,6 +390,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         logDiagnostic('recognition:onstart');
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
+        if (playbackPauseReasonsRef.current.size) {
+          setRecognizerStatus('paused');
+          try { recognitionRef.current?.abort?.() ?? recognitionRef.current?.stop(); } catch { /* already stopped */ }
+          return;
+        }
         setRecognizerStatus('listening');
         resultSeenSinceStartRef.current = false;
         handledFinalResultsRef.current.clear();
@@ -349,8 +435,8 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.onend = () => {
         logDiagnostic('recognition:onend', resultSeenSinceStartRef.current ? 'résultat reçu' : 'aucun résultat');
         recognitionRunningRef.current = false;
-        setRecognizerStatus(sessionEnabledRef.current ? 'restarting' : 'inactive');
-        if (sessionEnabledRef.current && !fatalErrorRef.current) {
+        setRecognizerStatus(playbackPauseReasonsRef.current.size ? 'paused' : sessionEnabledRef.current ? 'restarting' : 'inactive');
+        if (sessionEnabledRef.current && !fatalErrorRef.current && !playbackPauseReasonsRef.current.size) {
           scheduleRestart();
         }
       };
@@ -385,6 +471,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     startListeningSession,
     stopListeningSession,
     transcript,
+    acknowledgementSpeaking,
     recognizerStatus,
     showLocalTranscript,
     setShowLocalTranscript,

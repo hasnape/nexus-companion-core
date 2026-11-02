@@ -14,6 +14,7 @@ type CompanionFaceScreenProps = {
   subtitle?: string;
   isListening: boolean;
   transcript?: string;
+  speechShape?: 'neutral' | 'round' | 'wide';
   isOnline?: boolean;
   onFaceInteraction?: () => void;
 };
@@ -28,6 +29,7 @@ export function CompanionFaceScreen({
   subtitle,
   isListening,
   transcript,
+  speechShape,
   isOnline = true,
   onFaceInteraction
 }: CompanionFaceScreenProps) {
@@ -67,6 +69,7 @@ export function CompanionFaceScreen({
             variant={appearance === 'kawaii-feminine' ? 'feminine' : 'masculine'}
             expression={expression}
             visualState={companionVisualState}
+            speechShape={speechShape}
           />
         )}
       </div>

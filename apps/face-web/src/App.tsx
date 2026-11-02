@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hasCompanionAppearancePreference, loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
 import { CompanionSetupScreen } from './components/appearance/CompanionSetupScreen';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
@@ -125,6 +125,9 @@ export const flushOfflineQueueManually = async ({
 export default function App() {
   const {
     snapshot,
+    speechPlayback,
+    subscribeSpeechPlayback,
+    setCompanionVoiceStyle,
     memory,
     displayMemories,
     memoryCandidates,
@@ -163,6 +166,11 @@ export default function App() {
   const [appearanceStatus, setAppearanceStatus] = useState('');
   const [setupOpen, setSetupOpen] = useState(() => !hasCompanionAppearancePreference());
 
+  const voiceStyle = appearance === 'kawaii-feminine' ? 'feminine' : appearance === 'kawaii-masculine' ? 'masculine' : 'neutral';
+  useEffect(() => {
+    setCompanionVoiceStyle?.(voiceStyle);
+  }, [voiceStyle, setCompanionVoiceStyle]);
+
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
     ? snapshot.conversation
@@ -194,6 +202,7 @@ export default function App() {
     startListeningSession,
     stopListeningSession,
     transcript,
+    acknowledgementSpeaking,
     recognizerStatus,
     showLocalTranscript,
     setShowLocalTranscript,
@@ -206,7 +215,10 @@ export default function App() {
   } = useVoiceInput({
     onCommand: submitRecognizedMessage,
     onWake: () => triggerAction('listen_attentive'),
-    requestCamera: config.enableCamera
+    requestCamera: config.enableCamera,
+    isCompanionSpeaking: speechPlayback.phase !== 'end',
+    subscribeSpeechPlayback,
+    voiceStyle
   });
 
   const flushOfflineQueue = async () => {
@@ -228,14 +240,17 @@ export default function App() {
     wakeState,
     isListening: isSessionActive,
     listenerError,
-    companionMode: snapshot.state.mode
+    companionMode: snapshot.state.mode,
+    speechAudible: acknowledgementSpeaking || speechPlayback.phase === 'start' || speechPlayback.phase === 'boundary'
   });
   const visualStateLabel = companionVisualStateLabel(visualState, listenerError);
   const voiceSessionStatusLabel = (() => {
+    if (visualState === 'speaking') return 'Nexus parle';
     if (!isOnline || visualState === 'offline') return 'Mode hors ligne';
     if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
     if (!isSessionActive) return 'Micro désactivé';
-    if (visualState === 'speaking') return 'Je réponds';
+    if (recognizerStatus === 'paused') return 'Écoute suspendue pendant la voix de Nexus';
+    if (recognizerStatus === 'restarting') return 'Reconnaissance en cours de redémarrage';
     if (visualState === 'thinking') return 'Je réfléchis';
     const isListeningForCommand = wakeState === 'awake_listening_for_command' || visualState === 'listening_for_command';
     if (isListeningForCommand) {
@@ -245,7 +260,7 @@ export default function App() {
   })();
 
   const voiceSessionHint = isSessionActive
-    ? (visualState === 'listening_for_command' ? 'Écoute active' : 'En attente du mot “Nexus”')
+    ? (recognizerStatus === 'paused' ? 'Nexus parle : écoute temporairement suspendue' : recognizerStatus === 'restarting' ? 'Le navigateur relance le moteur vocal' : visualState === 'listening_for_command' ? 'Écoute active' : 'En attente du mot “Nexus”')
     : 'Micro inactif';
 
   const chooseAppearance = (next: CompanionAppearance) => {
@@ -271,8 +286,9 @@ export default function App() {
         companionVisualStateLabel={visualStateLabel}
         voiceSessionStatusLabel={voiceSessionStatusLabel}
         subtitle={visibleConversation.at(-1)?.text}
-        isListening={isSessionActive}
-        transcript={transcript}
+        isListening={isSessionActive && recognizerStatus === 'listening'}
+        transcript={showLocalTranscript && diagnosticsEnabled ? transcript : undefined}
+        speechShape={speechPlayback.shape}
         isOnline={isOnline}
         onEnter={(container) => {
           void enterFullscreen(container);
@@ -297,7 +313,8 @@ export default function App() {
           voiceSessionStatusLabel={voiceSessionStatusLabel}
           subtitle={visibleConversation.at(-1)?.text}
           isListening={isSessionActive}
-          transcript={transcript}
+          transcript={showLocalTranscript && diagnosticsEnabled ? transcript : undefined}
+          speechShape={speechPlayback.shape}
           isOnline={isOnline}
           onFaceInteraction={registerFaceTap}
         />
@@ -306,7 +323,7 @@ export default function App() {
             Vous démarrez la session vocale manuellement. Pendant cette session, Nexus peut relancer la reconnaissance après une interruption. Vous pouvez tout arrêter à tout moment.
           </p>
           <p className="voice-session-hint" aria-live="polite">{voiceSessionHint}</p>
-          <p className="voice-session-hint">Reconnaissance : {recognizerStatus === 'listening' ? 'en écoute' : recognizerStatus === 'restarting' ? 'redémarrage en cours' : recognizerStatus === 'starting' ? 'démarrage' : 'arrêtée'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>
+          <p className="voice-session-hint">Reconnaissance : {recognizerStatus === 'listening' ? 'en écoute' : recognizerStatus === 'restarting' ? 'redémarrage en cours' : recognizerStatus === 'starting' ? 'démarrage' : recognizerStatus === 'paused' ? 'suspendue pendant la parole' : 'arrêtée'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>
           {diagnosticsEnabled && isSessionActive && (
             <div className="voice-local-transcript">
               <label>
@@ -396,7 +413,7 @@ export default function App() {
           isListening={isSessionActive}
           startVoiceInput={startListeningSession}
           stopVoiceInput={stopListeningSession}
-          transcript={transcript}
+          transcript={showLocalTranscript && diagnosticsEnabled ? transcript : ''}
           listenerError={listenerError}
           wakeStatus={wakeStatus}
           voiceProfileName={voiceProfile.name}

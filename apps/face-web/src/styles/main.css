@@ -1019,10 +1019,16 @@ label {
 .kawaii-avatar--concerned .kawaii-mouth-smile { opacity: 1; }
 .kawaii-avatar.visual-thinking .kawaii-brows { transform: translateY(-4px); }
 .kawaii-avatar--concerned .kawaii-brows { transform: translateY(4px); }
-.kawaii-avatar--speaking .kawaii-mouth-open { opacity: 1; animation: kawaiiTalk 310ms ease-in-out infinite alternate;
+.kawaii-avatar--speaking .kawaii-mouth-open { opacity: 1; animation: kawaiiTalk 260ms ease-in-out infinite alternate;
 }
 .kawaii-avatar--speaking .kawaii-mouth-smile { opacity: 0; }
-@keyframes kawaiiTalk { from { transform: scaleY(.7); } to { transform: scaleY(1.1); } }
+.kawaii-avatar--mouth-neutral { --mouth-width: .88; --mouth-height: .8; }
+.kawaii-avatar--mouth-round { --mouth-width: .67; --mouth-height: 1.18; }
+.kawaii-avatar--mouth-wide { --mouth-width: 1.12; --mouth-height: .72; }
+@keyframes kawaiiTalk {
+  from { transform: scale(var(--mouth-width, .88), .25); }
+  to { transform: scale(var(--mouth-width, .88), var(--mouth-height, .8)); }
+}
 .kawaii-avatar.visual-waiting_for_wake_phrase .kawaii-head,
 .kawaii-avatar.visual-listening_for_command .kawaii-head { stroke: #71ffd9; }
 .kawaii-avatar.visual-offline { opacity: .78; filter: grayscale(.25); }

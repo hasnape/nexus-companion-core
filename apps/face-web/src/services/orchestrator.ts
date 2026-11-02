@@ -1,4 +1,4 @@
-import { BrowserVoiceAdapter, SilentVoiceAdapter } from '@nexus/adapters';
+import { BrowserVoiceAdapter, SilentVoiceAdapter, type BrowserSpeechEvent, type BrowserVoiceStyle } from '@nexus/adapters';
 import {
   createCompanionEngine,
   createDefaultCompanionProfile,
@@ -61,7 +61,10 @@ export class CompanionRuntime {
     memoryStore: browserSafeStore(),
     profile: createDefaultCompanionProfile()
   });
-  private readonly voice = ('speechSynthesis' in window ? new BrowserVoiceAdapter() : new SilentVoiceAdapter());
+  private readonly speechListeners = new Set<(event: BrowserSpeechEvent) => void>();
+  private readonly voice = ('speechSynthesis' in window
+    ? new BrowserVoiceAdapter((event) => this.speechListeners.forEach((listener) => listener(event)))
+    : new SilentVoiceAdapter());
   private training: TrainingConfig = { proactivity: 0.5, silenceTolerance: 0.6, greetingFrequency: 0.6, emotionalIntensity: 0.6, chatterCooldownMs: 20000 };
   private state = createDefaultState();
   private action = createAction('wake_up', 0.5);
@@ -97,6 +100,16 @@ export class CompanionRuntime {
     this.conversation = [];
     this.logs = [];
     this.log('memory cleared by user');
+  }
+
+  /** Ephemeral playback updates are not persisted in cognitive memory. */
+  subscribeSpeechPlayback(listener: (event: BrowserSpeechEvent) => void): () => void {
+    this.speechListeners.add(listener);
+    return () => { this.speechListeners.delete(listener); };
+  }
+
+  setVoiceStyle(style: BrowserVoiceStyle): void {
+    if (this.voice instanceof BrowserVoiceAdapter) this.voice.setVoiceStyle(style);
   }
 
   setTraining(next: TrainingConfig): void { this.training = next; }
@@ -139,8 +152,11 @@ export class CompanionRuntime {
     this.action = createAction('speak_calm', this.training.emotionalIntensity);
     this.conversation.push({ from: 'companion', text: reply.text });
 
-    if (this.voice.available) {
-      await this.voice.speak(reply.text);
+    try {
+      if (this.voice.available) await this.voice.speak(reply.text);
+    } finally {
+      // A completed utterance must not leave the face speaking indefinitely.
+      this.state = transitionState(this.state, { at: Date.now(), mode: 'idle', mood: 'warm' });
     }
 
     this.log(`decision: ${reply.decision.intent}`);

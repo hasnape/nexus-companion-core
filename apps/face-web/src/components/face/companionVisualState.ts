@@ -15,6 +15,7 @@ type DeriveCompanionVisualStateParams = {
   isListening: boolean;
   listenerError: string | null;
   companionMode: string;
+  speechAudible?: boolean;
 };
 
 export const deriveCompanionVisualState = ({
@@ -22,12 +23,14 @@ export const deriveCompanionVisualState = ({
   wakeState,
   isListening,
   listenerError,
-  companionMode
+  companionMode,
+  speechAudible = false
 }: DeriveCompanionVisualStateParams): CompanionVisualState => {
+  // Actual audio playback takes priority, including while offline.
+  if (speechAudible) return 'speaking';
   if (listenerError || wakeState === 'error') return 'error';
   if (!isOnline) return 'offline';
-  if (companionMode === 'speaking') return 'speaking';
-  if (wakeState === 'processing_command' || companionMode === 'thinking') return 'thinking';
+  if (wakeState === 'processing_command' || companionMode === 'thinking' || companionMode === 'speaking') return 'thinking';
   if (wakeState === 'awake_listening_for_command') return 'listening_for_command';
   if (wakeState === 'waiting_for_wake_phrase' || isListening) return 'waiting_for_wake_phrase';
   return 'idle';

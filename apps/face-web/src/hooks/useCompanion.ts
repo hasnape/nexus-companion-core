@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CompanionRuntime } from '../services/orchestrator';
 import type { TrainingConfig } from '@nexus/shared';
-import { BrowserVoiceListenerAdapter, SilentVoiceListenerAdapter } from '@nexus/adapters';
+import { BrowserVoiceListenerAdapter, SilentVoiceListenerAdapter, type BrowserSpeechEvent, type BrowserVoiceStyle } from '@nexus/adapters';
 import type { CompanionMemoryItem } from '@nexus/companion-core';
 
 export const useCompanion = () => {
@@ -10,7 +10,11 @@ export const useCompanion = () => {
     const adapter = new BrowserVoiceListenerAdapter();
     return adapter.available ? adapter : new SilentVoiceListenerAdapter();
   }, []);
+  const subscribeSpeechPlayback = useMemo(() => (
+    listener: (event: BrowserSpeechEvent) => void
+  ) => runtime.subscribeSpeechPlayback?.(listener) ?? (() => {}), [runtime]);
   const [snapshot, setSnapshot] = useState(runtime.getSnapshot());
+  const [speechPlayback, setSpeechPlayback] = useState<BrowserSpeechEvent>({ phase: 'end' });
   const [memory, setMemory] = useState(runtime.getMemory());
   const [displayMemories, setDisplayMemories] = useState<CompanionMemoryItem[]>([]);
   const [memoryCandidates, setMemoryCandidates] = useState<CompanionMemoryItem[]>([]);
@@ -31,6 +35,8 @@ export const useCompanion = () => {
     };
   }, [runtime, listener]);
 
+  useEffect(() => subscribeSpeechPlayback(setSpeechPlayback), [subscribeSpeechPlayback]);
+
   const refreshCompanionMemoryState = async () => {
     setMemory(runtime.getMemory());
     setDisplayMemories(await runtime.listDisplayableMemories());
@@ -44,6 +50,9 @@ export const useCompanion = () => {
 
   return {
     snapshot,
+    speechPlayback,
+    subscribeSpeechPlayback,
+    setCompanionVoiceStyle: (style: BrowserVoiceStyle) => runtime.setVoiceStyle(style),
     memory,
     displayMemories,
     memoryCandidates,

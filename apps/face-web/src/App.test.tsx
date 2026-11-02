@@ -58,6 +58,7 @@ const snapshotAction: CompanionAction = {
 };
 
 const mockCompanion = {
+  speechPlayback: { phase: 'end' as 'end' | 'prepare' | 'start' | 'boundary', shape: 'neutral' as 'neutral' | 'round' | 'wide' },
   snapshot: {
     state: snapshotState,
     action: snapshotAction,
@@ -84,6 +85,10 @@ const mockVoiceInput = {
   startListeningSession: vi.fn(),
   stopListeningSession: vi.fn(),
   transcript: '',
+  recognizerStatus: 'inactive',
+  acknowledgementSpeaking: false,
+  showLocalTranscript: false,
+  diagnosticsEnabled: false,
   listenerError: null as string | null,
   wakeState: 'inactive' as WakeListeningState,
   wakeStatus: 'Micro désactivé',
@@ -231,6 +236,7 @@ describe('App voice and layout flows', () => {
     mockVoiceInput.wakeState = 'inactive';
     mockVoiceInput.wakeStatus = 'Micro désactivé';
     mockCompanion.snapshot.state.mode = 'idle';
+    mockCompanion.speechPlayback.phase = 'end';
     mockCompanion.snapshot.conversation = [{ from: 'assistant', text: 'Hello there' }];
     mockCompanion.snapshot.state.lastInteractionAt = 0;
     mockConnectivity.isOnline = true;
@@ -289,7 +295,7 @@ describe('App voice and layout flows', () => {
 
     const ui = App();
 
-    expect(textOf(ui)).toContain('État du compagnon : Je réponds');
+    expect(textOf(ui)).toContain('État du compagnon : Je réfléchis');
     expect(textOf(ui)).toContain('Session vocale');
     expect(textOf(ui)).toContain('Micro désactivé');
     expect(textOf(ui)).not.toContain('Session vocaleJe réponds');
@@ -332,6 +338,7 @@ describe('App voice and layout flows', () => {
 
   it('shows Je réponds when session is active and companion is speaking', () => {
     mockCompanion.snapshot.state.mode = 'speaking';
+    mockCompanion.speechPlayback.phase = 'start';
     mockVoiceInput.isSessionActive = true;
 
     const ui = App();
@@ -341,8 +348,9 @@ describe('App voice and layout flows', () => {
     expect(textOf(ui)).toContain('Arrêter la session Nexus');
   });
 
-  it('keeps Je réponds when speaking with stale transcript', () => {
+  it('keeps Je réponds when speech is audible with a stale transcript', () => {
     mockCompanion.snapshot.state.mode = 'speaking';
+    mockCompanion.speechPlayback.phase = 'start';
     mockVoiceInput.isSessionActive = true;
     mockVoiceInput.transcript = 'commande précédente';
 

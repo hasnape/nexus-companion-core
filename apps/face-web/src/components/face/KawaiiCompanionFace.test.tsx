@@ -19,6 +19,14 @@ describe('layered kawaii companion faces', () => {
     expect(html).toContain('aria-hidden="true"');
   });
 
+  it('keeps the mouth closed when cognitive state says speaking but audio is not playing', () => {
+    const html = renderToStaticMarkup(
+      <KawaiiCompanionFace variant="feminine" expression="speaking" visualState="idle" />
+    );
+    expect(html).not.toContain('kawaii-avatar--speaking');
+    expect(html).toContain('kawaii-mouth-smile');
+  });
+
   it('maintains visual state changes and keeps animation optional for static preview', () => {
     const html = renderToStaticMarkup(
       <KawaiiCompanionFace variant="masculine" expression="happy" visualState="speaking" />

@@ -25,7 +25,7 @@ export function KawaiiCompanionFace({
   const feminine = variant === 'feminine';
   const prefix = `nexus-avatar-${variant}-${preview ? 'preview' : 'live'}`;
   const color = feminine ? '#d29aff' : '#4fdcff';
-  const isSpeaking = visualState === 'speaking' || expression === 'speaking';
+  const isSpeaking = visualState === 'speaking';
   const isHappy = expression === 'happy';
   const isConcerned = expression === 'concerned' || visualState === 'error';
   return (

@@ -62,7 +62,7 @@ export function CompanionFaceScreen({
               <span className="eye eye-left" />
               <span className="eye eye-right" />
             </div>
-            <div className={`mouth action-${action.name} ${state.mode === 'speaking' ? 'is-speaking' : ''}`} />
+            <div className={`mouth action-${action.name} ${companionVisualState === 'speaking' ? 'is-speaking' : ''}`} />
           </>
         ) : (
           <KawaiiCompanionFace

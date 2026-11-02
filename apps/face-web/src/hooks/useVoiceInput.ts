@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultCompanionVoiceProfile, hasFrenchVoice, selectPreferredVoice } from '../services/voice/voiceProfile';
 import { isWakePhrase, stripWakePhrasePrefix, wakeStateLabel, type WakeListeningState } from './useWakePhrase';
 
+export type VoiceDiagnosticEvent = { at: string; type: string; detail: string };
+
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -42,6 +44,19 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const [isSessionActive, setSessionActive] = useState(false);
   const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
   const [transcript, setTranscript] = useState('');
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
+  const diagnosticsEnabledRef = useRef(false);
+  const [diagnosticEvents, setDiagnosticEvents] = useState<VoiceDiagnosticEvent[]>([]);
+  const logDiagnostic = useCallback((type: string, detail = '') => {
+    if (!diagnosticsEnabledRef.current) return;
+    setDiagnosticEvents((prev) => [...prev.slice(-79), { at: new Date().toISOString(), type, detail }]);
+  }, []);
+  const setVoiceDiagnosticsEnabled = useCallback((enabled: boolean) => {
+    diagnosticsEnabledRef.current = enabled;
+    setDiagnosticsEnabled(enabled);
+    setDiagnosticEvents([]);
+  }, []);
+  const clearVoiceDiagnostics = useCallback(() => setDiagnosticEvents([]), []);
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [wakeState, setWakeState] = useState<WakeListeningState>('inactive');
   const wakeStateRef = useRef<WakeListeningState>('inactive');
@@ -109,6 +124,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   }, []);
 
   const cleanupMediaSession = useCallback((options?: { setWakeInactive?: boolean }) => {
+    logDiagnostic('session:stop');
     sessionEnabledRef.current = false;
     recognitionRunningRef.current = false;
     setSessionActive(false);
@@ -124,7 +140,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (options?.setWakeInactive ?? true) {
       setWakeListeningState('inactive');
     }
-  }, [clearRestartTimer, setWakeListeningState, stopAndClearMediaStream]);
+  }, [clearRestartTimer, logDiagnostic, setWakeListeningState, stopAndClearMediaStream]);
 
   const scheduleRestart = useCallback(() => {
     clearRestartTimer();
@@ -136,9 +152,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       return;
     }
     restartCountRef.current += 1;
+    logDiagnostic('recognition:restart-scheduled', String(restartCountRef.current));
     restartTimerRef.current = window.setTimeout(() => {
       if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
       try {
+        logDiagnostic('recognition:restart-attempt');
         recognitionRef.current.start();
       } catch {
         setWakeListeningState('error');
@@ -146,7 +164,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         cleanupMediaSession({ setWakeInactive: false });
       }
     }, 550);
-  }, [cleanupMediaSession, clearRestartTimer, setWakeListeningState]);
+  }, [cleanupMediaSession, clearRestartTimer, logDiagnostic, setWakeListeningState]);
 
   const stopListeningSession = useCallback(() => {
     cleanupMediaSession();
@@ -156,9 +174,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (!nextTranscript || !sessionEnabledRef.current) return;
 
     const currentWakeState = wakeStateRef.current;
+    logDiagnostic('wake:state', currentWakeState);
 
     if (currentWakeState === 'waiting_for_wake_phrase') {
       if (isWakePhrase(nextTranscript)) {
+        logDiagnostic('wake:detected');
         setWakeListeningState('awake_listening_for_command');
         onWakeRef.current();
         speakAcknowledgement();
@@ -167,6 +187,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
       const strippedAtWake = stripWakePhrasePrefix(nextTranscript);
       if (strippedAtWake && strippedAtWake !== nextTranscript.trim()) {
+        logDiagnostic('wake:command-prefixed');
         setWakeListeningState('processing_command');
         onWakeRef.current();
         try {
@@ -182,6 +203,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
     if (currentWakeState === 'awake_listening_for_command') {
       const command = stripWakePhrasePrefix(nextTranscript) || nextTranscript;
+      logDiagnostic('command:recognized');
       setWakeListeningState('processing_command');
       try {
         await onCommandRef.current(command);
@@ -191,9 +213,10 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         setListenerError('Erreur micro');
       }
     }
-  }, [setWakeListeningState, speakAcknowledgement]);
+  }, [logDiagnostic, setWakeListeningState, speakAcknowledgement]);
 
   const startListeningSession = useCallback(async () => {
+    logDiagnostic('session:start-request');
     setListenerError(null);
     setTranscript('');
     fatalErrorRef.current = false;
@@ -210,11 +233,13 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: requestCamera });
         mediaStreamRef.current = stream;
+        logDiagnostic('permission:micro-granted');
         setMediaState({
           micActive: stream.getAudioTracks().some((track) => track.readyState === 'live' && track.enabled),
           cameraActive: stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled)
         });
       } catch {
+        logDiagnostic('permission:micro-failed');
         cleanupMediaSession({ setWakeInactive: false });
         setWakeListeningState('error');
         setListenerError('Autorisation micro/caméra refusée.');
@@ -239,6 +264,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       };
 
       recognitionRef.current.onstart = () => {
+        logDiagnostic('recognition:onstart');
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
         restartCountRef.current = 0;
@@ -247,6 +273,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       };
 
       recognitionRef.current.onerror = (event) => {
+        logDiagnostic('recognition:onerror', event.error);
         recognitionRunningRef.current = false;
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           fatalErrorRef.current = true;
@@ -272,6 +299,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       };
 
       recognitionRef.current.onend = () => {
+        logDiagnostic('recognition:onend');
         recognitionRunningRef.current = false;
         if (sessionEnabledRef.current && !fatalErrorRef.current) {
           scheduleRestart();
@@ -283,13 +311,14 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     setSessionActive(true);
     setWakeListeningState('inactive');
     try {
+      logDiagnostic('recognition:start-attempt');
       recognitionRef.current.start();
     } catch {
       cleanupMediaSession({ setWakeInactive: false });
       setWakeListeningState('error');
       setListenerError('Erreur micro');
     }
-  }, [cleanupMediaSession, handleFinalTranscript, requestCamera, scheduleRestart, setWakeListeningState, speechRecognitionCtor]);
+  }, [cleanupMediaSession, handleFinalTranscript, logDiagnostic, requestCamera, scheduleRestart, setWakeListeningState, speechRecognitionCtor]);
 
   useEffect(() => () => {
     stopListeningSession();
@@ -297,6 +326,10 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
 
   return {
     voiceInputAvailable,
+    diagnosticsEnabled,
+    diagnosticEvents,
+    setVoiceDiagnosticsEnabled,
+    clearVoiceDiagnostics,
     isSessionActive,
     mediaState,
     startListeningSession,

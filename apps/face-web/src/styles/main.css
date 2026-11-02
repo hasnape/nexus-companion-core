@@ -223,7 +223,6 @@ body {
   box-shadow: 0 0 14px rgba(255, 123, 123, 0.24);
 }
 
-.mode-speaking .mouth,
 .mouth.is-speaking {
   animation: mouthTalk 380ms ease-in-out infinite alternate;
 }
@@ -942,8 +941,7 @@ label {
   height: 32px;
   border-bottom-width: 6px;
 }
-.face.visual-speaking .mouth,
-.face.mode-speaking .mouth {
+.face.visual-speaking .mouth {
   background: rgba(89, 160, 236, 0.2);
   border-radius: 45% 45% 55% 55%;
 }

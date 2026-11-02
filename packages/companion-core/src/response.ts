@@ -303,9 +303,10 @@ export const renderLocalSmallTalk = (input: string): string | null => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[’']/g, ' ')
-    .replace(/[!?.,;:]+/g, ' ')
+    .replace(/[!?.,;:\-]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
+    .replace(/^(bonjour|salut|coucou|hello|bonsoir) nexus (?=comment|ca va)/, '$1 ');
   if (!normalized) return null;
   if (/^(?:comment|comment ca|comment tu)$/.test(normalized)) {
     return 'Je n’ai pas entendu la fin. Tu peux répéter ta question ?';

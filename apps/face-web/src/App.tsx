@@ -245,9 +245,9 @@ export default function App() {
   });
   const visualStateLabel = companionVisualStateLabel(visualState, listenerError);
   const voiceSessionStatusLabel = (() => {
+    if (visualState === 'speaking') return 'Nexus parle';
     if (!isOnline || visualState === 'offline') return 'Mode hors ligne';
     if (listenerError || visualState === 'error') return 'Micro indisponible ou erreur navigateur';
-    if (visualState === 'speaking') return 'Nexus parle';
     if (!isSessionActive) return 'Micro désactivé';
     if (recognizerStatus === 'paused') return 'Écoute suspendue pendant la voix de Nexus';
     if (recognizerStatus === 'restarting') return 'Reconnaissance en cours de redémarrage';

@@ -200,6 +200,25 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('processes every final result in a batched mobile recognition event', async () => {
+    const { render, callbacks, recognitionInstances } = await createHookHarness();
+    let hook = render();
+    await hook.startListeningSession();
+    const recognition = recognitionInstances[0];
+    recognition.onresult?.({
+      resultIndex: 0,
+      results: [
+        { 0: { transcript: 'Nexus' }, isFinal: true, length: 1 },
+        { 0: { transcript: 'Bonjour' }, isFinal: true, length: 1 }
+      ]
+    });
+    await Promise.resolve();
+    hook = render();
+    expect(callbacks.onWake).toHaveBeenCalledOnce();
+    expect(callbacks.onCommand).toHaveBeenCalledWith('Bonjour');
+    expect(hook.wakeState).toBe('waiting_for_wake_phrase');
+  });
+
   it('uses latest onCommand callback after rerender', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
     const firstOnCommand = callbacks.onCommand;

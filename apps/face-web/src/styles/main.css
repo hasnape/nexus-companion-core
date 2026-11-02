@@ -1011,17 +1011,17 @@ label {
   41%, 76% { transform: scaleY(.07); }
 }
 .kawaii-avatar .kawaii-brows { transition: transform 240ms ease; }
-.kawaii-avatar .kawaii-mouth-open { opacity: 1; transform-origin: 160px 252px; }
-.kawaii-avatar .kawaii-mouth-smile { opacity: 0; }
+.kawaii-avatar .kawaii-mouth-open { opacity: 0; transform-origin: 160px 252px; }
+.kawaii-avatar .kawaii-mouth-smile { opacity: 1; }
 .kawaii-avatar.visual-thinking .kawaii-mouth-open,
 .kawaii-avatar--concerned .kawaii-mouth-open { opacity: 0; }
 .kawaii-avatar.visual-thinking .kawaii-mouth-smile,
 .kawaii-avatar--concerned .kawaii-mouth-smile { opacity: 1; }
 .kawaii-avatar.visual-thinking .kawaii-brows { transform: translateY(-4px); }
 .kawaii-avatar--concerned .kawaii-brows { transform: translateY(4px); }
-.kawaii-avatar--speaking .kawaii-mouth-open {
-  animation: kawaiiTalk 310ms ease-in-out infinite alternate;
+.kawaii-avatar--speaking .kawaii-mouth-open { opacity: 1; animation: kawaiiTalk 310ms ease-in-out infinite alternate;
 }
+.kawaii-avatar--speaking .kawaii-mouth-smile { opacity: 0; }
 @keyframes kawaiiTalk { from { transform: scaleY(.7); } to { transform: scaleY(1.1); } }
 .kawaii-avatar.visual-waiting_for_wake_phrase .kawaii-head,
 .kawaii-avatar.visual-listening_for_command .kawaii-head { stroke: #71ffd9; }

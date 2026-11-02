@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { CompanionAppearanceSettings } from './CompanionAppearanceSettings';
+import { CompanionAppearanceChoices, CompanionAppearanceSettings } from './CompanionAppearanceSettings';
 
 const storage = new Map<string, string>();
 
@@ -23,6 +23,14 @@ describe('Nexus companion appearance selection', () => {
     expect(html).toContain('Conserver le visage classique');
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('open=""');
+  });
+
+  it('does not mark classic as selected on first-run setup', () => {
+    const html = renderToStaticMarkup(
+      <CompanionAppearanceChoices appearance="classic" showClassicSelected={false} onChoose={() => {}} />
+    );
+    expect(html).not.toContain('aria-pressed="true"');
+    expect(html).not.toContain('✓ Conserver');
   });
 
   it('marks the persisted choice selected without affecting companion memory', () => {

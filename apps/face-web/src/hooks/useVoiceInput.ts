@@ -1,4 +1,4 @@
-import { pitchForVoiceStyle, preferredFrenchVoice, type BrowserVoiceStyle } from '@nexus/adapters';
+import { pitchForVoiceStyle, preferredFrenchVoice, type BrowserSpeechEvent, type BrowserVoiceStyle } from '@nexus/adapters';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultCompanionVoiceProfile, hasFrenchVoice, selectPreferredVoice } from '../services/voice/voiceProfile';
 import { isWakePhrase, stripWakePhrasePrefix, wakeStateLabel, type WakeListeningState } from './useWakePhrase';
@@ -55,9 +55,10 @@ type UseVoiceInputParams = {
   requestCamera?: boolean;
   isCompanionSpeaking?: boolean;
   voiceStyle?: BrowserVoiceStyle;
+  subscribeSpeechPlayback?: (listener: (event: BrowserSpeechEvent) => void) => () => void;
 };
 
-export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isCompanionSpeaking = false, voiceStyle = 'neutral' }: UseVoiceInputParams) => {
+export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isCompanionSpeaking = false, voiceStyle = 'neutral', subscribeSpeechPlayback }: UseVoiceInputParams) => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionEnabledRef = useRef(false);
@@ -230,6 +231,16 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
     if (isCompanionSpeaking) pauseForPlayback('reply');
     else resumeAfterPlayback('reply');
   }, [isCompanionSpeaking, pauseForPlayback, resumeAfterPlayback]);
+
+  // Direct subscription pauses ASR synchronously at 'prepare', before audio
+  // starts. React state updates alone can arrive too late on Android.
+  useEffect(() => {
+    if (!subscribeSpeechPlayback) return;
+    return subscribeSpeechPlayback((event) => {
+      if (event.phase === 'prepare') pauseForPlayback('reply');
+      else if (event.phase === 'end') resumeAfterPlayback('reply');
+    });
+  }, [subscribeSpeechPlayback, pauseForPlayback, resumeAfterPlayback]);
 
   const speakAcknowledgement = useCallback(() => {
     if (!('speechSynthesis' in window)) return;

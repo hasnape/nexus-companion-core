@@ -204,6 +204,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           setListenerError('Erreur micro');
         }
       }
+      // Do not retain private transcript text in diagnostics. This marker
+      // distinguishes a recognition result from a matched wake phrase.
+      logDiagnostic('wake:not-matched', 'caractères=' + nextTranscript.length);
       return;
     }
 

@@ -948,3 +948,34 @@ label {
   border-radius: 45% 45% 55% 55%;
 }
 /* The existing global reduced-motion rules above also cover this face. */
+
+
+/* Appearance choices: isolated from cognition and memory. */
+.companion-appearance-settings summary { cursor: pointer; font-weight: 600; }
+.companion-appearance-settings h2 { font-size: 1.1rem; margin: 12px 0 6px; }
+.appearance-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.appearance-choice { min-width: 0; padding: 12px 8px; border: 1px solid rgba(124, 170, 255, .5); border-radius: 12px; }
+.appearance-choice.selected { outline: 2px solid #83dafa; outline-offset: 2px; }
+.face.appearance-kawaii-feminine,
+.face.appearance-kawaii-masculine {
+  border-radius: 46% 46% 49% 49%;
+  box-shadow: 0 0 32px rgba(77, 181, 255, .35), inset 0 -14px 28px rgba(19, 65, 133, .45);
+}
+.face.appearance-kawaii-feminine {
+  background: radial-gradient(circle at 40% 28%, #3c397d, #18285c 62%, #121c4d);
+  box-shadow: 0 0 34px rgba(190, 107, 255, .38), inset 0 -14px 28px rgba(56, 25, 99, .45);
+}
+.face.appearance-kawaii-masculine {
+  background: radial-gradient(circle at 40% 28%, #21528e, #132e66 62%, #111c46);
+}
+.face.appearance-kawaii-feminine .eye,
+.face.appearance-kawaii-masculine .eye {
+  width: clamp(44px, 11vw, 58px);
+  height: clamp(52px, 13vw, 67px);
+  border-radius: 50% 50% 47% 47%;
+}
+.face.appearance-kawaii-feminine .eye::before,
+.face.appearance-kawaii-masculine .eye::before { width: 49%; height: 57%; left: 26%; top: 25%; }
+.face.appearance-kawaii-feminine .mouth,
+.face.appearance-kawaii-masculine .mouth { border-bottom-width: 6px; }
+@media (max-width: 640px) { .appearance-choices { grid-template-columns: 1fr; } }

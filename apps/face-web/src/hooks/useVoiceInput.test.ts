@@ -139,15 +139,20 @@ const createHookHarness = async () => {
 
   const module = await import('./useVoiceInput');
 
+  const playbackListeners: Array<(event: { phase: 'prepare' | 'start' | 'boundary' | 'end' }) => void> = [];
   const callbacks = {
     onWake: vi.fn(),
     onCommand: vi.fn(async () => {}),
-    isCompanionSpeaking: false
+    isCompanionSpeaking: false,
+    subscribeSpeechPlayback: (listener: (event: { phase: 'prepare' | 'start' | 'boundary' | 'end' }) => void) => {
+      playbackListeners.push(listener);
+      return () => { const index = playbackListeners.indexOf(listener); if (index >= 0) playbackListeners.splice(index, 1); };
+    }
   };
 
   const render = () => {
     hookIndex = 0;
-    return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake, isCompanionSpeaking: callbacks.isCompanionSpeaking });
+    return module.useVoiceInput({ onCommand: callbacks.onCommand, onWake: callbacks.onWake, isCompanionSpeaking: callbacks.isCompanionSpeaking, subscribeSpeechPlayback: callbacks.subscribeSpeechPlayback });
   };
 
   const unmount = () => {
@@ -161,7 +166,7 @@ const createHookHarness = async () => {
     });
   };
 
-  return { render, callbacks, recognitionInstances, emitFinal, getUserMedia, trackStopCalls, unmount, mockWindow };
+  return { render, callbacks, playbackListeners, recognitionInstances, emitFinal, getUserMedia, trackStopCalls, unmount, mockWindow };
 };
 
 describe('useVoiceInput reliability', () => {
@@ -454,6 +459,20 @@ describe('useVoiceInput reliability', () => {
     expect(callbacks.onWake).not.toHaveBeenCalled();
     callbacks.isCompanionSpeaking = false;
     render();
+    vi.advanceTimersByTime(600);
+    emitFinal(recognition, 'Nexus');
+    expect(callbacks.onWake).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses recognition synchronously when TTS prepares, before any React rerender', async () => {
+    const { render, callbacks, playbackListeners, recognitionInstances, emitFinal } = await createHookHarness();
+    await render().startListeningSession();
+    const recognition = recognitionInstances[0];
+    playbackListeners.forEach((listener) => listener({ phase: 'prepare' }));
+    expect(recognition.stop).toHaveBeenCalled();
+    emitFinal(recognition, 'Nexus');
+    expect(callbacks.onWake).not.toHaveBeenCalled();
+    playbackListeners.forEach((listener) => listener({ phase: 'end' }));
     vi.advanceTimersByTime(600);
     emitFinal(recognition, 'Nexus');
     expect(callbacks.onWake).toHaveBeenCalledTimes(1);

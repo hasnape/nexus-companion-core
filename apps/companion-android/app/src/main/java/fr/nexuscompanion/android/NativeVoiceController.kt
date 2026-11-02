@@ -51,7 +51,18 @@ internal class NativeVoiceController(
             ttsReady = result == TextToSpeech.SUCCESS
             if (ttsReady) {
                 val engine = tts ?: return@TextToSpeech
-                engine.language = Locale.FRENCH
+                val offlineFrench = engine.voices
+                    ?.firstOrNull { voice ->
+                        voice.locale.language == Locale.FRENCH.language &&
+                            !voice.isNetworkConnectionRequired &&
+                            !voice.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
+                    }
+                if (offlineFrench == null) {
+                    ttsReady = false
+                    handler.post { onStatus("Voix française hors ligne non installée : mode texte disponible.") }
+                } else {
+                    engine.voice = offlineFrench
+                }
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
                         handler.post { onSpeechState(true) }

@@ -1,3 +1,4 @@
+import { pitchForVoiceStyle, preferredFrenchVoice, type BrowserVoiceStyle } from '@nexus/adapters';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultCompanionVoiceProfile, hasFrenchVoice, selectPreferredVoice } from '../services/voice/voiceProfile';
 import { isWakePhrase, stripWakePhrasePrefix, wakeStateLabel, type WakeListeningState } from './useWakePhrase';
@@ -53,9 +54,10 @@ type UseVoiceInputParams = {
   onWake: () => void;
   requestCamera?: boolean;
   isCompanionSpeaking?: boolean;
+  voiceStyle?: BrowserVoiceStyle;
 };
 
-export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isCompanionSpeaking = false }: UseVoiceInputParams) => {
+export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isCompanionSpeaking = false, voiceStyle = 'neutral' }: UseVoiceInputParams) => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const sessionEnabledRef = useRef(false);
@@ -233,11 +235,11 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
     if (!('speechSynthesis' in window)) return;
     const utterance = new SpeechSynthesisUtterance('Je t’écoute.');
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = selectPreferredVoice(voices);
+    const preferredVoice = preferredFrenchVoice(voices, voiceStyle) ?? selectPreferredVoice(voices);
     if (preferredVoice) utterance.voice = preferredVoice;
     utterance.lang = defaultCompanionVoiceProfile.language;
     utterance.rate = defaultCompanionVoiceProfile.rate;
-    utterance.pitch = defaultCompanionVoiceProfile.pitch;
+    utterance.pitch = pitchForVoiceStyle(voiceStyle);
     utterance.volume = defaultCompanionVoiceProfile.volume;
     const finish = () => {
       if (ackTimeoutRef.current !== null) window.clearTimeout(ackTimeoutRef.current);
@@ -255,7 +257,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false, isComp
     } catch {
       finish();
     }
-  }, [pauseForPlayback, resumeAfterPlayback]);
+  }, [pauseForPlayback, resumeAfterPlayback, voiceStyle]);
 
   const stopListeningSession = useCallback(() => {
     cleanupMediaSession();

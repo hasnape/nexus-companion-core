@@ -159,12 +159,10 @@ body {
   transform-origin: center;
 }
 
-.eye-left {
-  animation: blinkNatural 7.2s infinite;
-}
-
+/* Both eyes share the same animation clock: synchronized natural blinks. */
+.eye-left,
 .eye-right {
-  animation: blinkNatural 6.7s infinite 0.18s;
+  animation: blinkNatural 7.2s linear infinite;
 }
 
 @keyframes blinkNatural {

@@ -7,6 +7,15 @@ export function isCompanionAppearance(value: unknown): value is CompanionAppeara
   return typeof value === 'string' && choices.includes(value as CompanionAppearance);
 }
 
+/** Distinguish first visit from a previously saved classic preference. */
+export function hasCompanionAppearancePreference(): boolean {
+  try {
+    return isCompanionAppearance(window.localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export function loadCompanionAppearance(): CompanionAppearance {
   try {
     const value = window.localStorage.getItem(STORAGE_KEY);

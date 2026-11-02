@@ -1,0 +1,126 @@
+package fr.nexuscompanion.android
+
+import android.content.Context
+import android.util.AtomicFile
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.nio.charset.StandardCharsets
+import java.util.UUID
+
+/**
+ * Local library, not the brain. Sources are evidence, never instructions.
+ * Each companion has its own namespace; no cloud account or network access.
+ * External information may be imported only by an explicit user action.
+ */
+internal class LocalKnowledgeLibrary(context: Context, companionId: String = "nexus-default") {
+    private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
+    private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
+    private val maxEntries = 500
+    private val maxText = 2000
+
+    data class Entry(
+        val id: String,
+        val title: String,
+        val excerpt: String,
+        val source: String,
+        val recordedAt: Long,
+        val expiresAt: Long?,
+        val verified: Boolean
+    )
+
+    @Synchronized
+    fun list(): List<Entry> {
+        val bytes = try { store.openRead().use { it.readBytes() } }
+            catch (_: java.io.FileNotFoundException) { return emptyList() }
+        val root = JSONObject(String(bytes, StandardCharsets.UTF_8))
+        require(root.optInt("schema") == 1) { "Unknown library schema" }
+        val entries = root.getJSONArray("entries")
+        return (0 until entries.length()).map { i ->
+            val item = entries.getJSONObject(i)
+            Entry(
+                id = item.getString("id"),
+                title = item.getString("title"),
+                excerpt = item.getString("excerpt"),
+                source = item.getString("source"),
+                recordedAt = item.getLong("recordedAt"),
+                expiresAt = if (item.isNull("expiresAt")) null else item.getLong("expiresAt"),
+                verified = item.getBoolean("verified")
+            )
+        }
+    }
+
+    @Synchronized
+    fun addUserNote(title: String, excerpt: String): Entry =
+        add(title, excerpt, "user:manual", verified = false, expiresAt = null)
+
+    /**
+     * Intended for future explicit import flow; do not silently fetch URLs.
+     * verified=true requires a separate verification process, not user input.
+     */
+    @Synchronized
+    fun add(
+        title: String, excerpt: String, source: String,
+        verified: Boolean = false, expiresAt: Long? = null
+    ): Entry {
+        require(title.isNotBlank() && title.length <= 160)
+        require(excerpt.isNotBlank() && excerpt.length <= maxText)
+        require(source.isNotBlank() && source.length <= 512)
+        require(!verified) { "Verification must be performed by a separate trusted verifier" }
+        val existing = list()
+        require(existing.size < maxEntries) { "Library capacity reached" }
+        val entry = Entry(UUID.randomUUID().toString(), title.trim(), excerpt.trim(),
+            source.trim(), System.currentTimeMillis(), expiresAt, false)
+        save(existing + entry)
+        return entry
+    }
+
+    @Synchronized
+    fun remove(id: String): Boolean {
+        val existing = list()
+        val updated = existing.filterNot { it.id == id }
+        if (updated.size == existing.size) return false
+        save(updated)
+        return true
+    }
+
+    fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
+        val tokens = query.lowercase().split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.length >= 3 }.distinct().take(8)
+        if (tokens.isEmpty()) return emptyList()
+        return list().filter { it.expiresAt == null || it.expiresAt > now }
+            .map { entry ->
+                val searchable = (entry.title + " " + entry.excerpt).lowercase()
+                entry to tokens.count { searchable.contains(it) }
+            }
+            .filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<Entry, Int>> { it.second }
+                .thenByDescending { it.first.recordedAt })
+            .take(5).map { it.first }
+    }
+
+    private fun save(entries: List<Entry>) {
+        val array = JSONArray()
+        entries.forEach { entry ->
+            array.put(JSONObject().apply {
+                put("id", entry.id)
+                put("title", entry.title)
+                put("excerpt", entry.excerpt)
+                put("source", entry.source)
+                put("recordedAt", entry.recordedAt)
+                put("expiresAt", entry.expiresAt ?: JSONObject.NULL)
+                put("verified", entry.verified)
+            })
+        }
+        val bytes = JSONObject().put("schema", 1).put("entries", array)
+            .toString().toByteArray(StandardCharsets.UTF_8)
+        val stream = store.startWrite()
+        try {
+            stream.write(bytes)
+            store.finishWrite(stream)
+        } catch (failure: Exception) {
+            store.failWrite(stream)
+            throw failure
+        }
+    }
+}

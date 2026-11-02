@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
 import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
@@ -137,6 +138,8 @@ export default function App() {
   usePwaShell();
 
   const [message, setMessage] = useState('');
+  const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
+  const [appearanceStatus, setAppearanceStatus] = useState('');
   const [training, updateTraining] = useState(defaultTraining);
   const [offlineQueue, setOfflineQueue] = useState(loadOfflineQueue);
   const [offlineNote, setOfflineNote] = useState(loadOfflineNote);
@@ -265,6 +268,7 @@ export default function App() {
     <main className="layout">
       <section className="immersive-stage">
         <CompanionFaceScreen
+          appearance={appearance}
           state={snapshot.state}
           action={snapshot.action}
           companionVisualState={visualState}
@@ -294,6 +298,36 @@ export default function App() {
         </div>
       </section>
       <section className="sidebar">
+        <details className="panel companion-appearance-settings">
+          <summary>Personnaliser mon compagnon</summary>
+          <h2>Choisissez votre visage Nexus</h2>
+          <p>Le visage est indépendant de la voix, de la personnalité et de la mémoire.</p>
+          <div className="appearance-choices" role="group" aria-label="Apparence de Nexus">
+            {([
+              ['classic', 'Visage classique'],
+              ['kawaii-feminine', 'Nexus Femme · kawaii'],
+              ['kawaii-masculine', 'Nexus Homme · kawaii']
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={appearance === value ? 'appearance-choice selected' : 'appearance-choice'}
+                aria-pressed={appearance === value}
+                onClick={() => {
+                  if (saveCompanionAppearance(value)) {
+                    setAppearance(value);
+                    setAppearanceStatus('Apparence enregistrée sur cet appareil.');
+                  } else {
+                    setAppearanceStatus('Enregistrement impossible sur cet appareil.');
+                  }
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p aria-live="polite">{appearanceStatus}</p>
+        </details>
         <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>
           Mode visage
         </button>

@@ -16,13 +16,13 @@ internal object KnowledgePolicy {
         if (queryTerms.isEmpty()) return 0
         val titleLower = title.lowercase()
         val excerptLower = excerpt.lowercase()
-        return queryTerms.sumOf { term ->
+        return queryTerms.map { term ->
             when {
                 titleLower.contains(term) -> 3
                 excerptLower.contains(term) -> 1
                 else -> 0
             }
-        }
+        }.sum()
     }
 
     fun isValidUserNote(title: String, excerpt: String): Boolean =

@@ -245,6 +245,22 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
+  it('stops after repeated silent recognizer ends instead of looping indefinitely', async () => {
+    const { render, recognitionInstances, trackStopCalls } = await createHookHarness();
+    let hook = render();
+    await hook.startListeningSession();
+    const recognition = recognitionInstances[0];
+    for (let i = 0; i < 6; i += 1) {
+      recognition.onend?.();
+      vi.advanceTimersByTime(600);
+    }
+    hook = render();
+    expect(hook.isSessionActive).toBe(false);
+    expect(hook.listenerError).toContain('sans transcrire');
+    expect(recognition.start).toHaveBeenCalledTimes(6);
+    expect(trackStopCalls[0]).toHaveBeenCalled();
+  });
+
   it('restarts after a recoverable recognition error and processes transcripts', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
     let hook = render();

@@ -278,7 +278,7 @@ export default function App() {
         />
         <div className="voice-session-controls panel" aria-label="Contrôle de session vocale">
           <p className="voice-session-copy">
-            Le micro ne démarre jamais tout seul. Vous l’activez manuellement et pouvez l’arrêter à tout moment.
+            Vous démarrez la session vocale manuellement. Pendant cette session, Nexus peut relancer la reconnaissance après une interruption. Vous pouvez tout arrêter à tout moment.
           </p>
           <p className="voice-session-hint" aria-live="polite">{voiceSessionHint}</p>
           <p className="voice-session-hint">Micro : {mediaState.micActive ? 'actif' : 'inactif'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>

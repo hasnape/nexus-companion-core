@@ -63,8 +63,7 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
         title: String, excerpt: String, source: String,
         verified: Boolean = false, expiresAt: Long? = null
     ): Entry {
-        require(title.isNotBlank() && title.length <= 160)
-        require(excerpt.isNotBlank() && excerpt.length <= maxText)
+        require(KnowledgePolicy.isValidUserNote(title, excerpt))
         require(source.isNotBlank() && source.length <= 512)
         require(!verified) { "Verification must be performed by a separate trusted verifier" }
         val existing = list()
@@ -85,13 +84,11 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
     }
 
     fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
-        val tokens = query.lowercase().split(Regex("[^\\p{L}\\p{N}]+"))
-            .filter { it.length >= 3 }.distinct().take(8)
+        val tokens = KnowledgePolicy.queryTerms(query)
         if (tokens.isEmpty()) return emptyList()
-        return list().filter { it.expiresAt == null || it.expiresAt > now }
+        return list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
             .map { entry ->
-                val searchable = (entry.title + " " + entry.excerpt).lowercase()
-                entry to tokens.count { searchable.contains(it) }
+                entry to KnowledgePolicy.score(tokens, entry.title, entry.excerpt)
             }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Entry, Int>> { it.second }

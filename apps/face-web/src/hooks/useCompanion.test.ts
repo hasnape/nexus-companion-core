@@ -109,9 +109,9 @@ describe('useCompanion message refresh behavior', () => {
     expect(runtimeMock.getMemory.mock.calls.length).toBeGreaterThan(memoryCallsBefore);
     expect(runtimeMock.listDisplayableMemories.mock.calls.length).toBeGreaterThan(displayCallsBefore);
     expect(runtimeMock.getMemoryCandidates.mock.calls.length).toBeGreaterThan(candidateCallsBefore);
-    expect(useStateSetters[1]).toHaveBeenCalled();
     expect(useStateSetters[2]).toHaveBeenCalled();
     expect(useStateSetters[3]).toHaveBeenCalled();
+    expect(useStateSetters[4]).toHaveBeenCalled();
   });
 
   it('voice final transcript uses the same refresh path as text messages', async () => {
@@ -128,8 +128,8 @@ describe('useCompanion message refresh behavior', () => {
     expect(runtimeMock.getMemory.mock.calls.length).toBeGreaterThan(memoryCallsBefore);
     expect(runtimeMock.listDisplayableMemories.mock.calls.length).toBeGreaterThan(displayCallsBefore);
     expect(runtimeMock.getMemoryCandidates.mock.calls.length).toBeGreaterThan(candidateCallsBefore);
-    expect(useStateSetters[1]).toHaveBeenCalled();
     expect(useStateSetters[2]).toHaveBeenCalled();
     expect(useStateSetters[3]).toHaveBeenCalled();
+    expect(useStateSetters[4]).toHaveBeenCalled();
   });
 });

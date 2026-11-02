@@ -78,17 +78,8 @@ export function KawaiiCompanionFace({
           </g>
         ))}
       </g>
-      <g className="kawaii-cheeks">
-        <ellipse cx="72" cy="219" rx="21" ry="9" fill={feminine ? '#ff61b1' : '#22dfff'} opacity=".77" />
-        <ellipse cx="247" cy="219" rx="21" ry="9" fill={feminine ? '#ff61b1' : '#22dfff'} opacity=".77" />
-        {feminine ? (
-          <g stroke="#ffc8ec" strokeWidth="3" strokeLinecap="round">
-            <path d="M63 214 l-7 9 M73 213 l-7 11 M83 214 l-7 9 M238 214 l-7 9 M248 213 l-7 11 M258 214 l-7 9" />
-          </g>
-        ) : null}
-      </g>
       <g className="kawaii-mouth">
-        <path className="kawaii-mouth-smile" d="M124 244 Q160 279 196 244" stroke="#8fd3ff" strokeWidth="5" strokeLinecap="round" fill="none" />
+        <path className="kawaii-mouth-smile" d="M132 245 Q160 260 188 245" stroke="#8fd3ff" strokeWidth="5" strokeLinecap="round" fill="none" />
         <g className="kawaii-mouth-open">
           <path d="M127 241 Q160 250 193 241 Q194 271 160 275 Q130 271 127 241Z" fill={`url(#${prefix}-mouth)`} stroke="#080e2d" strokeWidth="3" />
           <path d="M140 261 Q160 243 181 261 Q169 272 160 272 Q150 272 140 261Z" fill="#ff74c2" />

@@ -16,6 +16,7 @@ import android.widget.TextView
 /** Native first-run shell: no WebView, browser, server, or network permission. */
 class MainActivity : Activity() {
     private lateinit var controller: NativeVoiceController
+    private lateinit var library: LocalKnowledgeLibrary
     private lateinit var face: TextView
     private lateinit var status: TextView
     private lateinit var answer: TextView
@@ -25,6 +26,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        library = LocalKnowledgeLibrary(applicationContext)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -51,6 +53,8 @@ class MainActivity : Activity() {
             setHintTextColor(Color.LTGRAY)
         }
         val send = Button(this).apply { text = "Envoyer" }
+        val remember = Button(this).apply { text = "Ajouter à ma bibliothèque locale" }
+        val searchLibrary = Button(this).apply { text = "Chercher dans ma bibliothèque" }
         voiceButton = Button(this).apply { text = "Activer le micro local" }
         val layout = LinearLayout.LayoutParams(-1, -2)
         root.addView(face, layout)
@@ -58,6 +62,8 @@ class MainActivity : Activity() {
         root.addView(answer, layout)
         root.addView(input, layout)
         root.addView(send, layout)
+        root.addView(remember, layout)
+        root.addView(searchLibrary, layout)
         root.addView(voiceButton, layout)
         setContentView(root)
 
@@ -69,6 +75,26 @@ class MainActivity : Activity() {
                 face.text = if (audible) "●   ●\n◯" else "●   ●\n⌣"
             }
         )
+        remember.setOnClickListener {
+            val note = input.text.toString().trim()
+            if (note.isNotEmpty()) {
+                try {
+                    library.addUserNote(note.take(80), note)
+                    answer.text = "Note enregistrée localement (non vérifiée)."
+                    input.setText("")
+                } catch (_: IllegalArgumentException) {
+                    answer.text = "Note trop longue ou invalide (2000 caractères maximum)."
+                } catch (_: IllegalStateException) {
+                    answer.text = "Bibliothèque locale pleine."
+                }
+            }
+        }
+        searchLibrary.setOnClickListener {
+            val query = input.text.toString().trim()
+            val matches = library.search(query)
+            answer.text = if (matches.isEmpty()) "Aucune note locale correspondante."
+                else matches.joinToString("\n\n") { "${it.title} : ${it.excerpt}\nSource : ${it.source} (non vérifiée)" }
+        }
         send.setOnClickListener {
             val message = input.text.toString().trim()
             if (message.isNotEmpty()) {

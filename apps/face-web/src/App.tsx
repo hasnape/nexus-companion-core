@@ -194,6 +194,9 @@ export default function App() {
     startListeningSession,
     stopListeningSession,
     transcript,
+    recognizerStatus,
+    showLocalTranscript,
+    setShowLocalTranscript,
     listenerError,
     wakeState,
     wakeStatus,
@@ -303,7 +306,16 @@ export default function App() {
             Vous démarrez la session vocale manuellement. Pendant cette session, Nexus peut relancer la reconnaissance après une interruption. Vous pouvez tout arrêter à tout moment.
           </p>
           <p className="voice-session-hint" aria-live="polite">{voiceSessionHint}</p>
-          <p className="voice-session-hint">Micro : {mediaState.micActive ? 'actif' : 'inactif'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>
+          <p className="voice-session-hint">Reconnaissance : {recognizerStatus === 'listening' ? 'en écoute' : recognizerStatus === 'restarting' ? 'redémarrage en cours' : recognizerStatus === 'starting' ? 'démarrage' : 'arrêtée'} · Caméra : {config.enableCamera ? (mediaState.cameraActive ? 'active' : 'inactive') : 'désactivée'}</p>
+          {diagnosticsEnabled && isSessionActive && (
+            <div className="voice-local-transcript">
+              <label>
+                <input type="checkbox" checked={showLocalTranscript} onChange={(event) => setShowLocalTranscript(event.target.checked)} />
+                Afficher temporairement les mots reconnus sur cet écran (privé)
+              </label>
+              {showLocalTranscript && <p role="status">Android comprend : {transcript || 'En attente de paroles…'}</p>}
+            </div>
+          )}
           {isSessionActive ? (
             <button className="mic-live" type="button" onClick={() => { void stopListeningSession(); }}>
               Arrêter la session Nexus

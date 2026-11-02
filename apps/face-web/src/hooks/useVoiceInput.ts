@@ -40,6 +40,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const recognitionRunningRef = useRef(false);
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
+  const resultSeenSinceStartRef = useRef(false);
 
   const [isSessionActive, setSessionActive] = useState(false);
   const [mediaState, setMediaState] = useState({ micActive: false, cameraActive: false });
@@ -129,6 +130,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     recognitionRunningRef.current = false;
     setSessionActive(false);
     restartCountRef.current = 0;
+    resultSeenSinceStartRef.current = false;
     clearRestartTimer();
     try {
       recognitionRef.current?.stop();
@@ -147,8 +149,10 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
     if (!sessionEnabledRef.current || fatalErrorRef.current || !recognitionRef.current) return;
     if (restartCountRef.current >= 5) {
       setWakeListeningState('error');
-      setListenerError('Erreur micro');
       cleanupMediaSession({ setWakeInactive: false });
+      setWakeListeningState('error');
+      setListenerError('La reconnaissance vocale s’arrête sans transcrire de paroles. Vérifiez le service vocal Android ou essayez un autre moteur de reconnaissance.');
+      logDiagnostic('recognition:stopped-no-results', 'limite de relances atteinte');
       return;
     }
     restartCountRef.current += 1;
@@ -260,6 +264,9 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
           const result = event.results[index];
           const nextTranscript = result?.[0]?.transcript?.trim() ?? '';
           if (!nextTranscript) continue;
+          resultSeenSinceStartRef.current = true;
+          restartCountRef.current = 0;
+          logDiagnostic(result.isFinal ? 'recognition:final' : 'recognition:interim', 'caractères=' + nextTranscript.length);
           setTranscript(nextTranscript);
           if (result.isFinal) {
             void handleFinalTranscript(nextTranscript);
@@ -271,7 +278,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
         logDiagnostic('recognition:onstart');
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
-        restartCountRef.current = 0;
+        resultSeenSinceStartRef.current = false;
         setListenerError(null);
         setWakeListeningState('waiting_for_wake_phrase');
       };
@@ -303,7 +310,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       };
 
       recognitionRef.current.onend = () => {
-        logDiagnostic('recognition:onend');
+        logDiagnostic('recognition:onend', resultSeenSinceStartRef.current ? 'résultat reçu' : 'aucun résultat');
         recognitionRunningRef.current = false;
         if (sessionEnabledRef.current && !fatalErrorRef.current) {
           scheduleRestart();

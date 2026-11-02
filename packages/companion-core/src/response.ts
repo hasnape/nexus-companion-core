@@ -303,7 +303,7 @@ export const renderLocalSmallTalk = (input: string): string | null => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[’']/g, ' ')
-    .replace(/[!?.,;:\-]+/g, ' ')
+    .replace(/[-!?.,;:]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^(bonjour|salut|coucou|hello|bonsoir) nexus (?=comment|ca va)/, '$1 ');

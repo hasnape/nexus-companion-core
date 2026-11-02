@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import { hasCompanionAppearancePreference, loadCompanionAppearance, saveCompanionAppearance, type CompanionAppearance } from './services/appearance/companionAppearance';
+import { CompanionSetupScreen } from './components/appearance/CompanionSetupScreen';
 import { CompanionFaceScreen } from './components/face/CompanionFaceScreen';
+import { CompanionAppearanceSettings } from './components/appearance/CompanionAppearanceSettings';
 import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
@@ -156,6 +159,10 @@ export default function App() {
     exitCreatorMode
   } = useCreatorMode();
 
+  const [appearance, setAppearance] = useState<CompanionAppearance>(loadCompanionAppearance);
+  const [appearanceStatus, setAppearanceStatus] = useState('');
+  const [setupOpen, setSetupOpen] = useState(() => !hasCompanionAppearancePreference());
+
   const memoryCount = memory.session.length + memory.longTerm.length + memory.behavioral.length;
   const visibleConversation = isOnline
     ? snapshot.conversation
@@ -238,9 +245,23 @@ export default function App() {
     ? (visualState === 'listening_for_command' ? 'Écoute active' : 'En attente du mot “Nexus”')
     : 'Micro inactif';
 
+  const chooseAppearance = (next: CompanionAppearance) => {
+    const saved = saveCompanionAppearance(next);
+    setAppearance(next);
+    setAppearanceStatus(saved
+      ? 'Apparence enregistrée sur cet appareil.'
+      : 'Apparence appliquée temporairement : le stockage local est indisponible.');
+    setSetupOpen(false);
+  };
+
+  if (setupOpen) {
+    return <CompanionSetupScreen onChoose={chooseAppearance} status={appearanceStatus} />;
+  }
+
   if (isFaceOnlyMode) {
     return (
       <FaceOnlyMode
+        appearance={appearance}
         state={snapshot.state}
         action={snapshot.action}
         companionVisualState={visualState}
@@ -265,6 +286,7 @@ export default function App() {
     <main className="layout">
       <section className="immersive-stage">
         <CompanionFaceScreen
+          appearance={appearance}
           state={snapshot.state}
           action={snapshot.action}
           companionVisualState={visualState}
@@ -294,6 +316,11 @@ export default function App() {
         </div>
       </section>
       <section className="sidebar">
+        <CompanionAppearanceSettings
+          appearance={appearance}
+          status={appearanceStatus}
+          onChoose={chooseAppearance}
+        />
         <button className="face-mode-toggle" type="button" aria-label="Activer le mode visage" onClick={() => setIsFaceOnlyMode(true)}>
           Mode visage
         </button>

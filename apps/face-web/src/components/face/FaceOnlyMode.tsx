@@ -1,9 +1,11 @@
+import type { CompanionAppearance } from '../../services/appearance/companionAppearance';
 import { useRef } from 'react';
 import type { CompanionAction, InternalState } from '@nexus/shared';
 import { CompanionFaceScreen } from './CompanionFaceScreen';
 import type { CompanionVisualState } from './companionVisualState';
 
 type FaceOnlyModeProps = {
+  appearance?: CompanionAppearance;
   state: InternalState;
   action: CompanionAction;
   companionVisualState: CompanionVisualState;
@@ -18,6 +20,7 @@ type FaceOnlyModeProps = {
 };
 
 export function FaceOnlyMode({
+  appearance = 'classic',
   state,
   action,
   companionVisualState,
@@ -44,6 +47,7 @@ export function FaceOnlyMode({
       </button>
       <section className="face-only-stage">
         <CompanionFaceScreen
+          appearance={appearance}
           state={state}
           action={action}
           companionVisualState={companionVisualState}

@@ -948,3 +948,218 @@ label {
   border-radius: 45% 45% 55% 55%;
 }
 /* The existing global reduced-motion rules above also cover this face. */
+
+
+/* Appearance choices: isolated from cognition and memory. */
+.companion-appearance-settings summary { cursor: pointer; font-weight: 600; }
+.companion-appearance-settings h2 { font-size: 1.1rem; margin: 12px 0 6px; }
+.appearance-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.appearance-choice { min-width: 0; padding: 12px 8px; border: 1px solid rgba(124, 170, 255, .5); border-radius: 12px; }
+.appearance-choice.selected { outline: 2px solid #83dafa; outline-offset: 2px; }
+.face.appearance-kawaii-feminine,
+.face.appearance-kawaii-masculine {
+  border-radius: 46% 46% 49% 49%;
+  box-shadow: 0 0 32px rgba(77, 181, 255, .35), inset 0 -14px 28px rgba(19, 65, 133, .45);
+}
+.face.appearance-kawaii-feminine {
+  background: radial-gradient(circle at 40% 28%, #3c397d, #18285c 62%, #121c4d);
+  box-shadow: 0 0 34px rgba(190, 107, 255, .38), inset 0 -14px 28px rgba(56, 25, 99, .45);
+}
+.face.appearance-kawaii-masculine {
+  background: radial-gradient(circle at 40% 28%, #21528e, #132e66 62%, #111c46);
+}
+.face.appearance-kawaii-feminine .eye,
+.face.appearance-kawaii-masculine .eye {
+  width: clamp(44px, 11vw, 58px);
+  height: clamp(52px, 13vw, 67px);
+  border-radius: 50% 50% 47% 47%;
+}
+.face.appearance-kawaii-feminine .eye::before,
+.face.appearance-kawaii-masculine .eye::before { width: 49%; height: 57%; left: 26%; top: 25%; }
+.face.appearance-kawaii-feminine .mouth,
+.face.appearance-kawaii-masculine .mouth { border-bottom-width: 6px; }
+@media (max-width: 640px) { .appearance-choices { grid-template-columns: 1fr; } }
+
+
+/* Nexus Mobile V1: articulated kawaii companions (female/male share the same rig).
+   All animations remain local and CSS-driven; no remote imagery or inference. */
+.face.face--kawaii {
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: none;
+  width: min(75vw, 380px);
+  overflow: visible;
+  gap: 0;
+}
+.face.face--kawaii .kawaii-avatar { width: 100%; height: 100%; }
+.kawaii-avatar {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 14px rgba(29, 186, 255, .30));
+}
+.kawaii-avatar--feminine { filter: drop-shadow(0 0 14px rgba(199, 119, 255, .35)); }
+.kawaii-avatar .kawaii-eye-pair {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kawaiiBlink 6.4s ease-in-out infinite;
+}
+@keyframes kawaiiBlink {
+  0%, 40%, 42%, 75%, 77%, 100% { transform: scaleY(1); }
+  41%, 76% { transform: scaleY(.07); }
+}
+.kawaii-avatar .kawaii-brows { transition: transform 240ms ease; }
+.kawaii-avatar .kawaii-hair-top { transform-origin: 160px 100px; animation: kawaiiHair 7s ease-in-out infinite; }
+@keyframes kawaiiHair { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.kawaii-avatar .kawaii-mouth-open { opacity: 1; transform-origin: 160px 252px; }
+.kawaii-avatar .kawaii-mouth-smile { opacity: 0; }
+.kawaii-avatar.visual-thinking .kawaii-mouth-open,
+.kawaii-avatar--concerned .kawaii-mouth-open { opacity: 0; }
+.kawaii-avatar.visual-thinking .kawaii-mouth-smile,
+.kawaii-avatar--concerned .kawaii-mouth-smile { opacity: 1; }
+.kawaii-avatar.visual-thinking .kawaii-brows { transform: translateY(-4px); }
+.kawaii-avatar--concerned .kawaii-brows { transform: translateY(4px); }
+.kawaii-avatar--speaking .kawaii-mouth-open {
+  animation: kawaiiTalk 310ms ease-in-out infinite alternate;
+}
+@keyframes kawaiiTalk { from { transform: scaleY(.7); } to { transform: scaleY(1.1); } }
+.kawaii-avatar.visual-waiting_for_wake_phrase .kawaii-head,
+.kawaii-avatar.visual-listening_for_command .kawaii-head { stroke: #71ffd9; }
+.kawaii-avatar.visual-offline { opacity: .78; filter: grayscale(.25); }
+.kawaii-avatar--preview { filter: none; }
+.kawaii-avatar--preview .kawaii-eye-pair,
+.kawaii-avatar--preview .kawaii-hair-top,
+.kawaii-avatar--preview .kawaii-mouth-open { animation: none; }
+.companion-appearance-settings summary {
+  cursor: pointer;
+  padding: 3px 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.companion-appearance-settings h2 { margin: 16px 0 6px; font-size: 1.15rem; }
+.appearance-description { font-size: .88rem; line-height: 1.5; color: #d3dcf8; }
+.appearance-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+.appearance-choices .appearance-choice {
+  padding: 12px 8px 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(92, 181, 255, .55);
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 25%, rgba(55, 72, 148, .42), rgba(8, 17, 45, .9));
+  color: #f1f5ff;
+  cursor: pointer;
+  min-width: 0;
+  text-align: center;
+}
+.appearance-choices .appearance-choice:first-child { border-color: rgba(199, 121, 255, .64); }
+.appearance-choices .appearance-choice.selected {
+  outline: 2px solid #72dfff;
+  outline-offset: 2px;
+  background: radial-gradient(circle at 50% 20%, rgba(61, 90, 181, .65), rgba(11, 26, 62, .95));
+}
+.appearance-avatar { display: block; width: min(100%, 168px); aspect-ratio: 1; }
+.appearance-choice strong { font-size: .95rem; }
+.appearance-choice-subtitle { font-size: .72rem; color: #d1d9f7; }
+.appearance-choice-indicator { margin-top: 5px; color: #baf7ff; font-size: .8rem; font-weight: 600; }
+.appearance-classic-choice {
+  width: 100%;
+  border: 1px solid rgba(141, 164, 244, .42);
+  background: rgba(37, 52, 98, .5);
+  padding: 10px;
+  border-radius: 12px;
+}
+.appearance-save-status { min-height: 1.4em; font-size: .84rem; color: #aaf0df; }
+@media (max-width: 380px) {
+  .appearance-choices { gap: 8px; }
+  .appearance-choices .appearance-choice { padding: 8px 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kawaii-avatar .kawaii-eye-pair,
+  .kawaii-avatar .kawaii-hair-top,
+  .kawaii-avatar .kawaii-mouth-open { animation: none !important; }
+  .kawaii-avatar .kawaii-brows { transition: none; }
+}
+
+
+/* Accessible first-run mobile onboarding; no microphone/camera permission is requested. */
+.companion-setup-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: clamp(12px, 4vw, 40px);
+  background:
+    radial-gradient(circle at 12% 25%, rgba(135, 63, 255, .17), transparent 36%),
+    radial-gradient(circle at 88% 25%, rgba(0, 181, 255, .19), transparent 38%),
+    #060d25;
+}
+.companion-setup-panel {
+  width: min(100%, 920px);
+  padding: clamp(18px, 4vw, 36px);
+  border: 1px solid rgba(78, 148, 255, .48);
+  border-radius: 26px;
+  background: linear-gradient(155deg, rgba(13, 27, 68, .97), rgba(6, 16, 45, .96));
+  box-shadow: 0 18px 70px rgba(0, 0, 0, .32);
+  text-align: center;
+}
+.companion-setup-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(1.05rem, 3.6vw, 1.5rem);
+  font-weight: 700;
+  color: #e9f4ff;
+}
+.companion-setup-logo {
+  font-size: 2.1rem;
+  line-height: 1;
+  color: #3bddff;
+  text-shadow: 0 0 20px rgba(36, 214, 255, .55);
+}
+.companion-setup-step {
+  margin-left: auto;
+  font-size: .75rem;
+  font-weight: 500;
+  color: #9ebde9;
+}
+.companion-setup-panel h1 {
+  margin: 24px 0 10px;
+  font-size: clamp(1.55rem, 5vw, 2.25rem);
+  line-height: 1.2;
+}
+.companion-setup-panel p { line-height: 1.5; }
+.companion-setup-panel .appearance-choices {
+  margin: 24px auto 14px;
+  max-width: 780px;
+  gap: clamp(10px, 3vw, 22px);
+}
+.companion-setup-panel .appearance-choice { padding: 20px 12px; }
+.companion-setup-panel .appearance-choice:first-child {
+  background: radial-gradient(circle at 50% 28%, rgba(111, 51, 165, .36), rgba(7, 14, 42, .92));
+}
+.companion-setup-panel .appearance-avatar { width: min(100%, 230px); }
+.companion-setup-panel .appearance-choice strong { font-size: 1.1rem; }
+.companion-setup-panel .appearance-classic-choice {
+  max-width: 360px;
+  margin: 4px auto;
+}
+@media (max-width: 480px) {
+  .companion-setup-panel { padding: 16px 12px; }
+  .companion-setup-header { justify-content: flex-start; gap: 6px; }
+  .companion-setup-header span:nth-child(2) { font-size: .99rem; }
+  .companion-setup-step { font-size: .69rem; }
+  .companion-setup-panel .appearance-choice { padding: 12px 5px; }
+  .companion-setup-panel .appearance-avatar { width: min(100%, 148px); }
+  .companion-setup-panel .appearance-choice strong { font-size: .89rem; }
+}

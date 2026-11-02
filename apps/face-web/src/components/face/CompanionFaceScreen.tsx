@@ -1,8 +1,11 @@
+import type { CompanionAppearance } from '../../services/appearance/companionAppearance';
+import { KawaiiCompanionFace } from './KawaiiCompanionFace';
 import type { CompanionAction, InternalState } from '@nexus/shared';
 import type { CSSProperties } from 'react';
 import type { CompanionVisualState } from './companionVisualState';
 
 type CompanionFaceScreenProps = {
+  appearance?: CompanionAppearance;
   state: InternalState;
   action: CompanionAction;
   companionVisualState: CompanionVisualState;
@@ -16,6 +19,7 @@ type CompanionFaceScreenProps = {
 };
 
 export function CompanionFaceScreen({
+  appearance = 'classic',
   state,
   action,
   companionVisualState,
@@ -45,16 +49,26 @@ export function CompanionFaceScreen({
       <div className="ambient-grid" />
       <div className={`halo mood-${state.mood} ${stateClasses}`} />
       <div
-        className={`face mode-${state.mode} ${stateClasses} expression-${expression}`}
+        className={`face appearance-${appearance} ${appearance === 'classic' ? '' : 'face--kawaii'} mode-${state.mode} ${stateClasses} expression-${expression}`}
         onClick={onFaceInteraction}
         data-testid="nexus-face-core"
       >
-        <div className="brow" />
-        <div className="eyes gaze-float" style={{ '--eye-offset-x': eyeOffset } as CSSProperties}>
-          <span className="eye eye-left" />
-          <span className="eye eye-right" />
-        </div>
-        <div className={`mouth action-${action.name} ${state.mode === 'speaking' ? 'is-speaking' : ''}`} />
+        {appearance === 'classic' ? (
+          <>
+            <div className="brow" />
+            <div className="eyes gaze-float" style={{ '--eye-offset-x': eyeOffset } as CSSProperties}>
+              <span className="eye eye-left" />
+              <span className="eye eye-right" />
+            </div>
+            <div className={`mouth action-${action.name} ${state.mode === 'speaking' ? 'is-speaking' : ''}`} />
+          </>
+        ) : (
+          <KawaiiCompanionFace
+            variant={appearance === 'kawaii-feminine' ? 'feminine' : 'masculine'}
+            expression={expression}
+            visualState={companionVisualState}
+          />
+        )}
       </div>
       <div className="presence-indicators">
         <span className={`state-pill visual-${companionVisualState}`} aria-live="polite">{companionVisualStateLabel}</span>

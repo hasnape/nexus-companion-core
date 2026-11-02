@@ -36,6 +36,7 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
   const sessionEnabledRef = useRef(false);
   const fatalErrorRef = useRef(false);
   const recognitionRunningRef = useRef(false);
+  const recognitionHasResultRef = useRef(false);
   const restartTimerRef = useRef<number | null>(null);
   const restartCountRef = useRef(0);
 
@@ -229,18 +230,24 @@ export const useVoiceInput = ({ onCommand, onWake, requestCamera = false }: UseV
       recognitionRef.current.interimResults = true;
 
       recognitionRef.current.onresult = (event) => {
-        const result = event.results[event.resultIndex];
-        const nextTranscript = result?.[0]?.transcript?.trim() ?? '';
-        setTranscript(nextTranscript);
-        const isFinal = Boolean((result as { isFinal?: boolean } | undefined)?.isFinal);
-        if (isFinal) {
-          void handleFinalTranscript(nextTranscript);
+        // Some Android engines batch several results in a single callback.
+        // Process every new final result, not just the first resultIndex.
+        for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const nextTranscript = result?.[0]?.transcript?.trim() ?? '';
+          if (!nextTranscript) continue;
+          recognitionHasResultRef.current = true;
+          setTranscript(nextTranscript);
+          if (result.isFinal) {
+            void handleFinalTranscript(nextTranscript);
+          }
         }
       };
 
       recognitionRef.current.onstart = () => {
         if (!sessionEnabledRef.current) return;
         recognitionRunningRef.current = true;
+        recognitionHasResultRef.current = false;
         restartCountRef.current = 0;
         setListenerError(null);
         setWakeListeningState('waiting_for_wake_phrase');

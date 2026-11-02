@@ -8,7 +8,7 @@ export type BrowserVoiceStyle = 'neutral' | 'feminine' | 'masculine';
 export const preferredFrenchVoice = (voices: SpeechSynthesisVoice[], style: BrowserVoiceStyle): SpeechSynthesisVoice | null => {
   const french = voices.filter((voice) => voice.lang.toLowerCase().startsWith('fr'));
   const feminine = /(?:female|feminin|femme|amelie|hortense|celine|denise|julie|audrey|virginie|marie)/i;
-  const masculine = /(?:male|masculin|homme|thomas|paul|henri|nicolas|remy|alain)/i;
+  const masculine = /(?:\\bmale\\b|masculin|homme|thomas|paul|henri|nicolas|remy|alain)/i;
   const hint = style === 'feminine' ? feminine : style === 'masculine' ? masculine : null;
   return (hint ? french.find((voice) => hint.test(voice.name)) : null)
     ?? french.find((voice) => voice.default) ?? french[0]

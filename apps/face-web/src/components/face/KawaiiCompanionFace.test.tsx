@@ -10,6 +10,9 @@ describe('layered kawaii companion faces', () => {
     expect(html.match(/<ellipse cx="(112|209)" cy="166"/g)).toHaveLength(2);
     expect(html).toContain('kawaii-mouth-open');
     expect(html).toContain('kawaii-brows');
+    expect(html).not.toContain('kawaii-hair-back');
+    expect(html).not.toContain('kawaii-hair-top');
+    expect(html).not.toContain('nexus-avatar-' + variant + '-live-hair');
     expect(html).toContain(`kawaii-avatar--${variant}`);
     expect(html).toContain('aria-hidden="true"');
   });

@@ -1011,8 +1011,6 @@ label {
   41%, 76% { transform: scaleY(.07); }
 }
 .kawaii-avatar .kawaii-brows { transition: transform 240ms ease; }
-.kawaii-avatar .kawaii-hair-top { transform-origin: 160px 100px; animation: kawaiiHair 7s ease-in-out infinite; }
-@keyframes kawaiiHair { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 .kawaii-avatar .kawaii-mouth-open { opacity: 1; transform-origin: 160px 252px; }
 .kawaii-avatar .kawaii-mouth-smile { opacity: 0; }
 .kawaii-avatar.visual-thinking .kawaii-mouth-open,
@@ -1030,7 +1028,6 @@ label {
 .kawaii-avatar.visual-offline { opacity: .78; filter: grayscale(.25); }
 .kawaii-avatar--preview { filter: none; }
 .kawaii-avatar--preview .kawaii-eye-pair,
-.kawaii-avatar--preview .kawaii-hair-top,
 .kawaii-avatar--preview .kawaii-mouth-open { animation: none; }
 .companion-appearance-settings summary {
   cursor: pointer;
@@ -1084,7 +1081,6 @@ label {
 }
 @media (prefers-reduced-motion: reduce) {
   .kawaii-avatar .kawaii-eye-pair,
-  .kawaii-avatar .kawaii-hair-top,
   .kawaii-avatar .kawaii-mouth-open { animation: none !important; }
   .kawaii-avatar .kawaii-brows { transition: none; }
 }

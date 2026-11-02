@@ -1,8 +1,10 @@
+import type { CompanionAppearance } from '../../services/appearance/companionAppearance';
 import type { CompanionAction, InternalState } from '@nexus/shared';
 import type { CSSProperties } from 'react';
 import type { CompanionVisualState } from './companionVisualState';
 
 type CompanionFaceScreenProps = {
+  appearance?: CompanionAppearance;
   state: InternalState;
   action: CompanionAction;
   companionVisualState: CompanionVisualState;
@@ -16,6 +18,7 @@ type CompanionFaceScreenProps = {
 };
 
 export function CompanionFaceScreen({
+  appearance = 'classic',
   state,
   action,
   companionVisualState,
@@ -45,7 +48,7 @@ export function CompanionFaceScreen({
       <div className="ambient-grid" />
       <div className={`halo mood-${state.mood} ${stateClasses}`} />
       <div
-        className={`face mode-${state.mode} ${stateClasses} expression-${expression}`}
+        className={`face appearance-${appearance} mode-${state.mode} ${stateClasses} expression-${expression}`}
         onClick={onFaceInteraction}
         data-testid="nexus-face-core"
       >

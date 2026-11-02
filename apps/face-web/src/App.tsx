@@ -4,6 +4,7 @@ import { FaceOnlyMode } from './components/face/FaceOnlyMode';
 import { CompanionChatPanel } from './components/chat/CompanionChatPanel';
 import { DeveloperPanels } from './components/dev/DeveloperPanels';
 import { CompanionMemoryPanel } from './components/memory-panel/CompanionMemoryPanel';
+import { VoiceDiagnosticPanel } from './components/voice/VoiceDiagnosticPanel';
 import { CompanionBackupInspectionPanel } from './components/backup/CompanionBackupInspectionPanel';
 import { companionVisualStateLabel, deriveCompanionVisualState } from './components/face/companionVisualState';
 import { useCompanion } from './hooks/useCompanion';
@@ -178,6 +179,10 @@ export default function App() {
 
   const {
     voiceInputAvailable,
+    diagnosticsEnabled,
+    diagnosticEvents,
+    setVoiceDiagnosticsEnabled,
+    clearVoiceDiagnostics,
     isSessionActive,
     startListeningSession,
     stopListeningSession,
@@ -328,6 +333,7 @@ export default function App() {
             {creatorCodeError ? <p className="voice-error">{creatorCodeError}</p> : null}
           </section>
         ) : null}
+        <VoiceDiagnosticPanel enabled={diagnosticsEnabled} events={diagnosticEvents} onEnabledChange={setVoiceDiagnosticsEnabled} onClear={clearVoiceDiagnostics} />
         <CompanionChatPanel
           visibleConversation={visibleConversation}
           message={message}

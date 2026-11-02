@@ -12,6 +12,7 @@ type MockRecognition = {
   onresult: ((event: MockResultEvent) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
+  onstart: (() => void) | null;
   start: ReturnType<typeof vi.fn>;
   stop: ReturnType<typeof vi.fn>;
 };
@@ -99,7 +100,8 @@ const createHookHarness = async () => {
     onresult: ((event: MockResultEvent) => void) | null = null;
     onerror: ((event: { error: string }) => void) | null = null;
     onend: (() => void) | null = null;
-    start = vi.fn();
+    onstart: (() => void) | null = null;
+    start = vi.fn(() => { this.onstart?.(); });
     stop = vi.fn();
 
     constructor() {
@@ -224,27 +226,19 @@ describe('useVoiceInput reliability', () => {
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
   });
 
-  it('returns to waiting_for_wake_phrase after recoverable error restart and still processes transcripts', async () => {
+  it('restarts after a recoverable recognition error and processes transcripts', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
-
     let hook = render();
     await hook.startListeningSession();
-    hook = render();
     const recognition = recognitionInstances[0];
-
-    recognition.onerror?.({ error: 'network' });
-    hook = render();
-    expect(hook.wakeState).toBe('error');
-
+    recognition.onerror?.({ error: 'no-speech' });
     recognition.onend?.();
     vi.advanceTimersByTime(600);
     hook = render();
     expect(hook.wakeState).toBe('waiting_for_wake_phrase');
-
     emitFinal(recognition, 'Hey Nexus');
     hook = render();
     expect(callbacks.onWake).toHaveBeenCalledTimes(1);
-
     emitFinal(recognition, 'lance le mode présence');
     await Promise.resolve();
     hook = render();
@@ -381,5 +375,18 @@ describe('useVoiceInput reliability', () => {
 
     expect(() => hook.stopListeningSession()).not.toThrow();
     expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mobile speech recognition diagnostics', () => {
+  it('stops the session on recognition network failure and explains browser limitation', async () => {
+    const { render, recognitionInstances, trackStopCalls } = await createHookHarness();
+    let hook = render();
+    await hook.startListeningSession();
+    const recognition = recognitionInstances[0];
+    recognition.onerror?.({ error: 'network' });
+    hook = render();
+    expect(hook.isSessionActive).toBe(false);
+    expect(trackStopCalls[0]).toHaveBeenCalled();
   });
 });

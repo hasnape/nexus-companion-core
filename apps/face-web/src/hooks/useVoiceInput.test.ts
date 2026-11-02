@@ -180,6 +180,20 @@ describe('useVoiceInput reliability', () => {
     expect(mockWindow.speechSynthesis.onvoiceschanged).toBe(existingListener);
   });
 
+  it('releases the permission-check microphone before starting browser recognition', async () => {
+    const { render, recognitionInstances, getUserMedia, trackStopCalls } = await createHookHarness();
+    const hook = render();
+    await hook.startListeningSession();
+
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+    expect(recognitionInstances[0].start).toHaveBeenCalledTimes(1);
+    expect(render().mediaState.micActive).toBe(false);
+
+    hook.stopListeningSession();
+    expect(trackStopCalls[0]).toHaveBeenCalledTimes(1);
+  });
+
   it('uses latest wake state for final transcripts (no stale inactive closure)', async () => {
     const { render, callbacks, recognitionInstances, emitFinal } = await createHookHarness();
 

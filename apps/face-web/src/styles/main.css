@@ -862,3 +862,85 @@ label {
   opacity: 0.8;
   font-style: italic;
 }
+
+
+/* Mobile-first humanized face: expressive gaze, individual eyebrows and a gentle mouth.
+   Kept CSS-only so existing face states, gestures, offline mode and voice remain intact. */
+.face {
+  border-radius: 46% 46% 48% 48%;
+  background: radial-gradient(ellipse at 48% 34%, #263b78 0%, #1a2855 57%, #111a3b 100%);
+}
+.face .brow {
+  width: 0;
+  height: 0;
+  margin: 0;
+  border: 0;
+}
+.face .eyes {
+  position: relative;
+  gap: clamp(26px, 7vw, 42px);
+}
+.face .eye {
+  position: relative;
+  width: clamp(38px, 10vw, 49px);
+  height: clamp(45px, 12vw, 57px);
+  border-radius: 48% 48% 45% 45%;
+  background: radial-gradient(ellipse at 42% 30%, #f4fbff 0%, #c7eaff 64%, #91b6e3 100%);
+  box-shadow: 0 0 12px rgba(137, 205, 255, 0.26);
+}
+.face .eye::before {
+  content: '';
+  position: absolute;
+  width: 44%;
+  height: 52%;
+  left: 30%;
+  top: 28%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 37% 33%, #e4faff 0 10%, #387bb6 13% 42%, #172b52 47% 100%);
+}
+.face .eye::after {
+  content: '';
+  position: absolute;
+  width: 22%;
+  height: 12%;
+  top: 32%;
+  left: 37%;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.88);
+}
+.face .eyes::before,
+.face .eyes::after {
+  content: '';
+  position: absolute;
+  top: -24px;
+  width: 44px;
+  height: 14px;
+  border-top: 4px solid #91d4f5;
+  border-radius: 65% 65% 0 0;
+  opacity: 0.82;
+}
+.face .eyes::before { left: 0; transform: rotate(-6deg); }
+.face .eyes::after { right: 0; transform: rotate(6deg); }
+.face .mouth {
+  width: min(var(--state-mouth-width), 88px);
+  height: 24px;
+  margin-bottom: 16px;
+  border-radius: 0 0 70% 70%;
+  border-bottom: 5px solid #89c9f6;
+  background: transparent;
+  box-shadow: none;
+}
+.face.expression-happy .mouth {
+  height: 32px;
+  border-bottom-width: 6px;
+}
+.face.visual-speaking .mouth,
+.face.mode-speaking .mouth {
+  background: rgba(89, 160, 236, 0.2);
+  border-radius: 45% 45% 55% 55%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .face, .face .eye, .face .gaze-float, .face .mouth {
+    animation: none !important;
+  }
+}

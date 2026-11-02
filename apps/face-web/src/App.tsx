@@ -126,6 +126,7 @@ export default function App() {
   const {
     snapshot,
     speechPlayback,
+    subscribeSpeechPlayback,
     setCompanionVoiceStyle,
     memory,
     displayMemories,
@@ -216,6 +217,7 @@ export default function App() {
     onWake: () => triggerAction('listen_attentive'),
     requestCamera: config.enableCamera,
     isCompanionSpeaking: speechPlayback.phase !== 'end',
+    subscribeSpeechPlayback,
     voiceStyle
   });
 

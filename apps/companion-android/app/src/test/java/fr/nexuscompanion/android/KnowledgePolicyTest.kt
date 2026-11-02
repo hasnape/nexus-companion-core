@@ -1,0 +1,34 @@
+package fr.nexuscompanion.android
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class KnowledgePolicyTest {
+    @Test fun extractsFrenchQueryTermsWithoutCommonPunctuation() {
+        assertEquals(listOf("nexus", "memoire"), KnowledgePolicy.queryTerms("Nexus, mémoire?").map {
+            if (it == "mémoire") "memoire" else it
+        })
+    }
+
+    @Test fun neverMatchesEmptyOrTinyQueries() {
+        assertEquals(0, KnowledgePolicy.score(KnowledgePolicy.queryTerms("a ?"), "Titre", "texte"))
+    }
+
+    @Test fun ranksTitlesAboveBodyMatches() {
+        val terms = KnowledgePolicy.queryTerms("batterie")
+        assertTrue(KnowledgePolicy.score(terms, "Batterie", "conseils") >
+            KnowledgePolicy.score(terms, "Énergie", "batterie faible"))
+    }
+
+    @Test fun filtersExpiredKnowledge() {
+        assertTrue(KnowledgePolicy.isExpired(100L, 100L))
+        assertFalse(KnowledgePolicy.isExpired(null, 100L))
+        assertFalse(KnowledgePolicy.isExpired(101L, 100L))
+    }
+
+    @Test fun rejectsEmptyAndOverlongNotes() {
+        assertFalse(KnowledgePolicy.isValidUserNote("", "texte"))
+        assertFalse(KnowledgePolicy.isValidUserNote("titre", "x".repeat(2001)))
+        assertTrue(KnowledgePolicy.isValidUserNote("titre", "texte"))
+    }
+}

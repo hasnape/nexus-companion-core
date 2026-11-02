@@ -979,3 +979,112 @@ label {
 .face.appearance-kawaii-feminine .mouth,
 .face.appearance-kawaii-masculine .mouth { border-bottom-width: 6px; }
 @media (max-width: 640px) { .appearance-choices { grid-template-columns: 1fr; } }
+
+
+/* Nexus Mobile V1: articulated kawaii companions (female/male share the same rig).
+   All animations remain local and CSS-driven; no remote imagery or inference. */
+.face.face--kawaii {
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: none;
+  width: min(75vw, 380px);
+  overflow: visible;
+  gap: 0;
+}
+.face.face--kawaii .kawaii-avatar { width: 100%; height: 100%; }
+.kawaii-avatar {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 14px rgba(29, 186, 255, .30));
+}
+.kawaii-avatar--feminine { filter: drop-shadow(0 0 14px rgba(199, 119, 255, .35)); }
+.kawaii-avatar .kawaii-eye-pair {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: kawaiiBlink 6.4s ease-in-out infinite;
+}
+@keyframes kawaiiBlink {
+  0%, 40%, 42%, 75%, 77%, 100% { transform: scaleY(1); }
+  41%, 76% { transform: scaleY(.07); }
+}
+.kawaii-avatar .kawaii-brows { transition: transform 240ms ease; }
+.kawaii-avatar .kawaii-hair-top { transform-origin: 160px 100px; animation: kawaiiHair 7s ease-in-out infinite; }
+@keyframes kawaiiHair { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.kawaii-avatar .kawaii-mouth-open { opacity: 1; transform-origin: 160px 252px; }
+.kawaii-avatar .kawaii-mouth-smile { opacity: 0; }
+.kawaii-avatar.visual-thinking .kawaii-mouth-open,
+.kawaii-avatar--concerned .kawaii-mouth-open { opacity: 0; }
+.kawaii-avatar.visual-thinking .kawaii-mouth-smile,
+.kawaii-avatar--concerned .kawaii-mouth-smile { opacity: 1; }
+.kawaii-avatar.visual-thinking .kawaii-brows { transform: translateY(-4px); }
+.kawaii-avatar--concerned .kawaii-brows { transform: translateY(4px); }
+.kawaii-avatar--speaking .kawaii-mouth-open {
+  animation: kawaiiTalk 310ms ease-in-out infinite alternate;
+}
+@keyframes kawaiiTalk { from { transform: scaleY(.7); } to { transform: scaleY(1.1); } }
+.kawaii-avatar.visual-waiting_for_wake_phrase .kawaii-head,
+.kawaii-avatar.visual-listening_for_command .kawaii-head { stroke: #71ffd9; }
+.kawaii-avatar.visual-offline { opacity: .78; filter: grayscale(.25); }
+.kawaii-avatar--preview { filter: none; }
+.kawaii-avatar--preview .kawaii-eye-pair,
+.kawaii-avatar--preview .kawaii-hair-top,
+.kawaii-avatar--preview .kawaii-mouth-open { animation: none; }
+.companion-appearance-settings summary {
+  cursor: pointer;
+  padding: 3px 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+.companion-appearance-settings h2 { margin: 16px 0 6px; font-size: 1.15rem; }
+.appearance-description { font-size: .88rem; line-height: 1.5; color: #d3dcf8; }
+.appearance-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+.appearance-choices .appearance-choice {
+  padding: 12px 8px 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(92, 181, 255, .55);
+  border-radius: 18px;
+  background: radial-gradient(circle at 50% 25%, rgba(55, 72, 148, .42), rgba(8, 17, 45, .9));
+  color: #f1f5ff;
+  cursor: pointer;
+  min-width: 0;
+  text-align: center;
+}
+.appearance-choices .appearance-choice:first-child { border-color: rgba(199, 121, 255, .64); }
+.appearance-choices .appearance-choice.selected {
+  outline: 2px solid #72dfff;
+  outline-offset: 2px;
+  background: radial-gradient(circle at 50% 20%, rgba(61, 90, 181, .65), rgba(11, 26, 62, .95));
+}
+.appearance-avatar { display: block; width: min(100%, 168px); aspect-ratio: 1; }
+.appearance-choice strong { font-size: .95rem; }
+.appearance-choice-subtitle { font-size: .72rem; color: #d1d9f7; }
+.appearance-choice-indicator { margin-top: 5px; color: #baf7ff; font-size: .8rem; font-weight: 600; }
+.appearance-classic-choice {
+  width: 100%;
+  border: 1px solid rgba(141, 164, 244, .42);
+  background: rgba(37, 52, 98, .5);
+  padding: 10px;
+  border-radius: 12px;
+}
+.appearance-save-status { min-height: 1.4em; font-size: .84rem; color: #aaf0df; }
+@media (max-width: 380px) {
+  .appearance-choices { gap: 8px; }
+  .appearance-choices .appearance-choice { padding: 8px 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kawaii-avatar .kawaii-eye-pair,
+  .kawaii-avatar .kawaii-hair-top,
+  .kawaii-avatar .kawaii-mouth-open { animation: none !important; }
+  .kawaii-avatar .kawaii-brows { transition: none; }
+}

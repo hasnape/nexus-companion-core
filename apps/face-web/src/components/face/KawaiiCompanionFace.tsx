@@ -7,6 +7,7 @@ type KawaiiCompanionFaceProps = {
   expression?: string;
   visualState?: CompanionVisualState;
   preview?: boolean;
+  speechShape?: 'neutral' | 'round' | 'wide';
 };
 
 /**
@@ -18,7 +19,8 @@ export function KawaiiCompanionFace({
   variant,
   expression = 'idle',
   visualState = 'idle',
-  preview = false
+  preview = false,
+  speechShape = 'neutral'
 }: KawaiiCompanionFaceProps) {
   const feminine = variant === 'feminine';
   const prefix = `nexus-avatar-${variant}-${preview ? 'preview' : 'live'}`;
@@ -28,7 +30,7 @@ export function KawaiiCompanionFace({
   const isConcerned = expression === 'concerned' || visualState === 'error';
   return (
     <svg
-      className={`kawaii-avatar kawaii-avatar--${variant} ${preview ? 'kawaii-avatar--preview' : ''} ${isSpeaking ? 'kawaii-avatar--speaking' : ''} ${isHappy ? 'kawaii-avatar--happy' : ''} ${isConcerned ? 'kawaii-avatar--concerned' : ''} visual-${visualState}`}
+      className={`kawaii-avatar kawaii-avatar--${variant} ${preview ? 'kawaii-avatar--preview' : ''} ${isSpeaking ? 'kawaii-avatar--speaking' : ''} kawaii-avatar--mouth-${speechShape} ${isHappy ? 'kawaii-avatar--happy' : ''} ${isConcerned ? 'kawaii-avatar--concerned' : ''} visual-${visualState}`}
       viewBox="0 0 320 320"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"

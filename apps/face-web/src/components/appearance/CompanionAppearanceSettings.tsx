@@ -1,4 +1,4 @@
-import type { CompanionAppearance } from '../../services/appearance/companionAppearance';
+import { hasCompanionAppearancePreference, type CompanionAppearance } from '../../services/appearance/companionAppearance';
 import { KawaiiCompanionFace } from '../face/KawaiiCompanionFace';
 
 type CompanionAppearanceSettingsProps = {
@@ -18,7 +18,7 @@ export function CompanionAppearanceSettings({
   status
 }: CompanionAppearanceSettingsProps) {
   return (
-    <details className="panel companion-appearance-settings">
+    <details className="panel companion-appearance-settings" open={!hasCompanionAppearancePreference()}>
       <summary>Personnaliser mon compagnon</summary>
       <h2>Choisissez votre Nexus Companion</h2>
       <p className="appearance-description">Sélectionnez l'apparence de votre compagnon. Sa voix, sa personnalité et ses souvenirs restent indépendants de votre choix.</p>

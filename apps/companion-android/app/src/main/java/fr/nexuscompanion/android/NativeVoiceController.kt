@@ -21,7 +21,8 @@ internal class NativeVoiceController(
     private val context: Context,
     private val onStatus: (String) -> Unit,
     private val onCommand: (String) -> Unit,
-    private val onSpeechState: (Boolean) -> Unit
+    private val onSpeechState: (Boolean) -> Unit,
+    private val onSessionState: (Boolean) -> Unit = {}
 ) : RecognitionListener {
     private val handler = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
@@ -32,6 +33,12 @@ internal class NativeVoiceController(
     private var listening = false
     private var awaitingCommand = false
     private var restartCount = 0
+    private var sessionGeneration = 0
+    private var utteranceId: String? = null
+    private val commandTimeout = Runnable {
+        awaitingCommand = false
+        if (enabled) onStatus("Délai de commande écoulé. Dis « Nexus ».")
+    }
     private val restartTask = Runnable { beginRecognition() }
 
     fun available(): Boolean = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
@@ -43,11 +50,15 @@ internal class NativeVoiceController(
             return
         }
         enabled = true
+        sessionGeneration++
+        onSessionState(true)
         restartCount = 0
         recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context).apply {
             setRecognitionListener(this@NativeVoiceController)
         }
+        val generation = sessionGeneration
         tts = TextToSpeech(context) { result ->
+            if (!enabled || generation != sessionGeneration) return@TextToSpeech
             ttsReady = result == TextToSpeech.SUCCESS
             if (ttsReady) {
                 val engine = tts ?: return@TextToSpeech
@@ -65,11 +76,13 @@ internal class NativeVoiceController(
                 }
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
-                        handler.post { onSpeechState(true) }
+                        handler.post {
+                            if (enabled && speaking && this@NativeVoiceController.utteranceId == utteranceId) onSpeechState(true)
+                        }
                     }
-                    override fun onDone(utteranceId: String?) { handler.post { speechFinished() } }
+                    override fun onDone(utteranceId: String?) { handler.post { speechFinished(utteranceId) } }
                     @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) { handler.post { speechFinished() } }
+                    override fun onError(utteranceId: String?) { handler.post { speechFinished(utteranceId) } }
                 })
             }
         }
@@ -111,17 +124,21 @@ internal class NativeVoiceController(
         val transcript = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?.firstOrNull()?.trim().orEmpty()
         if (transcript.isNotBlank() && enabled && !speaking) {
-            restartCount = 0
             val text = transcript.replace(Regex("[.,!?]+$"), "").trim()
             val wake = Regex("^(nexus|nexusse|nexuce)(\\s+|$)", RegexOption.IGNORE_CASE)
             if (awaitingCommand) {
                 awaitingCommand = false
+                handler.removeCallbacks(commandTimeout)
+                restartCount = 0
                 onCommand(text)
             } else if (wake.containsMatchIn(text)) {
                 val rest = text.replaceFirst(wake, "").trim()
+                restartCount = 0
                 if (rest.isNotBlank()) onCommand(rest)
                 else {
                     awaitingCommand = true
+                    handler.removeCallbacks(commandTimeout)
+                    handler.postDelayed(commandTimeout, 12_000L)
                     speak("Je t'écoute.")
                 }
             }
@@ -133,26 +150,27 @@ internal class NativeVoiceController(
         if (!enabled) return
         if (!ttsReady || tts == null) {
             onStatus("Voix locale absente : installer une voix française hors ligne.")
-            scheduleRestart()
             return
         }
         speaking = true
         handler.removeCallbacks(restartTask)
         if (listening) recognizer?.cancel()
         listening = false
-        onSpeechState(true)
-        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nexus-reply")
-        if (result != TextToSpeech.SUCCESS) speechFinished()
+        val id = "nexus-${System.nanoTime()}"
+        utteranceId = id
+        val result = tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
+        if (result != TextToSpeech.SUCCESS) speechFinished(id)
     }
 
-    private fun speechFinished() {
-        if (!speaking) return
+    private fun speechFinished(callbackId: String?) {
+        if (!speaking || callbackId != utteranceId) return
         speaking = false
+        utteranceId = null
         onSpeechState(false)
         if (enabled) scheduleRestart()
     }
 
-    override fun onReadyForSpeech(params: Bundle?) { onStatus("Micro actif : reconnaissance locale") }
+    override fun onReadyForSpeech(params: Bundle?) { if (enabled && !speaking) onStatus("Micro actif : reconnaissance locale") }
     override fun onBeginningOfSpeech() = Unit
     override fun onRmsChanged(rmsdB: Float) = Unit
     override fun onBufferReceived(buffer: ByteArray?) = Unit
@@ -168,8 +186,12 @@ internal class NativeVoiceController(
 
     fun stop() {
         enabled = false
+        sessionGeneration++
+        onSessionState(false)
+        handler.removeCallbacks(commandTimeout)
         awaitingCommand = false
         speaking = false
+        utteranceId = null
         listening = false
         handler.removeCallbacks(restartTask)
         recognizer?.cancel()

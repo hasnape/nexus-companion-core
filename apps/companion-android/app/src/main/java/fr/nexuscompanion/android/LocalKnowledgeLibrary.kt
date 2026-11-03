@@ -18,7 +18,6 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
     private val cipher = LocalKnowledgeCipher(safeId)
     private val maxEntries = 500
-    private val maxText = 2000
 
     data class Entry(
         val id: String,
@@ -36,7 +35,8 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
             catch (_: java.io.FileNotFoundException) { return emptyList() }
         // Legacy alpha files were plaintext. Convert only recognized schema-v1 JSON,
         // atomically, before returning records. Do not overwrite on decrypt failure.
-        val plaintext = if (cipher.isEncrypted(bytes)) {
+        val legacyPlaintext = !cipher.isEncrypted(bytes)
+        val plaintext = if (!legacyPlaintext) {
             cipher.decrypt(bytes)
         } else {
             require(bytes.size <= 2_000_000 && bytes.firstOrNull() == '{'.code.toByte()) {
@@ -46,13 +46,13 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
             require(legacy.optInt("schema") == 1 && legacy.has("entries")) {
                 "Unknown legacy library schema"
             }
-            writeEncrypted(bytes)
             bytes
         }
         val root = JSONObject(String(plaintext, StandardCharsets.UTF_8))
         require(root.optInt("schema") == 1) { "Unknown library schema" }
         val entries = root.getJSONArray("entries")
-        return (0 until entries.length()).map { i ->
+        require(entries.length() <= maxEntries) { "Invalid library capacity" }
+        val parsed = (0 until entries.length()).map { i ->
             val item = entries.getJSONObject(i)
             Entry(
                 id = item.getString("id"),
@@ -64,6 +64,11 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
                 verified = item.getBoolean("verified")
             )
         }
+        // Validate every record before replacing a legacy plaintext file.
+        require(parsed.all { KnowledgePolicy.isValidUserNote(it.title, it.excerpt) &&
+            it.source.isNotBlank() && it.source.length <= 512 }) { "Invalid library entry" }
+        if (legacyPlaintext) writeEncrypted(bytes)
+        return parsed
     }
 
     @Synchronized

@@ -22,11 +22,15 @@ class MainActivity : Activity() {
     private lateinit var answer: TextView
     private lateinit var voiceButton: Button
     private var voiceActive = false
+    private var autoListenEnabled = true
+    private var foreground = false
+    private val voicePreferences by lazy { getSharedPreferences("nexus_voice_preferences", MODE_PRIVATE) }
     private val audioRequestCode = 410
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         library = LocalKnowledgeLibrary(applicationContext)
+        autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -114,14 +118,32 @@ class MainActivity : Activity() {
         }
         voiceButton.setOnClickListener {
             if (voiceActive) {
+                autoListenEnabled = false
+                voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
                 controller.stop()
                 voiceActive = false
                 voiceButton.text = "Activer le micro local"
             } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                autoListenEnabled = true
+                voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
                 activateVoice()
             } else {
                 requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioRequestCode)
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        foreground = true
+        if (!::controller.isInitialized || !autoListenEnabled || voiceActive) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            activateVoice()
+        } else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) {
+            voicePreferences.edit().putBoolean("microphone_permission_prompted", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioRequestCode)
+        } else {
+            status.text = "Micro désactivé : autorise-le dans Android puis active-le ici."
         }
     }
 
@@ -143,13 +165,18 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == audioRequestCode) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) activateVoice()
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && foreground) {
+                autoListenEnabled = true
+                voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
+                activateVoice()
+            }
             else status.text = "Micro refusé : le mode texte reste disponible."
         }
     }
 
     override fun onStop() {
         super.onStop()
+        foreground = false
         // No background surveillance: the microphone is off outside the foreground.
         if (::controller.isInitialized) controller.stop()
         voiceActive = false

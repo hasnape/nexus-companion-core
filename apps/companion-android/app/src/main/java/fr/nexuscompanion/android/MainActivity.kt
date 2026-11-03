@@ -7,11 +7,11 @@ import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ScrollView
 
 /** Native first-run shell: no WebView, browser, server, or network permission. */
 class MainActivity : Activity() {
@@ -65,7 +65,7 @@ class MainActivity : Activity() {
         root.addView(remember, layout)
         root.addView(searchLibrary, layout)
         root.addView(voiceButton, layout)
-        setContentView(root)
+        setContentView(ScrollView(this).apply { addView(root) })
 
         controller = NativeVoiceController(
             context = this,
@@ -73,6 +73,10 @@ class MainActivity : Activity() {
             onCommand = { message -> respond(message) },
             onSpeechState = { audible ->
                 face.text = if (audible) "●   ●\n◯" else "●   ●\n⌣"
+            },
+            onSessionState = { active ->
+                voiceActive = active
+                voiceButton.text = if (active) "Désactiver le micro" else "Activer le micro local"
             }
         )
         remember.setOnClickListener {
@@ -86,14 +90,20 @@ class MainActivity : Activity() {
                     answer.text = "Note trop longue ou invalide (2000 caractères maximum)."
                 } catch (_: IllegalStateException) {
                     answer.text = "Bibliothèque locale pleine."
+                } catch (_: Exception) {
+                    answer.text = "Impossible de lire ou enregistrer la bibliothèque. Données conservées."
                 }
             }
         }
         searchLibrary.setOnClickListener {
             val query = input.text.toString().trim()
-            val matches = library.search(query)
-            answer.text = if (matches.isEmpty()) "Aucune note locale correspondante."
-                else matches.joinToString("\n\n") { "${it.title} : ${it.excerpt}\nSource : ${it.source} (non vérifiée)" }
+            try {
+                val matches = library.search(query)
+                answer.text = if (matches.isEmpty()) "Aucune note locale correspondante."
+                    else matches.joinToString("\n\n") { "${it.title} : ${it.excerpt}\nSource : ${it.source} (non vérifiée)" }
+            } catch (_: Exception) {
+                answer.text = "Bibliothèque inaccessible : aucune donnée supprimée."
+            }
         }
         send.setOnClickListener {
             val message = input.text.toString().trim()
@@ -127,8 +137,7 @@ class MainActivity : Activity() {
             return
         }
         controller.start()
-        voiceActive = true
-        voiceButton.text = "Désactiver le micro"
+        // The controller reports its actual session state; do not assume startup succeeded.
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

@@ -13,7 +13,7 @@ This is a **new, native Android application**, not a WebView/PWA. It has no INTE
 - Shared TypeScript cognitive engine and existing SVG avatar are **not yet embedded or bridged**. The current native face and local replies are placeholders.
 - The current Android on-device SpeechRecognizer still uses Android's finite recognition sessions; it is **not a continuous local wake-word DSP engine**. Need a dedicated bundled on-device wake-word engine (e.g. verified Vosk/Picovoice alternatives after licensing and benchmarking) and foreground microphone service only if user explicitly opts in.
 - No bundled ASR model: if the phone lacks an installed on-device recognizer, speech is unavailable; text still works. A distributable offline ASR model is a subsequent task.
-- A per-companion private on-device JSON knowledge library with atomic writes and explicit note saving/search is implemented, but **not yet encrypted** and is **not the cognitive brain**. No migration/import/export, no face phoneme lip-sync, no signed release APK/AAB, no device tests.
+- A per-companion private on-device JSON knowledge library with atomic writes and explicit note saving/search is implemented, encrypted at rest with a per-companion Android Keystore AES-256-GCM key, but **not the cognitive brain**. Legacy plaintext alpha schema-v1 files are migrated atomically on read; no portable import/export, no face phoneme lip-sync, no signed release APK/AAB, no device tests.
 - A local LLM inference engine and model packaging (e.g. llama.cpp) need memory, licensing, battery and performance evaluation; the deterministic response adapter does not pretend to be an LLM.
 
 ## Internet as a library, not a brain
@@ -32,4 +32,4 @@ Validation commands: `gradle :app:testDebugUnitTest :app:assembleDebug` (run ins
 5. Test airplane mode, screen lock, microphone denial, voice pack missing, phone calls/audio focus, lifecycle, low battery and multiple Android devices. Produce a signed, reproducible APK only after build/device validation.
 
 ## Security
-No INTERNET permission by design. Do not add network access, background microphone service, or sensor capture without explicit product requirements and opt-in. No user speech transcripts are logged or persisted in this alpha.
+Knowledge is encrypted with authenticated AES-GCM, bound to the companion namespace. Android Keystore keys are device-bound; copying ciphertext to another phone is **not** an export strategy. A future portable encrypted export must use a separate password-based key derivation design and explicit consent. Device backups are disabled. Invalid ciphertext must fail closed rather than silently erasing records.\n\nNo INTERNET permission by design. Do not add network access, background microphone service, or sensor capture without explicit product requirements and opt-in. No user speech transcripts are logged or persisted in this alpha.

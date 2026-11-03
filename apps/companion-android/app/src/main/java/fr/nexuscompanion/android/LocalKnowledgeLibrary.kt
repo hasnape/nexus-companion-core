@@ -16,6 +16,7 @@ import java.util.UUID
 internal class LocalKnowledgeLibrary(context: Context, companionId: String = "nexus-default") {
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
+    private val cipher = LocalKnowledgeCipher(safeId)
     private val maxEntries = 500
     private val maxText = 2000
 
@@ -33,7 +34,22 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
     fun list(): List<Entry> {
         val bytes = try { store.openRead().use { it.readBytes() } }
             catch (_: java.io.FileNotFoundException) { return emptyList() }
-        val root = JSONObject(String(bytes, StandardCharsets.UTF_8))
+        // Legacy alpha files were plaintext. Convert only recognized schema-v1 JSON,
+        // atomically, before returning records. Do not overwrite on decrypt failure.
+        val plaintext = if (cipher.isEncrypted(bytes)) {
+            cipher.decrypt(bytes)
+        } else {
+            require(bytes.size <= 2_000_000 && bytes.firstOrNull() == '{'.code.toByte()) {
+                "Unknown library format"
+            }
+            val legacy = JSONObject(String(bytes, StandardCharsets.UTF_8))
+            require(legacy.optInt("schema") == 1 && legacy.has("entries")) {
+                "Unknown legacy library schema"
+            }
+            writeEncrypted(bytes)
+            bytes
+        }
+        val root = JSONObject(String(plaintext, StandardCharsets.UTF_8))
         require(root.optInt("schema") == 1) { "Unknown library schema" }
         val entries = root.getJSONArray("entries")
         return (0 until entries.length()).map { i ->
@@ -111,9 +127,14 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
         }
         val bytes = JSONObject().put("schema", 1).put("entries", array)
             .toString().toByteArray(StandardCharsets.UTF_8)
+        writeEncrypted(bytes)
+    }
+
+    private fun writeEncrypted(plaintext: ByteArray) {
+        val encrypted = cipher.encrypt(plaintext)
         val stream = store.startWrite()
         try {
-            stream.write(bytes)
+            stream.write(encrypted)
             store.finishWrite(stream)
         } catch (failure: Exception) {
             store.failWrite(stream)

@@ -34,6 +34,14 @@ Empreinte SHA-256 du certificat public : `01:44:5C:D0:F0:F5:66:88:FB:A4:6B:AD:32
 
 SHA-256 de l'APK signé livré : `fdac291119cb8b537924c6e3c46f6cc8f920bccf577f17278197c3891794b242`.
 
+## Essai sur émulateur et limites observées
+
+Un émulateur AOSP Android 15 / API 35 x86_64 a été démarré sans accélération matérielle. L'ancien APK signé, versionCode 2 construit depuis `4e2928a`, a été installé avec succès. L'installation par-dessus de l'APK 0.2.1 signé avec la même clé a ensuite réussi avec `adb install -r`, sans désinstallation ni effacement des données.
+
+La recette de l'interface (note enregistrée, mise à jour avec conservation de cette note, conversation en mode avion et refus du micro) n'a pas abouti : l'environnement a affiché « Process system isn't responding », empêchant l'automatisation d'atteindre le champ de saisie. Ce blocage du système émulé ne valide ni n'invalide ces parcours dans l'application. Aucune conservation de note lors d'une mise à jour, reconnaissance vocale réelle ou autonomie sur téléphone n'est déclarée testée.
+
+Le script de distribution local complet a été exécuté avec succès. Le bootstrap Linux optionnel utilise un JDK et Android CLI 19.0 vérifiés ; son exécution dans Vercel n'a pas été testée. Les fins de ligne des scripts Windows et Unix sont fixées par `.gitattributes`.
+
 ## Recette sur téléphone à effectuer
 
 1. Installer l'APK signé par-dessus une version ayant le même certificat, sans désinstaller ni effacer les données.

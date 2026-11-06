@@ -19,6 +19,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowAlertDialog
+import org.robolectric.shadows.ShadowSpeechRecognizer
 import org.robolectric.Shadows.shadowOf
 import java.io.File
 
@@ -57,6 +58,36 @@ class MainActivityTest {
         send("Nexus, comment vas tu ?")
         await { hasText("Ça va, merci") }
         assertFalse(libraryFile().exists())
+    }
+
+    @Test fun directDictationStaysDisabledWithoutAnActiveMicrophone() {
+        assertFalse(button(R.string.speak_now).isEnabled)
+        send("bonjour")
+        await { hasText("Bonjour ! Je t’écoute") }
+        assertFalse(button(R.string.speak_now).isEnabled)
+    }
+
+    @Test @Config(sdk = [34]) fun voiceStatusSurvivesTextWorkAndPrivateDialogsClearThePreview() {
+        shadowOf(activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
+        activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))
+        shadowOf(Looper.getMainLooper()).idle()
+        val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        recognizer.triggerOnReadyForSpeech(android.os.Bundle())
+        assertTrue(hasText("Micro actif"))
+        assertTrue(button(R.string.speak_now).isEnabled)
+        recognizer.triggerOnPartialResults(android.os.Bundle().apply {
+            putStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf("phrase privée provisoire"))
+        })
+        assertTrue(hasText("En cours : phrase privée provisoire"))
+        input().setText("Une note à relire")
+        button(R.string.remember).performClick()
+        assertFalse(hasText("phrase privée provisoire"))
+        assertFalse(button(R.string.speak_now).isEnabled)
+        ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        send("bonjour")
+        await { hasText("Bonjour ! Je t’écoute") }
+        assertFalse(hasText(activity.getString(R.string.local_ready)))
+        assertTrue(hasText("Reprise de l'écoute locale") || hasText("Micro actif") || hasText("Préparation du micro"))
     }
 
     @Test fun aMemoryProposalIsNotSavedAndCanBeCanceled() {

@@ -1,7 +1,6 @@
 package fr.nexuscompanion.android
 
 import android.content.Context
-import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -9,7 +8,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -21,11 +19,13 @@ internal class NativeVoiceController(
     onStatus: (String) -> Unit,
     onCommand: (String) -> Unit,
     onSpeechState: (Boolean) -> Unit,
-    onSessionState: (Boolean) -> Unit = {}
+    onSessionState: (Boolean) -> Unit = {},
+    onTranscript: (String, Boolean) -> Unit = { _, _ -> }
 ) {
-    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState, onSessionState)
+    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState, onSessionState, onTranscript)
     fun available() = session.available()
     fun start() = session.start()
+    fun listenForCommand() = session.listenForCommand()
     fun speak(text: String) { session.speak(text) }
     fun beginResponse() = session.beginResponse()
     fun finishResponse(text: String?) = session.finishResponse(text)
@@ -45,9 +45,7 @@ private class AndroidVoicePlatform(private val context: Context) : VoicePlatform
         val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) = events.ready()
-            override fun onResults(results: Bundle?) = events.result(
-                results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-            )
+            override fun onResults(results: Bundle?) = events.alternatives(NativeRecognitionSettings.hypotheses(results))
             override fun onError(error: Int) = events.error(when (error) {
                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> RecognitionFailure.SILENCE
                 SpeechRecognizer.ERROR_NO_MATCH -> RecognitionFailure.NO_MATCH
@@ -56,21 +54,18 @@ private class AndroidVoicePlatform(private val context: Context) : VoicePlatform
                 SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> RecognitionFailure.LANGUAGE_NOT_INSTALLED
                 else -> RecognitionFailure.TEMPORARY
             })
-            override fun onBeginningOfSpeech() = Unit
+            override fun onBeginningOfSpeech() = events.speechStarted()
             override fun onRmsChanged(rmsdB: Float) = Unit
             override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
-            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEndOfSpeech() = events.speechEnded()
+            override fun onPartialResults(partialResults: Bundle?) = events.partial(
+                NativeRecognitionSettings.hypotheses(partialResults).firstOrNull()?.text.orEmpty()
+            )
             override fun onEvent(eventType: Int, params: Bundle?) = Unit
         })
         return object : VoiceRecognition {
             override fun start() {
-                recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                })
+                recognizer.startListening(NativeRecognitionSettings.intent())
             }
             override fun close() {
                 try { recognizer.cancel() } finally { recognizer.destroy() }

@@ -1,0 +1,64 @@
+package fr.nexuscompanion.android
+
+import android.os.Bundle
+import android.os.Looper
+import android.speech.SpeechRecognizer
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowSpeechRecognizer
+
+/** Runs Android listener wiring through Robolectric's API-34 recognizer, not real audio. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+@LooperMode(LooperMode.Mode.PAUSED)
+class NativeVoiceControllerTest {
+    private fun bundle(vararg texts: String, scores: FloatArray? = null) = Bundle().apply {
+        putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf(*texts))
+        if (scores != null) putFloatArray(SpeechRecognizer.CONFIDENCE_SCORES, scores)
+    }
+
+    @Test fun androidPartialsArePreviewedAndOnlyFinalAlternativesExecute() {
+        val commands = mutableListOf<String>()
+        val heard = mutableListOf<Pair<String, Boolean>>()
+        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {}, {},
+            { text, final -> heard.add(text to final) })
+        try {
+            controller.start()
+            shadowOf(Looper.getMainLooper()).idle()
+            val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+            assertTrue(recognizer.lastRecognizerIntent.getBooleanExtra("android.speech.extra.PARTIAL_RESULTS", false))
+            recognizer.triggerOnReadyForSpeech(Bundle())
+            recognizer.triggerOnPartialResults(bundle("Nexus bon"))
+            assertEquals("Nexus bon" to false, heard.last())
+            assertTrue(commands.isEmpty())
+            recognizer.triggerOnEndOfSpeech()
+            recognizer.triggerOnResults(bundle("nexusbonjour", "Nexus bonjour", scores = floatArrayOf(.85f, .8f)))
+            assertEquals(listOf("bonjour"), commands)
+            assertEquals("Nexus bonjour" to true, heard.last())
+            controller.stop()
+            recognizer.triggerOnPartialResults(bundle("phrase périmée"))
+            assertEquals("" to false, heard.last())
+        } finally { controller.stop() }
+    }
+
+    @Test fun explicitDictationReplacesTheOldRecognizerAndAcceptsAnUnprefixedFinal() {
+        val commands = mutableListOf<String>()
+        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {})
+        try {
+            controller.start(); shadowOf(Looper.getMainLooper()).idle()
+            val previous = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
+            controller.listenForCommand(); shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(shadowOf(previous).isDestroyed)
+            val current = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+            current.triggerOnReadyForSpeech(Bundle())
+            current.triggerOnResults(bundle("bonjour"))
+            assertEquals(listOf("bonjour"), commands)
+        } finally { controller.stop() }
+    }
+}

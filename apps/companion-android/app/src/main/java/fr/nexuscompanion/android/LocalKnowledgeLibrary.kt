@@ -88,7 +88,7 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
         require(source.isNotBlank() && source.length <= 512)
         require(!verified) { "Verification must be performed by a separate trusted verifier" }
         val existing = list()
-        require(existing.size < maxEntries) { "Library capacity reached" }
+        check(existing.size < maxEntries) { "Library capacity reached" }
         val entry = Entry(UUID.randomUUID().toString(), title.trim(), excerpt.trim(),
             source.trim(), System.currentTimeMillis(), expiresAt, false)
         save(existing + entry)

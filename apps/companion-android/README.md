@@ -1,46 +1,61 @@
-# Nexus Companion — Android native foundation (alpha)
+# Nexus Companion Android — 0.2.1 native alpha
 
-This is a **new, native Android application**, not a WebView/PWA. It has no INTERNET permission, and the microphone is enabled only after the user taps the button and grants RECORD_AUDIO. The microphone stops when the Activity leaves the foreground.
+Application Kotlin native, sans WebView, navigateur, serveur ni permission INTERNET. Android 12 minimum (API 31), cible Android 15 (API 35). Le produit Android reste une **alpha** : un APK signé ne prouve pas que le compagnon complet est terminé.
 
-## Implemented in this first slice
-- Native Kotlin Activity with simple placeholder face, text input and offline deterministic greeting responses.
-- Android on-device SpeechRecognizer (API 31+) only; explicitly **no network recognizer fallback**.
-- Wake phrase “Nexus”, a separate next-command turn, bounded restart attempts, and microphone suspension while the companion speaks.
-- Android TextToSpeech restricted to a **locally installed French voice** (network-only voices rejected).
-- No background recording, telemetry, network permission, cloud account or silent startup.
+## Fonctions actuelles
 
-## Not yet implemented — do not describe this alpha as a complete companion
-- Shared TypeScript cognitive engine and existing SVG avatar are **not yet embedded or bridged**. The current native face and local replies are placeholders.
-- The current Android on-device SpeechRecognizer still uses Android's finite recognition sessions; it is **not a continuous local wake-word DSP engine**. Need a dedicated bundled on-device wake-word engine (e.g. verified Vosk/Picovoice alternatives after licensing and benchmarking) and foreground microphone service only if user explicitly opts in.
-- No bundled ASR model: if the phone lacks an installed on-device recognizer, speech is unavailable; text still works. A distributable offline ASR model is a subsequent task.
-- A per-companion private on-device JSON knowledge library with atomic writes and explicit note saving/search is implemented, encrypted at rest with a per-companion Android Keystore AES-256-GCM key, but **not the cognitive brain**. Legacy plaintext alpha schema-v1 files are migrated atomically on read; no portable import/export, no face phoneme lip-sync, no signed release APK/AAB, no device tests.
-- A local LLM inference engine and model packaging (e.g. llama.cpp) need memory, licensing, battery and performance evaluation; the deterministic response adapter does not pretend to be an LLM.
+- Conversation texte locale simple, avec réponses déterministes aux salutations.
+- Écoute automatique à l'ouverture si l'autorisation micro a été accordée et si l'utilisateur ne l'a pas désactivée. Bouton d'arrêt visible, préférence conservée. Le micro et la synthèse sont arrêtés dès `onPause`.
+- Reconnaissance exclusivement locale via le service Android installé. « Nexus, bonjour » ou « Nexus », puis la commande après « Je t'écoute ». Les silences ordinaires relancent l'écoute sans épuiser le budget de reprise des pannes.
+- Micro suspendu pendant la synthèse. Événements périmés ignorés, reprise après la fin ou l'interruption, délai de récupération si le moteur TTS ne répond plus. Bouche ouverte seulement après le signal audio de la synthèse.
+- Voix française installée hors ligne uniquement. Sans service vocal ou modèle français, le texte reste disponible avec un message explicite.
+- Notes privées, sauvegarde atomique, recherche et provenance ; chiffrement AES-256-GCM avec clé Android Keystore liée au compagnon. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture. Les données illisibles ne sont pas remplacées.
+- Sauvegarde système désactivée, exclusions explicites de sauvegarde cloud et de transfert entre appareils. Aucun audio ou historique de transcription enregistré par l'application.
 
-## Internet as a library, not a brain
-The native application currently has **no INTERNET permission**. Future internet research will require a separately consented source-import module. Each imported claim must carry a source, timestamp, confidence, expiration, and independent verification status; external pages must never be treated as executable instructions. Nexus must continue functioning in airplane mode even if the library is unavailable.
+La reconnaissance Android fonctionne par sessions finies et reprises. Elle ne constitue pas un moteur dédié de détection de mot-clé, et sa consommation et sa fiabilité sur téléphone restent à mesurer.
 
-## Build
-Open `apps/companion-android` in Android Studio with JDK 17, Android SDK 35 and Android Gradle Plugin 8.6.1. Run the `app` configuration on Android 12+ (API 31+).
+## Compilation sur Windows / Android Studio
 
-Validation commands: `gradle :app:testDebugUnitTest :app:assembleDebug` (run inside this Android project with JDK 17 and Android SDK 35). The resulting debug APK is for development, not a signed production release.\n\nThe project does not commit generated Gradle wrapper binaries. To use CLI builds, generate a Gradle wrapper using a trusted installed Gradle distribution, then run `./gradlew assembleDebug`.
+1. Ouvrir le dossier `apps/companion-android` dans Android Studio.
+2. Installer Android SDK Platform 35 et Build-Tools 35.0.0. Choisir un **JDK 17 complet** comme Gradle JDK.
+3. Laisser Gradle se synchroniser. Le wrapper Windows et Linux/macOS est inclus ; Gradle 8.10.2 et son SHA-256 sont fixés.
+4. Pour les tests et un APK de développement, dans le terminal de ce dossier :
 
-## Next milestones
-1. Define a versioned, platform-neutral brain protocol; migrate actual existing companion-core decision/memory logic without reimplementing it inconsistently in Kotlin. Bundle the engine as a local asset and use an explicit bridge, or port to a portable runtime.
-2. Port existing avatar visuals and real audio boundary events; use native audio amplitude/viseme signals where available.
-3. Bundle and benchmark a fully offline ASR model and wake detector in French; separate consented foreground/background policies.
-4. Add per-companion encrypted local persistence and export/import with schema migrations and authenticated backups.
-5. Test airplane mode, screen lock, microphone denial, voice pack missing, phone calls/audio focus, lifecycle, low battery and multiple Android devices. Produce a signed, reproducible APK only after build/device validation.
+```powershell
+.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+```
 
-## Security
-Knowledge is encrypted with authenticated AES-GCM, bound to the companion namespace. Android Keystore keys are device-bound; copying ciphertext to another phone is **not** an export strategy. A future portable encrypted export must use a separate password-based key derivation design and explicit consent. Device backups are disabled. Invalid ciphertext must fail closed rather than silently erasing records.\n\nNo INTERNET permission by design. Do not add network access, background microphone service, or sensor capture without explicit product requirements and opt-in. No user speech transcripts are logged or persisted in this alpha.
+L'APK debug est créé dans `app/build/outputs/apk/debug/app-debug.apk`. Il utilise une clé de développement et ne remplace pas une application déjà signée avec la clé de diffusion.
 
-## APK updates and signing (important)
-Android permits installing an update over an existing app only when the applicationId is unchanged, the versionCode increases, and the APK is signed with the same signing certificate (or a valid signing-key rotation). The current Vercel build uses a temporary debug key: do not assume successive debug APKs will update in place. A one-time migration to a consistently signed release APK is required; uninstalling the debug app may erase its private encrypted library and Android Keystore key. Do not uninstall before a secure export mechanism exists or data loss is explicitly accepted. Never commit a signing keystore or passwords. Create an owner-controlled, backed-up release key, configure Gradle release signing using protected build secrets, and publish versioned APKs with SHA-256 checksums. Android requires user confirmation for ordinary sideloaded updates; no silent update. A future in-app update checker requires explicit INTERNET permission and a trusted update manifest and must not affect offline conversation.
+## APK signé et mises à jour
 
-### Signed update build setup (owner-controlled)
-1. On a trusted machine, create a long-lived Android release keystore with `keytool -genkeypair -v -keystore nexus-release.jks -alias nexus-release -keyalg RSA -keysize 3072 -validity 10000`. Keep the keystore and passwords backed up securely in two separate private locations. Never commit or publish the keystore.
-2. Set protected build secrets `NEXUS_ANDROID_KEYSTORE_BASE64` (base64 of the keystore bytes), `NEXUS_ANDROID_STORE_PASSWORD`, `NEXUS_ANDROID_KEY_ALIAS`, and `NEXUS_ANDROID_KEY_PASSWORD`. Restrict access to trusted release builds; do not expose secrets to untrusted pull requests or previews.
-3. The Android APK build script produces `nexus-companion-v0.2.0-release.apk` only when all four secrets exist, verifies the signature and publishes a SHA256 checksum. An incomplete secret configuration fails the build.
-4. Every update must retain `applicationId`, increment `versionCode`, and use the identical release signing key. Confirm upgrade on an Android emulator using `adb install -r` and verify local encrypted data before rollout.
-5. The installed development APK is signed with a debug certificate; a release certificate cannot upgrade it directly. Preserve/export data before any necessary uninstall. There is currently no secure portable export, so do not uninstall if you need to keep local notes.
-6. This is a signed distribution foundation, **not** an in-app updater. Add a consented HTTPS version-checker, trusted update metadata and Android package installer confirmation in a separate reviewed change. Offline voice and brain must remain usable with networking disabled.
+Conserver la clé permanente existante ; ne pas en recréer une pour chaque version. Ne jamais déposer de keystore ou mot de passe dans Git ou dans une archive publique.
+
+La signature Gradle utilise ces quatre variables :
+
+| Variable | Contenu |
+| --- | --- |
+| `NEXUS_ANDROID_KEYSTORE_PATH` | Chemin absolu de la clé `.jks` existante |
+| `NEXUS_ANDROID_STORE_PASSWORD` | Mot de passe du keystore |
+| `NEXUS_ANDROID_KEY_ALIAS` | Alias existant |
+| `NEXUS_ANDROID_KEY_PASSWORD` | Mot de passe de la clé |
+
+Une configuration partielle est refusée. Une compilation `assembleRelease` sans configuration de signature produit seulement un APK non signé ; ne pas le distribuer. Android Studio permet aussi de sélectionner la clé existante avec **Build → Generate Signed App Bundle / APK → APK**.
+
+Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables de signature :
+
+```bash
+bash scripts/build-android-apk.sh
+```
+
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.2.1-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
+
+Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
+
+Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (3 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
+
+## Limites et prochaine validation
+
+Le cerveau TypeScript, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et un vérificateur de mises à jour dans l'application restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
+
+Voir le [rapport de validation 0.2.1](../../docs/releases/ANDROID-0.2.1-2026-11-06.md). Les tests JVM de la session vocale utilisent des services simulés ; ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie sur un vrai appareil.

@@ -1,36 +1,46 @@
 #!/usr/bin/env bash
+# Optional Linux bootstrap. Local Android Studio/SDK builds use build-android-apk.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK="${TMPDIR:-/tmp}/nexus-android-build"
-mkdir -p "$WORK/jdk" "$WORK/sdk/cmdline-tools" "$WORK/gradle"
-curl -fLsS --retry 3 https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse -o "$WORK/jdk.tar.gz"
-tar -xzf "$WORK/jdk.tar.gz" -C "$WORK/jdk" --strip-components=1
-curl -fLsS --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o "$WORK/cli.zip"
-unzip -qo "$WORK/cli.zip" -d "$WORK/sdk/cmdline-tools"
-mv "$WORK/sdk/cmdline-tools/cmdline-tools" "$WORK/sdk/cmdline-tools/latest"
-curl -fLsS --retry 3 https://services.gradle.org/distributions/gradle-8.10.2-bin.zip -o "$WORK/gradle.zip"
-unzip -qo "$WORK/gradle.zip" -d "$WORK/gradle"
-export JAVA_HOME="$WORK/jdk" ANDROID_HOME="$WORK/sdk" PATH="$WORK/jdk/bin:$PATH"
-yes | "$WORK/sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$WORK/sdk" --licenses >/dev/null 2>&1 || true
-"$WORK/sdk/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$WORK/sdk" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools' >/dev/null
-"$WORK/gradle/gradle-8.10.2/bin/gradle" -p "$ROOT/apps/companion-android" --no-daemon --max-workers=2 :app:testDebugUnitTest :app:assembleDebug
-# Release signing requires all four protected environment secrets.
+mkdir -p "$WORK"
 present=0
 for name in NEXUS_ANDROID_KEYSTORE_BASE64 NEXUS_ANDROID_STORE_PASSWORD NEXUS_ANDROID_KEY_ALIAS NEXUS_ANDROID_KEY_PASSWORD; do
   if [[ -n "${!name:-}" ]]; then present=$((present + 1)); fi
 done
-if (( present != 0 && present != 4 )); then echo "Incomplete release signing configuration" >&2; exit 1; fi
+if (( present != 0 && present != 4 )); then echo 'Incomplete release signing configuration.' >&2; exit 1; fi
+# Pin and verify the bootstrap JDK; reuse it for subsequent builds.
+JDK_NAME='jdk-17.0.21+9'
+JDK_SHA='8b9b611d917e3dfd8419d3566b5949226f69b052fed7e109c1368add1dfe8711'
+if [[ ! -x "$WORK/$JDK_NAME/bin/javac" ]]; then
+  curl -fLsS --retry 3 'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_x64_linux_hotspot_17.0.21_9.tar.gz' -o "$WORK/jdk.tar.gz"
+  printf '%s  %s\n' "$JDK_SHA" "$WORK/jdk.tar.gz" | sha256sum -c -
+  tar -xzf "$WORK/jdk.tar.gz" -C "$WORK"
+fi
+export JAVA_HOME="$WORK/$JDK_NAME"
+export PATH="$JAVA_HOME/bin:$PATH"
+export ANDROID_HOME="$WORK/sdk"
+if [[ ! -x "$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager" ]]; then
+  curl -fLsS --retry 3 'https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip' -o "$WORK/cli.zip"
+  printf '%s  %s\n' '7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee' "$WORK/cli.zip" | sha256sum -c -
+  unpack="$(mktemp -d "$WORK/cli.XXXXXX")"
+  unzip -qo "$WORK/cli.zip" -d "$unpack"
+  mkdir -p "$ANDROID_HOME/cmdline-tools"
+  mv "$unpack/cmdline-tools" "$ANDROID_HOME/cmdline-tools/19.0"
+  rmdir "$unpack"
+fi
+# yes may receive SIGPIPE when sdkmanager finishes reading; check sdkmanager itself.
+set +o pipefail
+yes | "$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
+license_status=${PIPESTATUS[1]}
+set -o pipefail
+(( license_status == 0 )) || exit "$license_status"
+"$ANDROID_HOME/cmdline-tools/19.0/bin/sdkmanager" --sdk_root="$ANDROID_HOME" 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
 if (( present == 4 )); then
   umask 077
-  export NEXUS_ANDROID_KEYSTORE_PATH="$WORK/release-signing.jks"
+  NEXUS_ANDROID_KEYSTORE_PATH="$(mktemp "$WORK/release-signing.XXXXXX.jks")"
+  export NEXUS_ANDROID_KEYSTORE_PATH
   trap 'rm -f "$NEXUS_ANDROID_KEYSTORE_PATH"' EXIT
-  printf "%s" "$NEXUS_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$NEXUS_ANDROID_KEYSTORE_PATH"
-  "$WORK/jdk/bin/keytool" -list -keystore "$NEXUS_ANDROID_KEYSTORE_PATH" -storepass "$NEXUS_ANDROID_STORE_PASSWORD" -alias "$NEXUS_ANDROID_KEY_ALIAS" >/dev/null
-  "$WORK/gradle/gradle-8.10.2/bin/gradle" -p "$ROOT/apps/companion-android" --no-daemon --max-workers=2 :app:assembleRelease
-  "$WORK/sdk/build-tools/35.0.0/apksigner" verify --verbose "$ROOT/apps/companion-android/app/build/outputs/apk/release/app-release.apk" >/dev/null
+  printf '%s' "$NEXUS_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$NEXUS_ANDROID_KEYSTORE_PATH"
 fi
-mkdir -p "$ROOT/apk-dist"
-cp "$ROOT/apps/companion-android/app/build/outputs/apk/debug/app-debug.apk" "$ROOT/apk-dist/nexus-companion-debug.apk"
-if (( present == 4 )); then cp "$ROOT/apps/companion-android/app/build/outputs/apk/release/app-release.apk" "$ROOT/apk-dist/nexus-companion-v0.2.0-release.apk"; fi
-(cd "$ROOT/apk-dist" && sha256sum ./*.apk > SHA256SUMS.txt)
-printf '%s\n' 'APK Android de développement (non signé pour publication Play Store).' 'Android 12 minimum. Installez uniquement si vous faites confiance au dépôt source.' > "$ROOT/apk-dist/README.txt"
+bash "$ROOT/scripts/build-android-apk.sh"

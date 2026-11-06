@@ -5,7 +5,7 @@
   <intent><action android:name="android.speech.RecognitionService" /></intent>
   <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
  </queries>
- <application android:label="Nexus Companion" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false">
+ <application android:label="@string/app_name" android:icon="@drawable/ic_companion" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false">
   <activity android:name=".MainActivity" android:exported="true">
    <intent-filter>
     <action android:name="android.intent.action.MAIN" />

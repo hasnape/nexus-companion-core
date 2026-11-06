@@ -6,3 +6,11 @@ coverage
 .env.*
 .DS_Store
 *.tsbuildinfo
+.gradle/
+.kotlin/
+**/build/
+local.properties
+apk-dist/
+*.jks
+*.keystore
+*signature-credentials*.txt

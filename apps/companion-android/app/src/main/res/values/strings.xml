@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nexus Companion</string>
+    <string name="face_idle" translatable="false">●   ●\n⌣</string>
+    <string name="face_speaking" translatable="false">●   ●\n◯</string>
+    <string name="offline_status">Nexus Companion — Android natif, hors ligne</string>
+    <string name="greeting">Bonjour ! Je suis Nexus.</string>
+    <string name="input_hint">Écris à Nexus</string>
+    <string name="send">Envoyer</string>
+    <string name="remember">Ajouter à ma bibliothèque locale</string>
+    <string name="search_library">Chercher dans ma bibliothèque</string>
+    <string name="activate_microphone">Activer le micro local</string>
+    <string name="deactivate_microphone">Désactiver le micro</string>
+    <string name="note_saved">Note enregistrée localement (non vérifiée).</string>
+    <string name="note_invalid">Note trop longue ou invalide (2000 caractères maximum).</string>
+    <string name="library_full">Bibliothèque locale pleine.</string>
+    <string name="library_write_failed">Impossible de lire ou enregistrer la bibliothèque. Données conservées.</string>
+    <string name="library_no_results">Aucune note locale correspondante.</string>
+    <string name="library_read_failed">Bibliothèque inaccessible : aucune donnée supprimée.</string>
+    <string name="microphone_permission_needed">Micro désactivé : autorise-le dans Android puis active-le ici.</string>
+    <string name="offline_recognition_unavailable">Ce téléphone n\'a pas de reconnaissance Android hors ligne. Texte disponible.</string>
+    <string name="microphone_permission_denied">Micro refusé : le mode texte reste disponible.</string>
+    <string name="library_entry">%1$s : %2$s\nSource : %3$s (non vérifiée)</string>
+</resources>

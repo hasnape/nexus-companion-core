@@ -7,6 +7,8 @@ import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -24,6 +26,7 @@ class MainActivity : Activity() {
     private var voiceActive = false
     private var autoListenEnabled = true
     private var foreground = false
+    private var permissionRequestInFlight = false
     private val voicePreferences by lazy { getSharedPreferences("nexus_voice_preferences", MODE_PRIVATE) }
     private val audioRequestCode = 410
 
@@ -31,11 +34,17 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         library = LocalKnowledgeLibrary(applicationContext)
         autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
+        fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 48, 28, 28)
+            setPadding(dp(20), dp(24), dp(20), dp(20))
             setBackgroundColor(Color.rgb(10, 22, 43))
+            setOnApplyWindowInsetsListener { view, insets ->
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+                view.setPadding(bars.left + dp(20), bars.top + dp(16), bars.right + dp(20), bars.bottom + dp(20))
+                insets
+            }
         }
         fun label(text: String, size: Float): TextView = TextView(this).apply {
             this.text = text
@@ -43,23 +52,23 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
         }
-        face = label("●   ●\n⌣", 68f).apply {
+        face = label(getString(R.string.face_idle), 68f).apply {
             setTextColor(Color.CYAN)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(0, 40, 0, 40)
         }
-        status = label("Nexus Companion — Android natif, hors ligne", 17f)
-        answer = label("Bonjour ! Je suis Nexus.", 19f)
+        status = label(getString(R.string.offline_status), 17f)
+        answer = label(getString(R.string.greeting), 19f)
         val input = EditText(this).apply {
-            hint = "Écris à Nexus"
+            hint = getString(R.string.input_hint)
             setSingleLine(true)
             setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY)
         }
-        val send = Button(this).apply { text = "Envoyer" }
-        val remember = Button(this).apply { text = "Ajouter à ma bibliothèque locale" }
-        val searchLibrary = Button(this).apply { text = "Chercher dans ma bibliothèque" }
-        voiceButton = Button(this).apply { text = "Activer le micro local" }
+        val send = Button(this).apply { text = getString(R.string.send) }
+        val remember = Button(this).apply { text = getString(R.string.remember) }
+        val searchLibrary = Button(this).apply { text = getString(R.string.search_library) }
+        voiceButton = Button(this).apply { text = getString(R.string.activate_microphone) }
         val layout = LinearLayout.LayoutParams(-1, -2)
         root.addView(face, layout)
         root.addView(status, layout)
@@ -70,17 +79,20 @@ class MainActivity : Activity() {
         root.addView(searchLibrary, layout)
         root.addView(voiceButton, layout)
         setContentView(ScrollView(this).apply { addView(root) })
+        window.insetsController?.setSystemBarsAppearance(0,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
+        root.requestApplyInsets()
 
         controller = NativeVoiceController(
             context = this,
             onStatus = { status.text = it },
             onCommand = { message -> respond(message) },
             onSpeechState = { audible ->
-                face.text = if (audible) "●   ●\n◯" else "●   ●\n⌣"
+                face.text = if (audible) getString(R.string.face_speaking) else getString(R.string.face_idle)
             },
             onSessionState = { active ->
                 voiceActive = active
-                voiceButton.text = if (active) "Désactiver le micro" else "Activer le micro local"
+                voiceButton.text = if (active) getString(R.string.deactivate_microphone) else getString(R.string.activate_microphone)
             }
         )
         remember.setOnClickListener {
@@ -88,14 +100,14 @@ class MainActivity : Activity() {
             if (note.isNotEmpty()) {
                 try {
                     library.addUserNote(note.take(80), note)
-                    answer.text = "Note enregistrée localement (non vérifiée)."
+                    answer.text = getString(R.string.note_saved)
                     input.setText("")
                 } catch (_: IllegalArgumentException) {
-                    answer.text = "Note trop longue ou invalide (2000 caractères maximum)."
+                    answer.text = getString(R.string.note_invalid)
                 } catch (_: IllegalStateException) {
-                    answer.text = "Bibliothèque locale pleine."
+                    answer.text = getString(R.string.library_full)
                 } catch (_: Exception) {
-                    answer.text = "Impossible de lire ou enregistrer la bibliothèque. Données conservées."
+                    answer.text = getString(R.string.library_write_failed)
                 }
             }
         }
@@ -103,10 +115,10 @@ class MainActivity : Activity() {
             val query = input.text.toString().trim()
             try {
                 val matches = library.search(query)
-                answer.text = if (matches.isEmpty()) "Aucune note locale correspondante."
-                    else matches.joinToString("\n\n") { "${it.title} : ${it.excerpt}\nSource : ${it.source} (non vérifiée)" }
+                answer.text = if (matches.isEmpty()) getString(R.string.library_no_results)
+                    else matches.joinToString("\n\n") { getString(R.string.library_entry, it.title, it.excerpt, it.source) }
             } catch (_: Exception) {
-                answer.text = "Bibliothèque inaccessible : aucune donnée supprimée."
+                answer.text = getString(R.string.library_read_failed)
             }
         }
         send.setOnClickListener {
@@ -122,13 +134,13 @@ class MainActivity : Activity() {
                 voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
                 controller.stop()
                 voiceActive = false
-                voiceButton.text = "Activer le micro local"
+                voiceButton.text = getString(R.string.activate_microphone)
             } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 autoListenEnabled = true
                 voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
                 activateVoice()
             } else {
-                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioRequestCode)
+                requestMicrophonePermission()
             }
         }
     }
@@ -136,14 +148,13 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         foreground = true
-        if (!::controller.isInitialized || !autoListenEnabled || voiceActive) return
+        if (!::controller.isInitialized || !autoListenEnabled || voiceActive || permissionRequestInFlight) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             activateVoice()
         } else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) {
-            voicePreferences.edit().putBoolean("microphone_permission_prompted", true).apply()
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioRequestCode)
+            requestMicrophonePermission()
         } else {
-            status.text = "Micro désactivé : autorise-le dans Android puis active-le ici."
+            status.text = getString(R.string.microphone_permission_needed)
         }
     }
 
@@ -154,8 +165,9 @@ class MainActivity : Activity() {
     }
 
     private fun activateVoice() {
+        if (!foreground || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
         if (!controller.available()) {
-            status.text = "Ce téléphone n'a pas de reconnaissance Android hors ligne. Texte disponible."
+            status.text = getString(R.string.offline_recognition_unavailable)
             return
         }
         controller.start()
@@ -165,13 +177,27 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == audioRequestCode) {
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED && foreground) {
+            permissionRequestInFlight = false
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
                 autoListenEnabled = true
                 voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
-                activateVoice()
+                if (foreground) activateVoice()
             }
-            else status.text = "Micro refusé : le mode texte reste disponible."
+            else status.text = getString(R.string.microphone_permission_denied)
         }
+    }
+
+    private fun requestMicrophonePermission() {
+        if (permissionRequestInFlight) return
+        permissionRequestInFlight = true
+        voicePreferences.edit().putBoolean("microphone_permission_prompted", true).apply()
+        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), audioRequestCode)
+    }
+
+    override fun onPause() {
+        foreground = false
+        if (::controller.isInitialized) controller.stop()
+        super.onPause()
     }
 
     override fun onStop() {
@@ -180,7 +206,7 @@ class MainActivity : Activity() {
         // No background surveillance: the microphone is off outside the foreground.
         if (::controller.isInitialized) controller.stop()
         voiceActive = false
-        if (::voiceButton.isInitialized) voiceButton.text = "Activer le micro local"
+        if (::voiceButton.isInitialized) voiceButton.text = getString(R.string.activate_microphone)
     }
 
     override fun onDestroy() {

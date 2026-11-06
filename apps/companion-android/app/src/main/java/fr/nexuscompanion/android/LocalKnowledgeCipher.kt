@@ -13,15 +13,21 @@ import javax.crypto.spec.GCMParameterSpec
  * The AES key never leaves Android Keystore. This does NOT provide portable
  * backup: encrypted export requires a separate user-controlled key design.
  */
-internal class LocalKnowledgeCipher(private val companionId: String) {
+internal interface KnowledgeCipher {
+    fun isEncrypted(bytes: ByteArray): Boolean
+    fun encrypt(plaintext: ByteArray): ByteArray
+    fun decrypt(blob: ByteArray): ByteArray
+}
+
+internal class LocalKnowledgeCipher(private val companionId: String) : KnowledgeCipher {
     private val alias = "nexus.knowledge.v1.$companionId"
     private val magic = byteArrayOf(0x4e, 0x58, 0x4b, 0x01) // NXK v1
     private val ivLength = 12
 
-    fun isEncrypted(bytes: ByteArray): Boolean =
+    override fun isEncrypted(bytes: ByteArray): Boolean =
         bytes.size >= magic.size && magic.indices.all { bytes[it] == magic[it] }
 
-    fun encrypt(plaintext: ByteArray): ByteArray {
+    override fun encrypt(plaintext: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(alias.toByteArray(Charsets.UTF_8))
@@ -30,7 +36,7 @@ internal class LocalKnowledgeCipher(private val companionId: String) {
         return magic + iv + cipher.doFinal(plaintext)
     }
 
-    fun decrypt(blob: ByteArray): ByteArray {
+    override fun decrypt(blob: ByteArray): ByteArray {
         require(isEncrypted(blob) && blob.size >= magic.size + ivLength + 16) {
             "Invalid encrypted knowledge envelope"
         }

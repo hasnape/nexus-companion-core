@@ -92,4 +92,4 @@ Le cœur décisionnel reste basé sur **actions abstraites** pour réutilisation
 
 ## Application Android native
 
-Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.2.1 est une alpha native hors ligne, distincte de la démonstration web. Voir le [rapport de validation](docs/releases/ANDROID-0.2.1-2026-11-06.md) pour les tests réellement exécutés et les fonctionnalités encore à intégrer.
+Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.3.0 intègre le premier moteur de règles partagé et une mémoire explicite ; elle reste une alpha native hors ligne, distincte de la démonstration web. Voir le [rapport de validation](docs/releases/ANDROID-0.3.0-2026-11-06.md) pour les tests réellement exécutés et les fonctionnalités encore à intégrer.

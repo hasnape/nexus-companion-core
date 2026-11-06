@@ -27,6 +27,8 @@ internal class NativeVoiceController(
     fun available() = session.available()
     fun start() = session.start()
     fun speak(text: String) { session.speak(text) }
+    fun beginResponse() = session.beginResponse()
+    fun finishResponse(text: String?) = session.finishResponse(text)
     fun stop() = session.stop()
 }
 

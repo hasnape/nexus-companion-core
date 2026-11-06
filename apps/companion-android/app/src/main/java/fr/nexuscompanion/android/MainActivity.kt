@@ -2,176 +2,277 @@ package fr.nexuscompanion.android
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
-import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.InputFilter
 import android.view.Gravity
+import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.ScrollView
+import android.widget.TextView
+import java.util.concurrent.Executors
 
-/** Native first-run shell: no WebView, browser, server, or network permission. */
+/** Native UI. A single worker owns the packaged brain and private library operations. */
 class MainActivity : Activity() {
     private lateinit var controller: NativeVoiceController
     private lateinit var library: LocalKnowledgeLibrary
+    private lateinit var brain: NativeBrainService
     private lateinit var face: TextView
     private lateinit var status: TextView
     private lateinit var answer: TextView
+    private lateinit var input: EditText
     private lateinit var voiceButton: Button
+    private lateinit var retainButton: Button
+    private val taskButtons = mutableListOf<Button>()
+    private val worker = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+    private var pendingCandidate: NativeBrainService.Candidate? = null
     private var voiceActive = false
     private var autoListenEnabled = true
     private var foreground = false
+    private var destroyed = false
+    private var busy = false
     private var permissionRequestInFlight = false
+    private var dialogDepth = 0
+    private val dialogs = mutableSetOf<AlertDialog>()
+    private var resumeVoiceAfterDialogs = false
     private val voicePreferences by lazy { getSharedPreferences("nexus_voice_preferences", MODE_PRIVATE) }
     private val audioRequestCode = 410
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         library = LocalKnowledgeLibrary(applicationContext)
+        brain = NativeBrainService(applicationContext, library)
         autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
+        buildScreen()
+        controller = NativeVoiceController(
+            context = this,
+            onStatus = { status.text = it },
+            onCommand = ::respond,
+            onSpeechState = { audible -> face.text = getString(if (audible) R.string.face_speaking else R.string.face_idle) },
+            onSessionState = { active ->
+                voiceActive = active
+                voiceButton.setText(if (active) R.string.deactivate_microphone else R.string.activate_microphone)
+            }
+        )
+    }
+
+    private fun buildScreen() {
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(20), dp(24), dp(20), dp(20))
             setBackgroundColor(Color.rgb(10, 22, 43))
+            setPadding(dp(20), dp(24), dp(20), dp(20))
             setOnApplyWindowInsetsListener { view, insets ->
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
                 view.setPadding(bars.left + dp(20), bars.top + dp(16), bars.right + dp(20), bars.bottom + dp(20))
                 insets
             }
         }
-        fun label(text: String, size: Float): TextView = TextView(this).apply {
-            this.text = text
-            textSize = size
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-        }
-        face = label(getString(R.string.face_idle), 68f).apply {
-            setTextColor(Color.CYAN)
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, 40, 0, 40)
-        }
-        status = label(getString(R.string.offline_status), 17f)
-        answer = label(getString(R.string.greeting), 19f)
-        val input = EditText(this).apply {
-            hint = getString(R.string.input_hint)
-            setSingleLine(true)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.LTGRAY)
-        }
-        val send = Button(this).apply { text = getString(R.string.send) }
-        val remember = Button(this).apply { text = getString(R.string.remember) }
-        val searchLibrary = Button(this).apply { text = getString(R.string.search_library) }
-        voiceButton = Button(this).apply { text = getString(R.string.activate_microphone) }
         val layout = LinearLayout.LayoutParams(-1, -2)
-        root.addView(face, layout)
-        root.addView(status, layout)
-        root.addView(answer, layout)
-        root.addView(input, layout)
-        root.addView(send, layout)
-        root.addView(remember, layout)
-        root.addView(searchLibrary, layout)
-        root.addView(voiceButton, layout)
+        fun label(resource: Int, size: Float): TextView = TextView(this).apply {
+            setText(resource); textSize = size; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            root.addView(this, layout)
+        }
+        fun button(resource: Int, action: () -> Unit): Button = Button(this).apply {
+            setText(resource); setOnClickListener { action() }; root.addView(this, layout)
+            taskButtons.add(this)
+        }
+        face = label(R.string.face_idle, 60f).apply {
+            setTextColor(Color.CYAN); typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(12), 0, dp(12))
+        }
+        status = label(R.string.offline_status, 16f)
+        voiceButton = button(R.string.activate_microphone) { toggleVoice() }
+        taskButtons.remove(voiceButton) // Keep Stop visible above long replies and available during work.
+        answer = label(R.string.greeting, 18f)
+        input = EditText(this).apply {
+            setHint(R.string.input_hint); setSingleLine(true); setTextColor(Color.WHITE)
+            setHintTextColor(Color.LTGRAY); filters = arrayOf(InputFilter.LengthFilter(2000))
+            root.addView(this, layout)
+        }
+        button(R.string.send) {
+            val message = input.text.toString().trim()
+            if (message.isNotEmpty() && !busy) {
+                input.setText("")
+                getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(input.windowToken, 0)
+                input.clearFocus()
+                respond(message)
+            }
+        }
+        button(R.string.remember) {
+            val content = input.text.toString().trim()
+            if (content.isNotEmpty()) confirmNote(content)
+        }
+        retainButton = button(R.string.retain_proposal) { pendingCandidate?.let { confirmNote(it.content, it.sensitive) } }
+            .apply { visibility = View.GONE }
+        button(R.string.my_notes) { showNotes() }
+        button(R.string.about) {
+            runLocal(R.string.working, R.string.operation_failed, {
+                assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().use { it.readText() }
+            }) { notices ->
+                if (foreground) showDialog(AlertDialog.Builder(this).setTitle(R.string.about)
+                    .setMessage(getString(R.string.about_text, BuildConfig.VERSION_NAME) + "\n\n" + notices)
+                    .setPositiveButton(R.string.close, null).create())
+            }
+        }
         setContentView(ScrollView(this).apply { addView(root) })
         window.insetsController?.setSystemBarsAppearance(0,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         root.requestApplyInsets()
+    }
 
-        controller = NativeVoiceController(
-            context = this,
-            onStatus = { status.text = it },
-            onCommand = { message -> respond(message) },
-            onSpeechState = { audible ->
-                face.text = if (audible) getString(R.string.face_speaking) else getString(R.string.face_idle)
-            },
-            onSessionState = { active ->
-                voiceActive = active
-                voiceButton.text = if (active) getString(R.string.deactivate_microphone) else getString(R.string.activate_microphone)
-            }
-        )
-        remember.setOnClickListener {
-            val note = input.text.toString().trim()
-            if (note.isNotEmpty()) {
-                try {
-                    library.addUserNote(note.take(80), note)
-                    answer.text = getString(R.string.note_saved)
-                    input.setText("")
-                } catch (_: IllegalArgumentException) {
-                    answer.text = getString(R.string.note_invalid)
-                } catch (_: IllegalStateException) {
-                    answer.text = getString(R.string.library_full)
-                } catch (_: Exception) {
-                    answer.text = getString(R.string.library_write_failed)
+    private fun setBusy(active: Boolean) {
+        busy = active
+        taskButtons.forEach { it.isEnabled = !active }
+        input.isEnabled = !active
+    }
+
+    private fun <T> runLocal(progress: Int, failureMessage: Int, task: () -> T, success: (T) -> Unit) {
+        if (busy || destroyed) return
+        setBusy(true)
+        if (voiceActive) controller.beginResponse()
+        status.setText(progress)
+        worker.execute {
+            try {
+                val result = task()
+                main.post {
+                    if (!destroyed) {
+                        setBusy(false)
+                        status.setText(R.string.local_ready)
+                        success(result)
+                        if (foreground && voiceActive) controller.finishResponse(null)
+                    }
+                }
+            } catch (failure: Exception) {
+                main.post {
+                    if (!destroyed) {
+                        setBusy(false)
+                        answer.setText(when (failure) {
+                            is InvalidKnowledgeNote -> R.string.note_invalid
+                            is KnowledgeCapacityReached -> R.string.library_full
+                            else -> failureMessage
+                        })
+                        status.setText(R.string.local_ready)
+                        if (foreground && voiceActive) controller.finishResponse(null)
+                    }
                 }
             }
         }
-        searchLibrary.setOnClickListener {
-            val query = input.text.toString().trim()
-            try {
-                val matches = library.search(query)
-                answer.text = if (matches.isEmpty()) getString(R.string.library_no_results)
-                    else matches.joinToString("\n\n") { getString(R.string.library_entry, it.title, it.excerpt, it.source) }
-            } catch (_: Exception) {
-                answer.text = getString(R.string.library_read_failed)
+    }
+
+    private fun respond(message: String) {
+        if (busy || message.isBlank() || message.length > 2000) return
+        pendingCandidate = null
+        retainButton.visibility = View.GONE
+        runLocal(R.string.thinking, R.string.brain_failed, { brain.reply(message) }) { reply ->
+            answer.text = if (reply.notesAvailable) reply.text
+                else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
+            pendingCandidate = if (reply.notesAvailable) reply.candidate else null
+            retainButton.visibility = if (pendingCandidate != null) View.VISIBLE else View.GONE
+            if (foreground && voiceActive) controller.finishResponse(reply.text)
+        }
+    }
+
+    private fun confirmNote(content: String, sensitive: Boolean = false) {
+        showDialog(AlertDialog.Builder(this).setTitle(R.string.confirm_note_title)
+            .setMessage(getString(if (sensitive) R.string.confirm_sensitive_note_message else R.string.confirm_note_message, content))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save_note) { _, _ ->
+                runLocal(R.string.working, R.string.library_write_failed, {
+                    library.addUserNote(content.take(80), content)
+                }) {
+                    answer.setText(R.string.note_saved)
+                    if (input.text.toString().trim() == content) input.setText("")
+                    if (pendingCandidate?.content == content) {
+                        pendingCandidate = null; retainButton.visibility = View.GONE
+                    }
+                }
+            }.create())
+    }
+
+    private fun showNotes() {
+        val query = input.text.toString().trim()
+        runLocal(R.string.working, R.string.library_read_failed, {
+            if (query.isBlank()) library.list().sortedByDescending { it.recordedAt }.take(50) else library.search(query)
+        }) { notes ->
+            if (notes.isEmpty()) { answer.setText(R.string.library_no_results); return@runLocal }
+            if (foreground) showDialog(AlertDialog.Builder(this).setTitle(R.string.my_notes)
+                .setItems(notes.map { it.title }.toTypedArray()) { _, position -> showNote(notes[position]) }
+                .setNegativeButton(R.string.close, null).create())
+        }
+    }
+
+    private fun showNote(note: LocalKnowledgeLibrary.Entry) {
+        showDialog(AlertDialog.Builder(this).setTitle(note.title)
+            .setMessage(getString(R.string.library_entry, note.title, note.excerpt, note.source))
+            .setNegativeButton(R.string.close, null)
+            .setNeutralButton(R.string.delete_note) { _, _ ->
+                showDialog(AlertDialog.Builder(this).setTitle(R.string.delete_note)
+                    .setMessage(R.string.delete_note_confirmation).setNegativeButton(R.string.cancel, null)
+                    .setPositiveButton(R.string.delete_note) { _, _ ->
+                        runLocal(R.string.working, R.string.library_write_failed, { library.remove(note.id) }) { removed ->
+                            answer.setText(if (removed) R.string.note_deleted else R.string.library_no_results)
+                        }
+                    }.create())
+            }.create())
+    }
+
+    /** Notes can contain private text: keep the microphone off while any dialog is visible. */
+    private fun showDialog(dialog: AlertDialog) {
+        if (dialogDepth == 0) {
+            resumeVoiceAfterDialogs = voiceActive
+            if (voiceActive) controller.stop()
+        }
+        dialogDepth++
+        dialogs.add(dialog)
+        dialog.setOnDismissListener {
+            dialogs.remove(dialog)
+            dialogDepth--
+            if (dialogDepth == 0 && resumeVoiceAfterDialogs) {
+                resumeVoiceAfterDialogs = false
+                if (foreground && autoListenEnabled) activateVoice()
             }
         }
-        send.setOnClickListener {
-            val message = input.text.toString().trim()
-            if (message.isNotEmpty()) {
-                respond(message)
-                input.setText("")
-            }
-        }
-        voiceButton.setOnClickListener {
-            if (voiceActive) {
-                autoListenEnabled = false
-                voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
-                controller.stop()
-                voiceActive = false
-                voiceButton.text = getString(R.string.activate_microphone)
-            } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                autoListenEnabled = true
-                voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
-                activateVoice()
-            } else {
-                requestMicrophonePermission()
-            }
-        }
+        dialog.show()
+    }
+
+    private fun toggleVoice() {
+        if (voiceActive) {
+            autoListenEnabled = false
+            voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
+            controller.stop()
+        } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            autoListenEnabled = true
+            voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
+            activateVoice()
+        } else requestMicrophonePermission()
     }
 
     override fun onResume() {
         super.onResume()
         foreground = true
-        if (!::controller.isInitialized || !autoListenEnabled || voiceActive || permissionRequestInFlight) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            activateVoice()
-        } else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) {
-            requestMicrophonePermission()
-        } else {
-            status.text = getString(R.string.microphone_permission_needed)
-        }
-    }
-
-    private fun respond(message: String) {
-        val reply = OfflineConversation.reply(message)
-        answer.text = reply
-        if (voiceActive) controller.speak(reply)
+        if (!autoListenEnabled || voiceActive || permissionRequestInFlight || dialogDepth > 0) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) activateVoice()
+        else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) requestMicrophonePermission()
+        else status.setText(R.string.microphone_permission_needed)
     }
 
     private fun activateVoice() {
-        if (!foreground || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
-        if (!controller.available()) {
-            status.text = getString(R.string.offline_recognition_unavailable)
-            return
-        }
+        if (!foreground || dialogDepth > 0 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        if (!controller.available()) { status.setText(R.string.offline_recognition_unavailable); return }
         controller.start()
-        // The controller reports its actual session state; do not assume startup succeeded.
+        if (busy && voiceActive) controller.beginResponse()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -182,8 +283,7 @@ class MainActivity : Activity() {
                 autoListenEnabled = true
                 voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
                 if (foreground) activateVoice()
-            }
-            else status.text = getString(R.string.microphone_permission_denied)
+            } else status.setText(R.string.microphone_permission_denied)
         }
     }
 
@@ -200,17 +300,14 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
-    override fun onStop() {
-        super.onStop()
-        foreground = false
-        // No background surveillance: the microphone is off outside the foreground.
-        if (::controller.isInitialized) controller.stop()
-        voiceActive = false
-        if (::voiceButton.isInitialized) voiceButton.text = getString(R.string.activate_microphone)
-    }
-
     override fun onDestroy() {
+        destroyed = true
+        foreground = false
+        dialogs.toList().forEach { it.dismiss() }
+        dialogs.clear()
         if (::controller.isInitialized) controller.stop()
+        worker.execute { brain.close() }
+        worker.shutdown()
         super.onDestroy()
     }
 }

@@ -31,4 +31,14 @@ class KnowledgePolicyTest {
         assertFalse(KnowledgePolicy.isValidUserNote("titre", "x".repeat(2001)))
         assertTrue(KnowledgePolicy.isValidUserNote("titre", "texte"))
     }
+
+    @Test fun matchesFrenchAccentsWithoutDependingOnTheKeyboard() {
+        assertTrue(KnowledgePolicy.score(KnowledgePolicy.queryTerms("memoire"), "Mémoire", "") > 0)
+        assertTrue(KnowledgePolicy.score(KnowledgePolicy.queryTerms("THÉ"), "Thé vert", "") > 0)
+    }
+
+    @Test fun ignoresCommonQuestionWordsAndDoesNotMatchWordFragments() {
+        assertEquals(listOf("projet"), KnowledgePolicy.queryTerms("Que sais-tu de mon projet ?"))
+        assertEquals(0, KnowledgePolicy.score(KnowledgePolicy.queryTerms("port"), "Transport", "portefeuille"))
+    }
 }

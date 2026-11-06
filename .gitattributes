@@ -3,3 +3,7 @@
 **/gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+apps/companion-android/app/src/main/assets/brain/*.js text eol=lf
+apps/companion-android/app/src/main/assets/brain/*.json text eol=lf
+# Keep upstream license text verbatim.
+apps/companion-android/app/src/main/assets/THIRD_PARTY_NOTICES.txt text eol=lf -whitespace

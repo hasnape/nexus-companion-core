@@ -6,6 +6,7 @@ export * from './context';
 export * from './decision';
 export * from './provider';
 export * from './engine';
+export * from './native-bridge';
 
 export * from './cognitive';
 export * from './brain';

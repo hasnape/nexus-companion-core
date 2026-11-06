@@ -1,0 +1,93 @@
+package fr.nexuscompanion.android
+
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
+
+class SharedBrainRuntimeTest {
+    private fun runtime() = SharedBrainRuntime(File(requireNotNull(System.getProperty("nexus.brain.asset"))).readText())
+    private fun request(message: String, notes: String = "[]"): String {
+        val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+        return """{"protocolVersion":1,"message":"$escaped","notes":$notes,"now":1000000}"""
+    }
+
+    @Test fun executesTheActualPackagedSharedBrain() {
+        runtime().use { brain ->
+            for (text in listOf("bonjour", "Nexus, bonjour !", "comment vas tu", "comment ça va ?")) {
+                val output = brain.replyJson(request(text))
+                assertTrue(output.contains("Bonjour") || output.contains("Ça va"))
+                assertTrue(output.contains("nexus-core-rules-v1"))
+                assertTrue(output.contains("\"candidate\":null"))
+            }
+        }
+    }
+
+    @Test fun returnsMemoryProposalWithNoStorageSideEffects() {
+        runtime().use { brain ->
+            val output = brain.replyJson(request("retiens que je préfère le thé"))
+            assertTrue(output.contains("confirmer"))
+            assertTrue(output.contains("thé"))
+            assertFalse(output.contains("\"candidate\":null"))
+            assertTrue(brain.replyJson(request("mes notes")).contains("ne retrouve pas"))
+        }
+    }
+
+    @Test fun recallsOnlyUnexpiredNonSensitiveNotes() {
+        val notes = """[
+          {"id":"safe","title":"Thé","excerpt":"Je préfère le thé vert","source":"user:manual","recordedAt":10,"expiresAt":null,"verified":false},
+          {"id":"private","title":"Adresse","excerpt":"mon adresse exacte est privée","source":"user:manual","recordedAt":10,"expiresAt":null,"verified":false},
+          {"id":"old","title":"Ancienne note","excerpt":"ancienne préférence café","source":"user:manual","recordedAt":10,"expiresAt":999999,"verified":false}
+        ]"""
+        runtime().use { brain ->
+            val output = brain.replyJson(request("de quoi te souviens-tu ?", notes))
+            assertTrue(output.contains("thé vert"))
+            assertFalse(output.contains("exacte est privée"))
+            assertFalse(output.contains("préférence café"))
+        }
+    }
+
+    @Test fun enforcesTheSharedSafetyDecisionInTheActualInterpreter() {
+        runtime().use { brain ->
+            assertTrue(brain.replyJson(request("observe-moi sans me le dire")).contains("Je ne peux pas"))
+            assertTrue(brain.replyJson(request("formate tout le disque")).contains("Je ne peux pas"))
+        }
+    }
+
+    @Test fun userInputIsNotEvaluatedAsJavaScript() {
+        runtime().use { brain ->
+            assertTrue(brain.replyJson(request("\"; while(true){}; //")).contains("protocolVersion"))
+            assertTrue(brain.replyJson(request("bonjour")).contains("Bonjour"))
+        }
+    }
+
+    @Test fun sandboxDoesNotExposeJavaNetworkingFilesOrHostReflection() {
+        SharedBrainRuntime("""var NexusNativeBrain={handleNativeTurnJson:function(input){return JSON.stringify([
+          typeof java,typeof Packages,typeof JavaAdapter,typeof getClass,typeof fetch,
+          typeof XMLHttpRequest,typeof load,typeof readFile,typeof input.getClass
+        ]);}};""").use { brain ->
+            assertEquals("[" + List(9) { "\"undefined\"" }.joinToString(",") + "]", brain.replyJson("data"))
+        }
+    }
+
+    @Test fun infiniteLoopIsInterruptedByTheInstructionBudget() {
+        SharedBrainRuntime("var NexusNativeBrain={handleNativeTurnJson:function(){while(true){};}};", instructionLimit = 20_000).use { brain ->
+            assertThrows(IllegalStateException::class.java) { brain.replyJson("data") }
+        }
+    }
+
+    @Test fun failedEvaluationCannotLeaveDirtyStateForTheNextTurn() {
+        SharedBrainRuntime("""var count=0;var NexusNativeBrain={handleNativeTurnJson:function(input){
+          count++;if(input==='bad')throw Error('failure');return String(count);}};""").use { brain ->
+            assertEquals("1", brain.replyJson("good"))
+            assertThrows(RuntimeException::class.java) { brain.replyJson("bad") }
+            assertEquals("1", brain.replyJson("good"))
+        }
+    }
+
+    @Test fun rejectsOversizedInputBeforeEvaluationAndClosedRuntimes() {
+        val brain = runtime()
+        assertThrows(IllegalArgumentException::class.java) { brain.replyJson("x".repeat(40_001)) }
+        brain.close()
+        assertThrows(IllegalStateException::class.java) { brain.replyJson(request("bonjour")) }
+    }
+}

@@ -50,6 +50,7 @@ internal class VoiceSession(
     private var listening = false
     private var speechReady = false
     private var awaitingCommand = false
+    private var processing = false
     private var generation = 0L
     private var recognitionGeneration = 0L
     private var utteranceSequence = 0L
@@ -60,6 +61,7 @@ internal class VoiceSession(
     private var restart: VoiceTask? = null
     private var commandTimeout: VoiceTask? = null
     private var speechTimeout: VoiceTask? = null
+    private var responseTimeout: VoiceTask? = null
     private val wake = Regex("^(nexus|nexusse|nexuce)(?=$|[\\s,;:!?.…])([\\s,;:!?.…]+)?", RegexOption.IGNORE_CASE)
 
     fun available(): Boolean = try { platform.available() } catch (_: RuntimeException) { false }
@@ -104,7 +106,7 @@ internal class VoiceSession(
 
     private fun beginRecognition() {
         restart = null
-        if (!enabled || utterance != null || listening) return
+        if (!enabled || utterance != null || listening || processing) return
         try {
             if (recognition == null) {
                 val session = generation
@@ -183,7 +185,7 @@ internal class VoiceSession(
     }
 
     private fun scheduleRestart(failed: Boolean = false, delayMs: Long = 500L) {
-        if (!enabled || utterance != null || listening) return
+        if (!enabled || utterance != null || listening || processing) return
         failures = if (failed) failures + 1 else 0
         if (failures > 12) {
             stop()
@@ -194,6 +196,37 @@ internal class VoiceSession(
         val session = generation
         val delay = if (failed) (500L * failures).coerceAtMost(3_000L) else delayMs
         restart = platform.after(delay) { if (enabled && generation == session) beginRecognition() }
+    }
+
+    /** Keep the microphone closed while the local worker prepares its answer. */
+    fun beginResponse() {
+        if (!enabled) return
+        processing = true
+        awaitingCommand = false
+        restart?.cancel(); restart = null
+        commandTimeout?.cancel(); commandTimeout = null
+        responseTimeout?.cancel()
+        speechTimeout?.cancel(); speechTimeout = null
+        utterance = null
+        closeRecognition()
+        try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
+        onSpeechState(false)
+        val session = generation
+        responseTimeout = platform.after(10_000L) {
+            if (enabled && generation == session && processing) {
+                processing = false
+                responseTimeout = null
+                scheduleRestart()
+                onStatus("La réponse prend du temps. Retour à l'écoute locale.")
+            }
+        }
+    }
+
+    fun finishResponse(text: String?) {
+        if (!enabled) return
+        processing = false
+        responseTimeout?.cancel(); responseTimeout = null
+        if (text == null || !speak(text)) scheduleRestart()
     }
 
     /** Returns false when the local voice is absent or still initializing. */
@@ -209,6 +242,7 @@ internal class VoiceSession(
         commandTimeout = null
         closeRecognition()
         speechTimeout?.cancel()
+        responseTimeout?.cancel()
         val id = "nexus-${generation}-${++utteranceSequence}"
         utterance = id
         onSpeechState(false)
@@ -255,9 +289,12 @@ internal class VoiceSession(
         restart?.cancel()
         commandTimeout?.cancel()
         speechTimeout?.cancel()
+        responseTimeout?.cancel()
         restart = null
         commandTimeout = null
         speechTimeout = null
+        responseTimeout = null
+        processing = false
         awaitingCommand = false
         utterance = null
         speechReady = false

@@ -8,7 +8,6 @@
     <string name="input_hint">Écris à Nexus</string>
     <string name="send">Envoyer</string>
     <string name="remember">Ajouter à ma bibliothèque locale</string>
-    <string name="search_library">Chercher dans ma bibliothèque</string>
     <string name="activate_microphone">Activer le micro local</string>
     <string name="deactivate_microphone">Désactiver le micro</string>
     <string name="note_saved">Note enregistrée localement (non vérifiée).</string>
@@ -21,4 +20,23 @@
     <string name="offline_recognition_unavailable">Ce téléphone n\'a pas de reconnaissance Android hors ligne. Texte disponible.</string>
     <string name="microphone_permission_denied">Micro refusé : le mode texte reste disponible.</string>
     <string name="library_entry">%1$s : %2$s\nSource : %3$s (non vérifiée)</string>
+    <string name="retain_proposal">Retenir cette information</string>
+    <string name="my_notes">Mes notes</string>
+    <string name="about">À propos</string>
+    <string name="working">Traitement local…</string>
+    <string name="thinking">Je réfléchis…</string>
+    <string name="local_ready">Prêt — fonctionnement local</string>
+    <string name="brain_failed">Je ne peux pas répondre pour le moment. Réessaie ; aucune note n’a été modifiée.</string>
+    <string name="operation_failed">Cette action n’a pas pu aboutir. Réessaie.</string>
+    <string name="confirm_note_title">Enregistrer une note locale</string>
+    <string name="confirm_note_message">Veux-tu enregistrer cette information sur ce téléphone ?\n\n%1$s\n\nTu pourras la consulter et la supprimer dans « Mes notes ».</string>
+    <string name="cancel">Annuler</string>
+    <string name="save_note">Enregistrer</string>
+    <string name="close">Fermer</string>
+    <string name="delete_note">Supprimer cette note</string>
+    <string name="delete_note_confirmation">Supprimer définitivement cette note de ce téléphone ?</string>
+    <string name="note_deleted">Note supprimée.</string>
+    <string name="about_text">Nexus Companion %1$s\nCompagnon local en version alpha. Réponses fondées sur des règles, sans modèle de langage général embarqué.\n\nLogiciels libres et licences :</string>
+    <string name="reply_with_library_warning">%1$s\n\n%2$s</string>
+    <string name="confirm_sensitive_note_message">Cette information semble personnelle. Veux-tu la conserver uniquement dans tes notes locales ?\n\n%1$s\n\nTu pourras la supprimer dans « Mes notes ».</string>
 </resources>

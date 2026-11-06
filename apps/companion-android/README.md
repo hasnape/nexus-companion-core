@@ -1,15 +1,15 @@
-# Nexus Companion Android — 0.2.1 native alpha
+# Nexus Companion Android — 0.3.0 native alpha
 
 Application Kotlin native, sans WebView, navigateur, serveur ni permission INTERNET. Android 12 minimum (API 31), cible Android 15 (API 35). Le produit Android reste une **alpha** : un APK signé ne prouve pas que le compagnon complet est terminé.
 
 ## Fonctions actuelles
 
-- Conversation texte locale simple, avec réponses déterministes aux salutations.
+- Conversation texte locale utilisant les règles partagées Nexus (salutations, soutien simple, mémoire explicite et limites de sécurité), dans un interpréteur Java embarqué. Aucun WebView ni moteur cloud.
 - Écoute automatique à l'ouverture si l'autorisation micro a été accordée et si l'utilisateur ne l'a pas désactivée. Bouton d'arrêt visible, préférence conservée. Le micro et la synthèse sont arrêtés dès `onPause`.
 - Reconnaissance exclusivement locale via le service Android installé. « Nexus, bonjour » ou « Nexus », puis la commande après « Je t'écoute ». Les silences ordinaires relancent l'écoute sans épuiser le budget de reprise des pannes.
-- Micro suspendu pendant la synthèse. Événements périmés ignorés, reprise après la fin ou l'interruption, délai de récupération si le moteur TTS ne répond plus. Bouche ouverte seulement après le signal audio de la synthèse.
+- Micro suspendu pendant le calcul local, la synthèse et les dialogues de notes. Événements périmés ignorés, reprise après la fin ou l'interruption, délai de récupération si le moteur TTS ne répond plus. Bouche ouverte seulement après le signal audio de la synthèse.
 - Voix française installée hors ligne uniquement. Sans service vocal ou modèle français, le texte reste disponible avec un message explicite.
-- Notes privées, sauvegarde atomique, recherche et provenance ; chiffrement AES-256-GCM avec clé Android Keystore liée au compagnon. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture. Les données illisibles ne sont pas remplacées.
+- Propositions à retenir avec confirmation explicite ; consultation et suppression dans « Mes notes » ; rappel conversationnel des notes non sensibles, avec extraits courts et statut non vérifié. Notes privées, sauvegarde atomique, recherche sans accents et provenance ; chiffrement AES-256-GCM avec clé Android Keystore liée au compagnon. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture. Les données illisibles ne sont pas remplacées.
 - Sauvegarde système désactivée, exclusions explicites de sauvegarde cloud et de transfert entre appareils. Aucun audio ou historique de transcription enregistré par l'application.
 
 La reconnaissance Android fonctionne par sessions finies et reprises. Elle ne constitue pas un moteur dédié de détection de mot-clé, et sa consommation et sa fiabilité sur téléphone restent à mesurer.
@@ -48,14 +48,26 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.2.1-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.3.0-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (3 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
+Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (4 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
 
 ## Limites et prochaine validation
 
-Le cerveau TypeScript, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et un vérificateur de mises à jour dans l'application restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
+Le premier pont vers les règles TypeScript est intégré ; le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et un vérificateur de mises à jour dans l'application restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
 
-Voir le [rapport de validation 0.2.1](../../docs/releases/ANDROID-0.2.1-2026-11-06.md). Les tests JVM de la session vocale utilisent des services simulés ; ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie sur un vrai appareil.
+Voir le [rapport de validation 0.3.0](../../docs/releases/ANDROID-0.3.0-2026-11-06.md). Les tests exécutent le bundle partagé dans Rhino, l'interface dans Robolectric et la persistance avec AES-GCM de JVM. Les tests de la session vocale utilisent des services simulés ; ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie sur un vrai appareil.
+
+## Développement du moteur partagé
+
+Les assets JavaScript et leur manifeste SHA-256 sont inclus. Gradle vérifie qu'ils correspondent aux sources du dépôt complet avant de compiler. Après une modification du moteur TypeScript ou de son compilateur, exécuter depuis la racine :
+
+```bash
+npm ci
+npm run build:native-brain
+npm run check:native-brain
+```
+
+Voir la [décision d'architecture](../../docs/architecture/ADR-0002-android-shared-brain.md). Une conversation ne sauvegarde pas automatiquement des informations ; le bouton « Retenir cette information » propose une relecture et une confirmation. Dans « Mes notes », saisir d'abord un sujet dans le champ texte pour rechercher ; sans sujet, les cinquante notes les plus récentes sont affichées.

@@ -8,15 +8,21 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
+internal class InvalidKnowledgeNote : IllegalArgumentException("Invalid knowledge note")
+internal class KnowledgeCapacityReached : IllegalStateException("Knowledge capacity reached")
+
 /**
  * Local library, not the brain. Sources are evidence, never instructions.
  * Each companion has its own namespace; no cloud account or network access.
  * External information may be imported only by an explicit user action.
  */
-internal class LocalKnowledgeLibrary(context: Context, companionId: String = "nexus-default") {
+internal class LocalKnowledgeLibrary(
+    context: Context,
+    companionId: String = "nexus-default",
+    private val cipher: KnowledgeCipher = LocalKnowledgeCipher(companionId)
+) {
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
-    private val cipher = LocalKnowledgeCipher(safeId)
     private val maxEntries = 500
 
     data class Entry(
@@ -84,11 +90,11 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
         title: String, excerpt: String, source: String,
         verified: Boolean = false, expiresAt: Long? = null
     ): Entry {
-        require(KnowledgePolicy.isValidUserNote(title, excerpt))
+        if (!KnowledgePolicy.isValidUserNote(title, excerpt)) throw InvalidKnowledgeNote()
         require(source.isNotBlank() && source.length <= 512)
         require(!verified) { "Verification must be performed by a separate trusted verifier" }
         val existing = list()
-        check(existing.size < maxEntries) { "Library capacity reached" }
+        if (existing.size >= maxEntries) throw KnowledgeCapacityReached()
         val entry = Entry(UUID.randomUUID().toString(), title.trim(), excerpt.trim(),
             source.trim(), System.currentTimeMillis(), expiresAt, false)
         save(existing + entry)
@@ -105,16 +111,27 @@ internal class LocalKnowledgeLibrary(context: Context, companionId: String = "ne
     }
 
     fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
+        return matchingEntries(list(), query, now).take(5)
+    }
+
+    /** One atomic read per conversation turn; expired notes never enter the brain context. */
+    fun contextFor(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
+        val entries = list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
+        val matches = matchingEntries(entries, query, now)
+        return (if (matches.isEmpty()) entries.sortedByDescending { it.recordedAt } else matches).take(8)
+    }
+
+    private fun matchingEntries(entries: List<Entry>, query: String, now: Long): List<Entry> {
         val tokens = KnowledgePolicy.queryTerms(query)
         if (tokens.isEmpty()) return emptyList()
-        return list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
+        return entries.filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
             .map { entry ->
                 entry to KnowledgePolicy.score(tokens, entry.title, entry.excerpt)
             }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Entry, Int>> { it.second }
                 .thenByDescending { it.first.recordedAt })
-            .take(5).map { it.first }
+            .map { it.first }
     }
 
     private fun save(entries: List<Entry>) {

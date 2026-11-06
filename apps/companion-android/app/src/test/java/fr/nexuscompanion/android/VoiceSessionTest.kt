@@ -269,4 +269,47 @@ class VoiceSessionTest {
         assertEquals(listOf(true, false), f.sessions)
         assertEquals(1, f.platform.totalStarts)
     }
+
+    @Test fun asynchronousBrainProcessingKeepsRecognitionPausedUntilReplyFinishes() {
+        val f = Fixture(); f.start()
+        val previous = f.platform.recognition
+        f.session.beginResponse()
+        f.platform.advance(2_000)
+        previous.events.result("Nexus commande périmée")
+        assertTrue(f.commands.isEmpty())
+        assertEquals(1, f.platform.totalStarts)
+        f.session.finishResponse("Bonjour")
+        f.platform.advance(1_000)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(700)
+        assertEquals(2, f.platform.totalStarts)
+    }
+
+    @Test fun workerFailureResumesListeningWithoutSpeaking() {
+        val f = Fixture(); f.start()
+        f.session.beginResponse(); f.session.finishResponse(null)
+        f.platform.advance(500)
+        assertEquals(2, f.platform.totalStarts)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+    }
+
+    @Test fun lostWorkerCallbackHasABoundedRecoveryAndStopCancelsIt() {
+        val f = Fixture(); f.start()
+        f.session.beginResponse(); f.platform.advance(10_500)
+        assertEquals(2, f.platform.totalStarts)
+        f.session.beginResponse(); f.session.stop(); f.platform.advance(20_000)
+        assertEquals(2, f.platform.totalStarts)
+        f.start()
+        assertEquals(3, f.platform.totalStarts)
+    }
+
+    @Test fun stoppedMicrophoneCannotBeReactivatedByALateBrainReply() {
+        val f = Fixture(); f.start()
+        f.session.beginResponse(); f.session.stop(); f.session.finishResponse("Réponse tardive")
+        f.platform.advance(20_000)
+        assertEquals(1, f.platform.totalStarts)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        assertEquals(listOf(true, false), f.sessions)
+    }
 }

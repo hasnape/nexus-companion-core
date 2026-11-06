@@ -75,6 +75,13 @@ class MainActivityTest {
         assertEquals("private bytes", notes.readText())
     }
 
+    @Test fun voiceSetupIsPrivateAndTheTestChannelClearlyIdentifiesItsSeparateMemory() {
+        assertEquals(BuildConfig.IS_PREVIEW, hasText(activity.getString(R.string.preview_warning)))
+        button(R.string.voice_settings).performClick()
+        assertEquals(VoiceSettingsActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
+        assertFalse(activity.packageManager.getActivityInfo(android.content.ComponentName(activity, VoiceSettingsActivity::class.java), 0).exported)
+    }
+
     @Test @Config(sdk = [34]) fun voiceStatusSurvivesTextWorkAndPrivateDialogsClearThePreview() {
         shadowOf(activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
         activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))

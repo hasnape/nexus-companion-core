@@ -67,8 +67,9 @@ class VoiceSessionTest {
         val mouths = mutableListOf<Boolean>()
         val sessions = mutableListOf<Boolean>()
         val transcripts = mutableListOf<Pair<String, Boolean>>()
+        val levels = mutableListOf<Int>()
         val session = VoiceSession(platform, statuses::add, commands::add, mouths::add, sessions::add,
-            { text, final -> transcripts.add(text to final) })
+            { text, final -> transcripts.add(text to final) }, levels::add)
         fun start() { session.start(); platform.speaker.events.ready(true) }
     }
 
@@ -80,6 +81,49 @@ class VoiceSessionTest {
         }
         assertEquals(101, f.platform.totalStarts)
         assertEquals(listOf(true), f.sessions)
+        assertTrue(f.commands.isEmpty())
+    }
+
+    @Test fun androidRateLimitsUseACooldownInsteadOfRapidRestarts() {
+        val f = Fixture(); f.start()
+        f.platform.recognition.events.error(RecognitionFailure.RATE_LIMIT)
+        f.platform.advance(14_999)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1)
+        assertEquals(2, f.platform.totalStarts)
+        assertTrue(f.statuses.any { "15 secondes" in it })
+    }
+
+    @Test fun busyRecognizerGetsTimeToReleaseItsAudioResources() {
+        val f = Fixture(); f.start()
+        val old = f.platform.recognition
+        old.events.error(RecognitionFailure.BUSY)
+        assertTrue(old.closed)
+        f.platform.advance(1_499); assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1); assertEquals(2, f.platform.totalStarts)
+        old.events.result("Nexus ancien résultat")
+        assertTrue(f.commands.isEmpty())
+    }
+
+    @Test fun stoppingCancelsRateLimitRecoveryAndSignalCallbacks() {
+        val f = Fixture(); f.start()
+        val old = f.platform.recognition
+        old.events.level(8f); assertTrue(f.levels.last() > 0)
+        old.events.error(RecognitionFailure.RATE_LIMIT)
+        f.session.stop(); old.events.level(12f)
+        f.platform.advance(100_000)
+        assertEquals(1, f.platform.totalStarts)
+        assertEquals(0, f.levels.last())
+    }
+
+    @Test fun signalMeterIsBoundedAndPausedDuringTheCompanionsVoice() {
+        val f = Fixture(); f.start()
+        val old = f.platform.recognition
+        old.events.level(100f); assertEquals(100, f.levels.last())
+        old.events.level(-100f); assertEquals(0, f.levels.last())
+        old.events.level(Float.NaN); assertEquals(0, f.levels.last())
+        f.session.speak("Bonjour"); old.events.level(12f)
+        assertEquals(0, f.levels.last())
         assertTrue(f.commands.isEmpty())
     }
 

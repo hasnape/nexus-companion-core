@@ -3,7 +3,7 @@ package fr.nexuscompanion.android
 internal fun interface VoiceTask { fun cancel() }
 
 internal enum class RecognitionFailure {
-    SILENCE, NO_MATCH, PERMISSION, LANGUAGE_NOT_SUPPORTED, LANGUAGE_NOT_INSTALLED, TEMPORARY
+    SILENCE, NO_MATCH, PERMISSION, LANGUAGE_NOT_SUPPORTED, LANGUAGE_NOT_INSTALLED, TEMPORARY, BUSY, RATE_LIMIT
 }
 
 internal interface VoiceRecognition {
@@ -25,6 +25,7 @@ internal interface RecognitionEvents {
     fun partial(text: String) = Unit
     fun speechStarted() = Unit
     fun speechEnded() = Unit
+    fun level(rmsDb: Float) = Unit
 }
 
 internal interface SpeechEvents {
@@ -49,7 +50,8 @@ internal class VoiceSession(
     private val onCommand: (String) -> Unit,
     private val onSpeechState: (Boolean) -> Unit,
     private val onSessionState: (Boolean) -> Unit,
-    private val onTranscript: (String, Boolean) -> Unit = { _, _ -> }
+    private val onTranscript: (String, Boolean) -> Unit = { _, _ -> },
+    private val onInputLevel: (Int) -> Unit = {}
 ) {
     private var enabled = false
     private var listening = false
@@ -145,6 +147,9 @@ internal class VoiceSession(
                         if (utterance == null) scheduleRestart()
                     }
                     override fun speechStarted() { if (current()) markSpeechStarted() }
+                    override fun level(rmsDb: Float) {
+                        if (current() && rmsDb.isFinite()) onInputLevel(((rmsDb + 2f) * 100f / 14f).toInt().coerceIn(0, 100))
+                    }
                     override fun partial(text: String) {
                         if (!current() || text.isBlank()) return
                         markSpeechStarted()
@@ -160,12 +165,20 @@ internal class VoiceSession(
                         if (!current()) return
                         recognitionTimeout?.cancel(); recognitionTimeout = null
                         listening = false
+                        onInputLevel(0)
                         if (awaitingCommand && capturing) armCommandTimeout()
                         when (failure) {
                             RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH -> scheduleRestart()
                             RecognitionFailure.TEMPORARY -> {
                                 closeRecognition()
                                 scheduleRestart(failed = true)
+                            }
+                            RecognitionFailure.BUSY, RecognitionFailure.RATE_LIMIT -> {
+                                closeRecognition()
+                                scheduleRestart(failed = true, delayMs = if (failure == RecognitionFailure.RATE_LIMIT) 15_000L else 1_500L)
+                                if (enabled) onStatus(if (failure == RecognitionFailure.RATE_LIMIT)
+                                    "Android limite les demandes vocales — reprise dans 15 secondes."
+                                    else "Service vocal occupé — reprise dans un instant.")
                             }
                             else -> {
                                 stop()
@@ -180,6 +193,7 @@ internal class VoiceSession(
                 })
             }
             capturing = false
+            onInputLevel(0)
             ++recognitionCycle
             listening = true
             onStatus("Préparation du micro…")
@@ -276,6 +290,7 @@ internal class VoiceSession(
 
     private fun scheduleRestart(failed: Boolean = false, delayMs: Long = 500L) {
         if (!enabled || utterance != null || listening || processing) return
+        onInputLevel(0)
         failures = if (failed) failures + 1 else 0
         if (failures > 12) {
             stop()
@@ -285,7 +300,7 @@ internal class VoiceSession(
         restart?.cancel()
         onStatus(if (failed) "Le micro se réinitialise…" else "Reprise de l'écoute locale…")
         val session = generation
-        val delay = if (failed) (500L * failures).coerceAtMost(3_000L) else delayMs
+        val delay = if (failed) (500L * failures).coerceAtMost(3_000L).coerceAtLeast(delayMs) else delayMs
         restart = platform.after(delay) { if (enabled && generation == session) beginRecognition() }
     }
 
@@ -372,6 +387,7 @@ internal class VoiceSession(
         ++recognitionCycle
         ++recognitionGeneration
         listening = false
+        onInputLevel(0)
         val previous = recognition
         recognition = null
         try { previous?.close() } catch (_: RuntimeException) { /* callbacks already invalidated */ }

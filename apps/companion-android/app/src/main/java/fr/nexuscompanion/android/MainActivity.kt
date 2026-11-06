@@ -139,6 +139,7 @@ class MainActivity : Activity() {
         retainButton = button(R.string.retain_proposal) { pendingCandidate?.let { confirmNote(it.content, it.sensitive) } }
             .apply { visibility = View.GONE }
         button(R.string.my_notes) { showNotes() }
+        button(R.string.updates) { startActivity(android.content.Intent(this, UpdateActivity::class.java)) }
         button(R.string.about) {
             runLocal(R.string.working, R.string.operation_failed, {
                 assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().use { it.readText() }

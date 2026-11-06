@@ -14,8 +14,8 @@ android {
   applicationId = "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 5
-  versionName = "0.3.1-native-alpha"
+  versionCode = 6
+  versionName = "0.4.0-native-alpha"
  }
  compileOptions {
   sourceCompatibility = JavaVersion.VERSION_17
@@ -50,6 +50,7 @@ android {
 }
 
 dependencies {
+ implementation("androidx.core:core:1.15.0")
  implementation("org.mozilla:rhino:1.9.1")
  testImplementation("junit:junit:4.13.2")
  testImplementation("org.robolectric:robolectric:4.17")

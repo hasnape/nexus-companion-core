@@ -67,6 +67,14 @@ class MainActivityTest {
         assertFalse(button(R.string.speak_now).isEnabled)
     }
 
+    @Test fun updatesOpenThePrivateNativeScreenWithoutChangingNotes() {
+        val notes = File(activity.filesDir, "knowledge-nexus-default.json").apply { writeText("private bytes") }
+        button(R.string.updates).performClick()
+        val intent = shadowOf(activity).nextStartedActivity
+        assertEquals(UpdateActivity::class.java.name, intent.component?.className)
+        assertEquals("private bytes", notes.readText())
+    }
+
     @Test @Config(sdk = [34]) fun voiceStatusSurvivesTextWorkAndPrivateDialogsClearThePreview() {
         shadowOf(activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
         activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))

@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.3.1 native alpha
+# Nexus Companion Android — 0.4.0 native alpha
 
 Application Kotlin native, sans WebView, navigateur, serveur ni permission INTERNET. Android 12 minimum (API 31), cible Android 15 (API 35). Le produit Android reste une **alpha** : un APK signé ne prouve pas que le compagnon complet est terminé.
 
@@ -15,6 +15,7 @@ Application Kotlin native, sans WebView, navigateur, serveur ni permission INTER
 - Voix française installée hors ligne uniquement. Sans service vocal ou modèle français, le texte reste disponible avec un message explicite.
 - Propositions à retenir avec confirmation explicite ; consultation et suppression dans « Mes notes » ; rappel conversationnel des notes non sensibles, avec extraits courts et statut non vérifié. Notes privées, sauvegarde atomique, recherche sans accents et provenance ; chiffrement AES-256-GCM avec clé Android Keystore liée au compagnon. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture. Les données illisibles ne sont pas remplacées.
 - Sauvegarde système désactivée, exclusions explicites de sauvegarde cloud et de transfert entre appareils. Aucun audio ou historique de transcription enregistré par l'application.
+- Écran natif « Mises à jour » : choix explicite d'un APK local, contrôle du package, de la version, des signataires courants et du niveau Android, puis transmission d'une copie privée en lecture seule à l'installateur Android. Aucun téléchargement automatique ni permission de stockage étendue.
 
 La reconnaissance Android fonctionne par sessions finies et reprises. Elle ne constitue pas un moteur dédié de détection de mot-clé, et sa consommation et sa fiabilité sur téléphone restent à mesurer.
 
@@ -52,17 +53,23 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.3.1-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.0-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (5 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
+Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (6 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
+
+Après l'installation de 0.4.0, les prochains APK peuvent être sélectionnés dans **Mises à jour → Choisir un APK**. L'écran affiche la version vérifiée ; **Installer cette version** ouvre les réglages d'autorisation si nécessaire. Au retour, un nouveau tap est obligatoire : aucune installation automatique. Android vérifie ensuite le paquet et demande sa confirmation. La validation locale ne remplace pas la vérification cryptographique finale effectuée par Android.
+
+La permission spéciale `REQUEST_INSTALL_PACKAGES` permet ce passage à l'installateur ; elle ne donne pas le droit de modifier les notes ni de procéder à une installation silencieuse. `INTERNET`, les autorisations générales de stockage et la désinstallation ne sont pas utilisés par ce parcours. L'APK doit être un paquet autonome, pas une archive XAPK ou un ensemble de splits. La rotation de clé est refusée par la comparaison stricte des signataires ; elle nécessiterait une migration distincte.
+
+Le cache privé ne contient que des copies APK, limitées à 64 Mio par fichier et 128 Mio au total. Leur SHA-256 est recalculé après une recréation de l'écran et avant la transmission. Les fichiers non transmis sont supprimés à la fermeture ; ceux transmis à Android restent lisibles pour l'installation, puis sont supprimés à l'import suivant une fois âgés de 24 heures. Le fournisseur non exporté expose uniquement `cache/updates/` et interdit l'écriture, sans accès aux notes.
 
 ## Limites et prochaine validation
 
-Le premier pont vers les règles TypeScript est intégré ; le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et un vérificateur de mises à jour dans l'application restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
+Le premier pont vers les règles TypeScript est intégré ; le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
 
-Voir le [rapport de validation 0.3.1](../../docs/releases/ANDROID-0.3.1-2026-11-06.md). Les tests exécutent le bundle partagé dans Rhino, l'interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les services vocaux sont simulés ; ces tests ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie sur un vrai appareil. Aucun nouveau modèle acoustique n'est livré ; les indications de vocabulaire et résultats partiels dépendent du service Android installé.
+Voir le [rapport de validation 0.4.0](../../docs/releases/ANDROID-0.4.0-2026-11-06.md). Les tests exécutent le bundle partagé dans Rhino, l'interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les services vocaux, métadonnées de paquets et écrans système sont simulés ; les fichiers et octets transmis au fournisseur sont réels. Ces tests ne prouvent pas une installation physique ni la conservation des notes au cours d'une installation réelle. Ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie. Aucun nouveau modèle acoustique n'est livré ; les indications de vocabulaire et résultats partiels dépendent du service Android installé.
 
 ## Développement du moteur partagé
 

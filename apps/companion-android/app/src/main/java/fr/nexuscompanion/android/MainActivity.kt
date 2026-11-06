@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputFilter
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -32,12 +33,15 @@ class MainActivity : Activity() {
     private lateinit var answer: TextView
     private lateinit var input: EditText
     private lateinit var voiceButton: Button
+    private lateinit var directVoiceButton: Button
+    private lateinit var transcript: TextView
     private lateinit var retainButton: Button
     private val taskButtons = mutableListOf<Button>()
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private var pendingCandidate: NativeBrainService.Candidate? = null
     private var voiceActive = false
+    private var voiceStatus: String? = null
     private var autoListenEnabled = true
     private var foreground = false
     private var destroyed = false
@@ -57,12 +61,22 @@ class MainActivity : Activity() {
         buildScreen()
         controller = NativeVoiceController(
             context = this,
-            onStatus = { status.text = it },
+            onStatus = { message ->
+                voiceStatus = message
+                if (!busy) status.text = message
+            },
             onCommand = ::respond,
             onSpeechState = { audible -> face.text = getString(if (audible) R.string.face_speaking else R.string.face_idle) },
             onSessionState = { active ->
                 voiceActive = active
                 voiceButton.setText(if (active) R.string.deactivate_microphone else R.string.activate_microphone)
+                directVoiceButton.isEnabled = active && !busy
+            },
+            onTranscript = { heard, final ->
+                transcript.text = if (heard.isEmpty()) "" else getString(
+                    if (final) R.string.voice_heard else R.string.voice_hearing, heard
+                )
+                transcript.visibility = if (heard.isEmpty()) View.GONE else View.VISIBLE
             }
         )
     }
@@ -95,6 +109,14 @@ class MainActivity : Activity() {
         status = label(R.string.offline_status, 16f)
         voiceButton = button(R.string.activate_microphone) { toggleVoice() }
         taskButtons.remove(voiceButton) // Keep Stop visible above long replies and available during work.
+        directVoiceButton = button(R.string.speak_now) {
+            if (foreground && voiceActive && !busy) controller.listenForCommand()
+        }.apply { isEnabled = false }
+        taskButtons.remove(directVoiceButton)
+        transcript = label(R.string.voice_transcript_empty, 16f).apply {
+            setTextColor(Color.LTGRAY); maxLines = 4; ellipsize = TextUtils.TruncateAt.END
+            visibility = View.GONE
+        }
         answer = label(R.string.greeting, 18f)
         input = EditText(this).apply {
             setHint(R.string.input_hint); setSingleLine(true); setTextColor(Color.WHITE)
@@ -126,7 +148,9 @@ class MainActivity : Activity() {
                     .setPositiveButton(R.string.close, null).create())
             }
         }
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(Color.rgb(10, 22, 43)); isFillViewport = true; addView(root)
+        })
         window.insetsController?.setSystemBarsAppearance(0,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         root.requestApplyInsets()
@@ -136,6 +160,12 @@ class MainActivity : Activity() {
         busy = active
         taskButtons.forEach { it.isEnabled = !active }
         input.isEnabled = !active
+        directVoiceButton.isEnabled = voiceActive && !active
+    }
+
+    private fun restoreStatus() {
+        val message = voiceStatus
+        if (voiceActive && message != null) status.text = message else status.setText(R.string.local_ready)
     }
 
     private fun <T> runLocal(progress: Int, failureMessage: Int, task: () -> T, success: (T) -> Unit) {
@@ -149,7 +179,7 @@ class MainActivity : Activity() {
                 main.post {
                     if (!destroyed) {
                         setBusy(false)
-                        status.setText(R.string.local_ready)
+                        restoreStatus()
                         success(result)
                         if (foreground && voiceActive) controller.finishResponse(null)
                     }
@@ -163,7 +193,7 @@ class MainActivity : Activity() {
                             is KnowledgeCapacityReached -> R.string.library_full
                             else -> failureMessage
                         })
-                        status.setText(R.string.local_ready)
+                        restoreStatus()
                         if (foreground && voiceActive) controller.finishResponse(null)
                     }
                 }

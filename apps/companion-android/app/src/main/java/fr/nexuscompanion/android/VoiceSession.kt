@@ -21,6 +21,10 @@ internal interface RecognitionEvents {
     fun ready()
     fun result(text: String)
     fun error(failure: RecognitionFailure)
+    fun alternatives(hypotheses: List<SpeechHypothesis>) { result(hypotheses.firstOrNull()?.text.orEmpty()) }
+    fun partial(text: String) = Unit
+    fun speechStarted() = Unit
+    fun speechEnded() = Unit
 }
 
 internal interface SpeechEvents {
@@ -44,15 +48,19 @@ internal class VoiceSession(
     private val onStatus: (String) -> Unit,
     private val onCommand: (String) -> Unit,
     private val onSpeechState: (Boolean) -> Unit,
-    private val onSessionState: (Boolean) -> Unit
+    private val onSessionState: (Boolean) -> Unit,
+    private val onTranscript: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     private var enabled = false
     private var listening = false
     private var speechReady = false
     private var awaitingCommand = false
     private var processing = false
+    private var capturing = false
+    private var commandTimerPending = false
     private var generation = 0L
     private var recognitionGeneration = 0L
+    private var recognitionCycle = 0L
     private var utteranceSequence = 0L
     private var utterance: String? = null
     private var failures = 0
@@ -62,7 +70,8 @@ internal class VoiceSession(
     private var commandTimeout: VoiceTask? = null
     private var speechTimeout: VoiceTask? = null
     private var responseTimeout: VoiceTask? = null
-    private val wake = Regex("^(nexus|nexusse|nexuce)(?=$|[\\s,;:!?.…])([\\s,;:!?.…]+)?", RegexOption.IGNORE_CASE)
+    private var recognitionTimeout: VoiceTask? = null
+    private var transcriptTimeout: VoiceTask? = null
 
     fun available(): Boolean = try { platform.available() } catch (_: RuntimeException) { false }
 
@@ -114,18 +123,44 @@ internal class VoiceSession(
                 fun current() = enabled && generation == session && recognitionGeneration == turn && listening && utterance == null
                 recognition = platform.recognizer(object : RecognitionEvents {
                     override fun ready() {
-                        if (current()) onStatus(if (awaitingCommand) "Micro actif : je t'écoute." else "Micro actif : dis « Nexus ».")
+                        if (!current() || capturing) return
+                        armRecognitionTimeout(45_000L)
+                        if (commandTimerPending) armCommandTimeout()
+                        onStatus(if (awaitingCommand) "Micro actif : je t'écoute." else "Micro actif : dis « Nexus ».")
                     }
                     override fun result(text: String) {
+                        alternatives(listOf(SpeechHypothesis(text)))
+                    }
+                    override fun alternatives(hypotheses: List<SpeechHypothesis>) {
                         if (!current()) return
+                        recognitionTimeout?.cancel(); recognitionTimeout = null
                         listening = false
                         failures = 0
-                        acceptTranscript(text)
+                        val text = VoiceTranscriptPolicy.select(hypotheses, awaitingCommand)
+                        if (text != null) {
+                            showTranscript(text, true)
+                            acceptTranscript(text)
+                        }
+                        if (awaitingCommand && utterance == null && capturing) armCommandTimeout()
                         if (utterance == null) scheduleRestart()
+                    }
+                    override fun speechStarted() { if (current()) markSpeechStarted() }
+                    override fun partial(text: String) {
+                        if (!current() || text.isBlank()) return
+                        markSpeechStarted()
+                        showTranscript(text, false)
+                    }
+                    override fun speechEnded() {
+                        if (!current()) return
+                        markSpeechStarted()
+                        armRecognitionTimeout(8_000L)
+                        onStatus("Analyse locale de ta phrase…")
                     }
                     override fun error(failure: RecognitionFailure) {
                         if (!current()) return
+                        recognitionTimeout?.cancel(); recognitionTimeout = null
                         listening = false
+                        if (awaitingCommand && capturing) armCommandTimeout()
                         when (failure) {
                             RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH -> scheduleRestart()
                             RecognitionFailure.TEMPORARY -> {
@@ -144,7 +179,11 @@ internal class VoiceSession(
                     }
                 })
             }
+            capturing = false
+            ++recognitionCycle
             listening = true
+            onStatus("Préparation du micro…")
+            armRecognitionTimeout(8_000L)
             recognition?.start()
         } catch (_: SecurityException) {
             stop()
@@ -156,11 +195,10 @@ internal class VoiceSession(
     }
 
     private fun acceptTranscript(transcript: String) {
-        val text = transcript.trim()
-        if (text.isBlank()) return
-        val prefix = wake.find(text)
-        if (prefix == null && !awaitingCommand) return
-        val command = if (prefix != null) text.substring(prefix.range.last + 1).trim() else text
+        if (transcript.isBlank() || transcript.length > 2000) return
+        val parsed = VoiceTranscriptPolicy.parse(transcript)
+        if (!parsed.hasWake && !awaitingCommand) return
+        val command = parsed.command
         commandTimeout?.cancel()
         commandTimeout = null
         if (command.isBlank()) {
@@ -173,15 +211,67 @@ internal class VoiceSession(
     }
 
     private fun armCommandTimeout() {
+        commandTimerPending = false
         commandTimeout?.cancel()
+        commandTimeout = null
         if (!enabled || !awaitingCommand) return
         val session = generation
         commandTimeout = platform.after(12_000L) {
             if (enabled && generation == session) {
+                commandTimeout = null
                 awaitingCommand = false
                 onStatus("Dis « Nexus » quand tu veux me parler.")
             }
         }
+    }
+
+    private fun markSpeechStarted() {
+        if (capturing) return
+        capturing = true
+        // The command window limits the wait for speech, never the user's whole sentence.
+        if (awaitingCommand) {
+            commandTimerPending = false
+            commandTimeout?.cancel(); commandTimeout = null
+        }
+        armRecognitionTimeout(60_000L)
+        onStatus("Je t'écoute — parle naturellement.")
+    }
+
+    private fun armRecognitionTimeout(delayMs: Long) {
+        recognitionTimeout?.cancel()
+        val session = generation
+        val cycle = recognitionCycle
+        recognitionTimeout = platform.after(delayMs) {
+            if (enabled && generation == session && recognitionCycle == cycle && listening) {
+                if (awaitingCommand && capturing) armCommandTimeout()
+                closeRecognition()
+                scheduleRestart(failed = true)
+            }
+        }
+    }
+
+    private fun showTranscript(text: String, final: Boolean) {
+        transcriptTimeout?.cancel()
+        onTranscript(text.take(2000), final)
+        val session = generation
+        transcriptTimeout = platform.after(15_000L) {
+            if (enabled && generation == session) onTranscript("", false)
+        }
+    }
+
+    /** Explicit direct dictation bypasses the wake phrase without persisting anything. */
+    fun listenForCommand() {
+        if (!enabled || processing) return
+        restart?.cancel(); restart = null
+        commandTimeout?.cancel(); commandTimeout = null
+        speechTimeout?.cancel(); speechTimeout = null
+        utterance = null
+        closeRecognition()
+        try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
+        onSpeechState(false)
+        awaitingCommand = true
+        commandTimerPending = true
+        beginRecognition()
     }
 
     private fun scheduleRestart(failed: Boolean = false, delayMs: Long = 500L) {
@@ -193,6 +283,7 @@ internal class VoiceSession(
             return
         }
         restart?.cancel()
+        onStatus(if (failed) "Le micro se réinitialise…" else "Reprise de l'écoute locale…")
         val session = generation
         val delay = if (failed) (500L * failures).coerceAtMost(3_000L) else delayMs
         restart = platform.after(delay) { if (enabled && generation == session) beginRecognition() }
@@ -203,6 +294,7 @@ internal class VoiceSession(
         if (!enabled) return
         processing = true
         awaitingCommand = false
+        commandTimerPending = false
         restart?.cancel(); restart = null
         commandTimeout?.cancel(); commandTimeout = null
         responseTimeout?.cancel()
@@ -211,6 +303,7 @@ internal class VoiceSession(
         closeRecognition()
         try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
         onSpeechState(false)
+        onStatus("Nexus réfléchit — micro en pause")
         val session = generation
         responseTimeout = platform.after(10_000L) {
             if (enabled && generation == session && processing) {
@@ -275,6 +368,8 @@ internal class VoiceSession(
     }
 
     private fun closeRecognition() {
+        recognitionTimeout?.cancel(); recognitionTimeout = null
+        ++recognitionCycle
         ++recognitionGeneration
         listening = false
         val previous = recognition
@@ -290,12 +385,16 @@ internal class VoiceSession(
         commandTimeout?.cancel()
         speechTimeout?.cancel()
         responseTimeout?.cancel()
+        transcriptTimeout?.cancel(); transcriptTimeout = null
+        onTranscript("", false)
         restart = null
         commandTimeout = null
         speechTimeout = null
         responseTimeout = null
         processing = false
         awaitingCommand = false
+        commandTimerPending = false
+        capturing = false
         utterance = null
         speechReady = false
         closeRecognition()

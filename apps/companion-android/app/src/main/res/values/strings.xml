@@ -10,6 +10,10 @@
     <string name="remember">Ajouter à ma bibliothèque locale</string>
     <string name="activate_microphone">Activer le micro local</string>
     <string name="deactivate_microphone">Désactiver le micro</string>
+    <string name="speak_now">Parler maintenant</string>
+    <string name="voice_transcript_empty" translatable="false"></string>
+    <string name="voice_hearing">En cours : %1$s</string>
+    <string name="voice_heard">Entendu : %1$s</string>
     <string name="note_saved">Note enregistrée localement (non vérifiée).</string>
     <string name="note_invalid">Note trop longue ou invalide (2000 caractères maximum).</string>
     <string name="library_full">Bibliothèque locale pleine.</string>

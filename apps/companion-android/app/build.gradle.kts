@@ -6,16 +6,19 @@ plugins {
  id("com.android.application")
  id("org.jetbrains.kotlin.android")
 }
+val nexusPreview = providers.gradleProperty("nexusPreview").getOrElse("false").toBooleanStrict()
 android {
  namespace = "fr.nexuscompanion.android"
  compileSdk = 35
  buildToolsVersion = "35.0.0"
  defaultConfig {
-  applicationId = "fr.nexuscompanion.android"
+  applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 6
-  versionName = "0.4.0-native-alpha"
+  versionCode = 7
+  versionName = "0.4.1-native-alpha" + if (nexusPreview) "-preview" else ""
+  buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
+  manifestPlaceholders["nexusLabel"] = if (nexusPreview) "Nexus Companion Test" else "@string/app_name"
  }
  compileOptions {
   sourceCompatibility = JavaVersion.VERSION_17

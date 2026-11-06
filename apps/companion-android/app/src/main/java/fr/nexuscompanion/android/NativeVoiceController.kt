@@ -20,9 +20,10 @@ internal class NativeVoiceController(
     onCommand: (String) -> Unit,
     onSpeechState: (Boolean) -> Unit,
     onSessionState: (Boolean) -> Unit = {},
-    onTranscript: (String, Boolean) -> Unit = { _, _ -> }
+    onTranscript: (String, Boolean) -> Unit = { _, _ -> },
+    onInputLevel: (Int) -> Unit = {}
 ) {
-    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState, onSessionState, onTranscript)
+    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState, onSessionState, onTranscript, onInputLevel)
     fun available() = session.available()
     fun start() = session.start()
     fun listenForCommand() = session.listenForCommand()
@@ -52,10 +53,12 @@ private class AndroidVoicePlatform(private val context: Context) : VoicePlatform
                 SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> RecognitionFailure.PERMISSION
                 SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED -> RecognitionFailure.LANGUAGE_NOT_SUPPORTED
                 SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE -> RecognitionFailure.LANGUAGE_NOT_INSTALLED
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> RecognitionFailure.BUSY
+                SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> RecognitionFailure.RATE_LIMIT
                 else -> RecognitionFailure.TEMPORARY
             })
             override fun onBeginningOfSpeech() = events.speechStarted()
-            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onRmsChanged(rmsdB: Float) = events.level(rmsdB)
             override fun onBufferReceived(buffer: ByteArray?) = Unit
             override fun onEndOfSpeech() = events.speechEnded()
             override fun onPartialResults(partialResults: Bundle?) = events.partial(

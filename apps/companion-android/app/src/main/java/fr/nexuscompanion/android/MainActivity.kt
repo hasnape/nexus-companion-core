@@ -20,6 +20,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.ProgressBar
 import android.widget.TextView
 import java.util.concurrent.Executors
 
@@ -35,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var voiceButton: Button
     private lateinit var directVoiceButton: Button
     private lateinit var transcript: TextView
+    private lateinit var microphoneLevel: ProgressBar
     private lateinit var retainButton: Button
     private val taskButtons = mutableListOf<Button>()
     private val worker = Executors.newSingleThreadExecutor()
@@ -77,7 +79,8 @@ class MainActivity : Activity() {
                     if (final) R.string.voice_heard else R.string.voice_hearing, heard
                 )
                 transcript.visibility = if (heard.isEmpty()) View.GONE else View.VISIBLE
-            }
+            },
+            onInputLevel = { microphoneLevel.progress = it }
         )
     }
 
@@ -104,8 +107,10 @@ class MainActivity : Activity() {
             taskButtons.add(this)
         }
         face = label(R.string.face_idle, 60f).apply {
+            contentDescription = getString(R.string.app_name)
             setTextColor(Color.CYAN); typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(12), 0, dp(12))
         }
+        if (BuildConfig.IS_PREVIEW) label(R.string.preview_warning, 15f)
         status = label(R.string.offline_status, 16f)
         voiceButton = button(R.string.activate_microphone) { toggleVoice() }
         taskButtons.remove(voiceButton) // Keep Stop visible above long replies and available during work.
@@ -113,6 +118,11 @@ class MainActivity : Activity() {
             if (foreground && voiceActive && !busy) controller.listenForCommand()
         }.apply { isEnabled = false }
         taskButtons.remove(directVoiceButton)
+        microphoneLevel = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100; contentDescription = getString(R.string.microphone_level)
+            root.addView(this, LinearLayout.LayoutParams(-1, dp(8)))
+        }
+        button(R.string.voice_settings) { startActivity(android.content.Intent(this, VoiceSettingsActivity::class.java)) }
         transcript = label(R.string.voice_transcript_empty, 16f).apply {
             setTextColor(Color.LTGRAY); maxLines = 4; ellipsize = TextUtils.TruncateAt.END
             visibility = View.GONE

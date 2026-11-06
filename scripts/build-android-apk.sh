@@ -17,7 +17,11 @@ fi
 cd "$ROOT/apps/companion-android"
 tasks=(:app:clean :app:testDebugUnitTest :app:lintDebug :app:assembleDebug)
 if (( present == 4 )); then tasks+=(:app:testReleaseUnitTest :app:lintRelease :app:assembleRelease); fi
-bash ./gradlew --no-daemon --max-workers=2 "${tasks[@]}"
+case "${NEXUS_ANDROID_PREVIEW:-false}" in
+  true|false) preview="${NEXUS_ANDROID_PREVIEW:-false}" ;;
+  *) echo 'NEXUS_ANDROID_PREVIEW must be true or false.' >&2; exit 1 ;;
+esac
+bash ./gradlew --no-daemon --max-workers=2 "-PnexusPreview=$preview" "${tasks[@]}"
 DEBUG_APK="$PWD/app/build/outputs/apk/debug/app-debug.apk"
 version="$("$TOOLS/aapt" dump badging "$DEBUG_APK" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p")"
 [[ "$version" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo 'Invalid APK version name.' >&2; exit 1; }

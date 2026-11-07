@@ -12,6 +12,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowSpeechRecognizer
+import java.time.Duration
 
 /** Runs Android listener wiring through Robolectric's API-34 recognizer, not real audio. */
 @RunWith(RobolectricTestRunner::class)
@@ -58,6 +59,31 @@ class NativeVoiceControllerTest {
             val current = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
             current.triggerOnReadyForSpeech(Bundle())
             current.triggerOnResults(bundle("bonjour"))
+            assertEquals(listOf("bonjour"), commands)
+        } finally { controller.stop() }
+    }
+
+    @Test fun silenceRestartsReleaseTheOldClientAndRejectItsLateCallbacks() {
+        val commands = mutableListOf<String>()
+        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {})
+        try {
+            controller.start(); shadowOf(Looper.getMainLooper()).idle()
+            repeat(10) {
+                val engine = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
+                val recognizer = shadowOf(engine)
+                recognizer.triggerOnReadyForSpeech(Bundle())
+                recognizer.triggerOnError(SpeechRecognizer.ERROR_SPEECH_TIMEOUT)
+                assertTrue(recognizer.isDestroyed)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+                assertNotSame(engine, ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+                recognizer.triggerOnPartialResults(bundle("phrase périmée"))
+                recognizer.triggerOnResults(bundle("Nexus ancienne commande"))
+                recognizer.triggerOnError(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS)
+                assertTrue(commands.isEmpty())
+            }
+            val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+            recognizer.triggerOnReadyForSpeech(Bundle())
+            recognizer.triggerOnResults(bundle("Nexus bonjour"))
             assertEquals(listOf("bonjour"), commands)
         } finally { controller.stop() }
     }

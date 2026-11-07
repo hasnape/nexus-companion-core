@@ -1,6 +1,7 @@
 package fr.nexuscompanion.android
 
 import android.app.AlertDialog
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Looper
@@ -10,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Switch
 import android.widget.TextView
 import org.junit.After
 import org.junit.Assert.*
@@ -46,6 +48,7 @@ class MainActivityTest {
     private fun views(view: View = activity.findViewById(android.R.id.content)): List<View> =
         listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun input() = views().filterIsInstance<EditText>().single()
+    private fun spokenReplies() = views().filterIsInstance<Switch>().single()
     private fun button(text: Int) = views().filterIsInstance<Button>().single { it.text.toString() == activity.getString(text) }
     private fun hasText(text: String) = views().filterIsInstance<TextView>().any { text in it.text.toString() }
     private fun await(condition: () -> Boolean) {
@@ -60,14 +63,41 @@ class MainActivityTest {
     private fun send(text: String) { input().setText(text); button(R.string.send).performClick() }
     private fun libraryFile() = File(activity.filesDir, "knowledge-nexus-default.json")
 
-    @Test fun typedConversationWorksWithoutMicrophoneOrInternetPermission() {
+    @Test @Config(sdk = [34]) fun typedConversationIsSpokenWithoutMicrophoneOrInternetPermission() {
         assertEquals(PackageManager.PERMISSION_DENIED, activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))
         val requested = activity.packageManager.getPackageInfo(activity.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
         assertFalse(requested.contains(android.Manifest.permission.INTERNET))
+        assertTrue(spokenReplies().isChecked)
+        assertEquals(AudioManager.STREAM_MUSIC, activity.volumeControlStream)
+        ShadowTextToSpeech.addVoice(Voice("french-local", Locale.FRANCE, Voice.QUALITY_NORMAL,
+            Voice.LATENCY_NORMAL, false, emptySet()))
+        shadowOf(activity.getSystemService(AudioManager::class.java))
+            .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+
         send("Nexus, comment vas tu ?")
-        await { hasText("Ça va, merci") }
+        await { hasText("Ça va, merci") && ShadowTextToSpeech.getLastTextToSpeechInstance() != null }
+        val speech = shadowOf(ShadowTextToSpeech.getLastTextToSpeechInstance())
+        speech.onInitListener.onInit(TextToSpeech.SUCCESS)
+        await { speech.lastSpokenText?.contains("Ça va, merci") == true }
         assertFalse(libraryFile().exists())
+        assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+    }
+
+    @Test fun aPreviouslySilentInstallationCanEnableSpokenRepliesIndependently() {
+        activity.getSharedPreferences("nexus_voice_preferences", Context.MODE_PRIVATE).edit()
+            .putBoolean("auto_listen_enabled", false).remove("spoken_replies_enabled").apply()
+        lifecycle.recreate()
+        activity = lifecycle.get()
+        assertFalse(spokenReplies().isChecked)
+        send("bonjour")
+        await { hasText("Bonjour ! Je t’écoute") }
         assertNull(ShadowTextToSpeech.getLastTextToSpeechInstance())
+
+        spokenReplies().performClick()
+        lifecycle.recreate()
+        activity = lifecycle.get()
+        assertTrue(spokenReplies().isChecked)
+        assertFalse(button(R.string.speak_now).isEnabled)
     }
 
     @Test @Config(sdk = [34]) fun writtenReplyIsSpokenWhenTheRecognitionServiceIsUnavailable() {

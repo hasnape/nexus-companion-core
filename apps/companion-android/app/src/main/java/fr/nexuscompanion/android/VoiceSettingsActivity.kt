@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
+import android.media.AudioManager
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
@@ -25,6 +26,7 @@ class VoiceSettingsActivity : Activity() {
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
+        volumeControlStream = AudioManager.STREAM_MUSIC
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL

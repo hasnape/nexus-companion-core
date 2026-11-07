@@ -11,6 +11,7 @@
     <string name="activate_microphone">Activer le micro local</string>
     <string name="deactivate_microphone">Désactiver le micro</string>
     <string name="speak_now">Parler maintenant</string>
+    <string name="spoken_replies">Réponses vocales</string>
     <string name="voice_transcript_empty" translatable="false"></string>
     <string name="voice_hearing">En cours : %1$s</string>
     <string name="voice_heard">Entendu : %1$s</string>

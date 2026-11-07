@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,11 +22,16 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.ProgressBar
+import android.widget.Switch
 import android.widget.TextView
 import java.util.concurrent.Executors
 
 /** Native UI. A single worker owns the packaged brain and private library operations. */
 open class MainActivity : Activity() {
+    private companion object {
+        const val SPOKEN_REPLIES_KEY = "spoken_replies_enabled"
+    }
+
     private lateinit var controller: NativeVoiceController
     private lateinit var library: LocalKnowledgeLibrary
     private lateinit var brain: NativeBrainService
@@ -58,10 +64,15 @@ open class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
         library = LocalKnowledgeLibrary(applicationContext)
         brain = NativeBrainService(applicationContext, library)
         autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
-        buildScreen()
+        val spokenRepliesEnabled = voicePreferences.getBoolean(SPOKEN_REPLIES_KEY, autoListenEnabled)
+        if (!voicePreferences.contains(SPOKEN_REPLIES_KEY)) {
+            voicePreferences.edit().putBoolean(SPOKEN_REPLIES_KEY, spokenRepliesEnabled).apply()
+        }
+        buildScreen(spokenRepliesEnabled)
         controller = NativeVoiceController(
             context = this,
             onStatus = { message ->
@@ -92,12 +103,12 @@ open class MainActivity : Activity() {
                 }
             },
             input = createVoiceInput()
-        )
+        ).also { it.setSpokenRepliesEnabled(spokenRepliesEnabled) }
     }
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
 
-    private fun buildScreen() {
+    private fun buildScreen(spokenRepliesEnabled: Boolean) {
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -127,6 +138,15 @@ open class MainActivity : Activity() {
         status = label(R.string.offline_status, 16f)
         voiceButton = button(R.string.activate_microphone) { toggleVoice() }
         taskButtons.remove(voiceButton) // Keep Stop visible above long replies and available during work.
+        root.addView(Switch(this).apply {
+            setText(R.string.spoken_replies)
+            setTextColor(Color.WHITE)
+            isChecked = spokenRepliesEnabled
+            setOnCheckedChangeListener { _, enabled ->
+                voicePreferences.edit().putBoolean(SPOKEN_REPLIES_KEY, enabled).apply()
+                controller.setSpokenRepliesEnabled(enabled)
+            }
+        }, layout)
         directVoiceButton = button(R.string.speak_now) {
             if (foreground && voiceActive && !busy) controller.listenForCommand()
         }.apply { isEnabled = false }
@@ -235,11 +255,7 @@ open class MainActivity : Activity() {
     private fun finishLocalVoice(text: String?) {
         if (!foreground || dialogDepth > 0) return
         if (voiceActive) controller.finishResponse(text)
-        else if (text != null && autoListenEnabled &&
-            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            // Keep the existing voice opt-in when the recognition service cannot run.
-            controller.playReply(text)
-        }
+        else if (text != null) controller.playReply(text)
     }
 
     private fun respond(message: String) {
@@ -321,7 +337,7 @@ open class MainActivity : Activity() {
         if (voiceActive) {
             autoListenEnabled = false
             voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
-            controller.stop()
+            controller.stopListening()
         } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             autoListenEnabled = true
             voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()

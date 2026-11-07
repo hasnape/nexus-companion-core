@@ -21,16 +21,28 @@ internal class NativeVoiceController(
     onSpeechState: (Boolean) -> Unit,
     onSessionState: (Boolean) -> Unit = {},
     onTranscript: (String, Boolean) -> Unit = { _, _ -> },
-    onInputLevel: (Int) -> Unit = {}
+    onInputLevel: (Int) -> Unit = {},
+    onSpeechOutput: (SpeechOutputState) -> Unit = {}
 ) {
-    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState, onSessionState, onTranscript, onInputLevel)
+    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState,
+        onSessionState, onTranscript, onInputLevel, onSpeechOutput)
     fun available() = session.available()
     fun start() = session.start()
     fun listenForCommand() = session.listenForCommand()
-    fun speak(text: String) { session.speak(text) }
+    fun playReply(text: String) = session.playReply(text)
     fun beginResponse() = session.beginResponse()
     fun finishResponse(text: String?) = session.finishResponse(text)
     fun stop() = session.stop()
+}
+
+internal fun SpeechOutputState.messageResource() = when (this) {
+    SpeechOutputState.IDLE -> R.string.voice_output_idle
+    SpeechOutputState.PREPARING -> R.string.voice_output_preparing
+    SpeechOutputState.PLAYING -> R.string.voice_output_playing
+    SpeechOutputState.COMPLETED -> R.string.voice_output_completed
+    SpeechOutputState.UNAVAILABLE -> R.string.voice_output_unavailable
+    SpeechOutputState.FAILED -> R.string.voice_output_failed
+    SpeechOutputState.INTERRUPTED -> R.string.voice_output_interrupted
 }
 
 private class AndroidVoicePlatform(private val context: Context) : VoicePlatform {
@@ -103,11 +115,11 @@ private class AndroidSpeech(context: Context, private val handler: Handler, priv
                 if (!closed) {
                     try {
                         val tts = engine
-                        val voice = if (result == TextToSpeech.SUCCESS) tts?.voices?.firstOrNull {
+                        val voices = if (result == TextToSpeech.SUCCESS) tts?.voices.orEmpty().filter {
                             it.locale.language == Locale.FRENCH.language && !it.isNetworkConnectionRequired &&
                                 !it.features.orEmpty().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)
-                        } else null
-                        ready = voice != null && tts?.setVoice(voice) == TextToSpeech.SUCCESS
+                        }.sortedByDescending { it.locale.country == Locale.FRANCE.country } else emptyList()
+                        ready = tts != null && voices.any { tts.setVoice(it) == TextToSpeech.SUCCESS }
                         tts?.setAudioAttributes(attributes)
                         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -115,9 +127,9 @@ private class AndroidSpeech(context: Context, private val handler: Handler, priv
                             }
                             override fun onDone(utteranceId: String?) = complete(utteranceId)
                             @Deprecated("Deprecated in Java")
-                            override fun onError(utteranceId: String?) = complete(utteranceId)
-                            override fun onError(utteranceId: String?, errorCode: Int) = complete(utteranceId)
-                            override fun onStop(utteranceId: String?, interrupted: Boolean) = complete(utteranceId)
+                            override fun onError(utteranceId: String?) = complete(utteranceId, failed = true)
+                            override fun onError(utteranceId: String?, errorCode: Int) = complete(utteranceId, failed = true)
+                            override fun onStop(utteranceId: String?, interrupted: Boolean) = complete(utteranceId, failed = true)
                         })
                     } catch (_: RuntimeException) {
                         ready = false
@@ -128,14 +140,14 @@ private class AndroidSpeech(context: Context, private val handler: Handler, priv
         }
     }
 
-    private fun complete(id: String?) {
+    private fun complete(id: String?, failed: Boolean = false) {
         handler.post {
             if (!closed && id != null) {
                 if (activeUtterance == id) {
                     activeUtterance = null
                     audio.abandonAudioFocusRequest(focus)
                 }
-                events.finished(id)
+                if (failed) events.failed(id) else events.finished(id)
             }
         }
     }

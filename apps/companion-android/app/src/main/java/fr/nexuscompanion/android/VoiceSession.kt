@@ -6,6 +6,10 @@ internal enum class RecognitionFailure {
     SILENCE, NO_MATCH, PERMISSION, LANGUAGE_NOT_SUPPORTED, LANGUAGE_NOT_INSTALLED, TEMPORARY, BUSY, RATE_LIMIT
 }
 
+internal enum class SpeechOutputState {
+    IDLE, PREPARING, PLAYING, COMPLETED, UNAVAILABLE, FAILED, INTERRUPTED
+}
+
 internal interface VoiceRecognition {
     fun start()
     fun close()
@@ -32,6 +36,7 @@ internal interface SpeechEvents {
     fun ready(available: Boolean)
     fun started(id: String)
     fun finished(id: String)
+    fun failed(id: String)
     fun interrupted()
 }
 
@@ -51,11 +56,12 @@ internal class VoiceSession(
     private val onSpeechState: (Boolean) -> Unit,
     private val onSessionState: (Boolean) -> Unit,
     private val onTranscript: (String, Boolean) -> Unit = { _, _ -> },
-    private val onInputLevel: (Int) -> Unit = {}
+    private val onInputLevel: (Int) -> Unit = {},
+    private val onSpeechOutput: (SpeechOutputState) -> Unit = {}
 ) {
     private var enabled = false
     private var listening = false
-    private var speechReady = false
+    private var speechReady: Boolean? = null
     private var awaitingCommand = false
     private var processing = false
     private var capturing = false
@@ -68,6 +74,8 @@ internal class VoiceSession(
     private var failures = 0
     private var recognition: VoiceRecognition? = null
     private var speech: VoiceSpeech? = null
+    private var pendingReply: String? = null
+    private var speechSetupTimeout: VoiceTask? = null
     private var restart: VoiceTask? = null
     private var commandTimeout: VoiceTask? = null
     private var speechTimeout: VoiceTask? = null
@@ -84,40 +92,60 @@ internal class VoiceSession(
             return
         }
         enabled = true
-        val session = ++generation
         failures = 0
         onSessionState(true)
-        try {
-            speech = platform.speech(object : SpeechEvents {
-                override fun ready(available: Boolean) {
-                    if (!enabled || generation != session) return
-                    speechReady = available
-                    if (!available) onStatus("Voix française hors ligne absente. Les réponses restent affichées.")
-                }
-                override fun started(id: String) {
-                    if (!enabled || generation != session || utterance != id) return
-                    onStatus("Nexus parle — micro en pause")
-                    onSpeechState(true)
-                }
-                override fun finished(id: String) {
-                    if (generation == session) speechFinished(id)
-                }
-                override fun interrupted() {
-                    if (!enabled || generation != session) return
-                    stop()
-                    onStatus("Voix interrompue par Android. Réactive le micro quand tu es prêt.")
-                }
-            })
-        } catch (_: RuntimeException) {
-            onStatus("Voix locale indisponible. Les réponses restent affichées.")
-        }
+        prepareSpeech()
         onStatus("Écoute locale activée : dis « Nexus ».")
         beginRecognition()
     }
 
+    private fun prepareSpeech() {
+        if (speech != null) return
+        val session = generation
+        speechReady = null
+        try {
+            speech = platform.speech(object : SpeechEvents {
+                override fun ready(available: Boolean) {
+                    if (generation != session) return
+                    speechReady = available
+                    val reply = pendingReply
+                    clearPendingReply()
+                    if (!available) {
+                        onSpeechOutput(SpeechOutputState.UNAVAILABLE)
+                        if (reply != null) scheduleRestart()
+                    } else if (reply != null) {
+                        speak(reply)
+                    }
+                }
+                override fun started(id: String) {
+                    if (generation != session || utterance != id) return
+                    if (enabled) onStatus("Nexus parle — micro en pause")
+                    onSpeechState(true)
+                    onSpeechOutput(SpeechOutputState.PLAYING)
+                }
+                override fun finished(id: String) {
+                    if (generation == session) speechFinished(id)
+                }
+                override fun failed(id: String) {
+                    if (generation == session) speechFinished(id, SpeechOutputState.FAILED)
+                }
+                override fun interrupted() {
+                    if (generation != session) return
+                    val wasListening = enabled
+                    stop()
+                    onSpeechOutput(SpeechOutputState.INTERRUPTED)
+                    if (wasListening) onStatus("Voix interrompue par Android. Réactive le micro quand tu es prêt.")
+                }
+            })
+        } catch (_: RuntimeException) {
+            speechReady = false
+            onSpeechOutput(SpeechOutputState.UNAVAILABLE)
+        }
+    }
+
     private fun beginRecognition() {
         restart = null
-        if (!enabled || utterance != null || listening || processing) return
+        if (!enabled || utterance != null || pendingReply != null || listening || processing) return
         try {
             if (recognition == null) {
                 val session = generation
@@ -274,18 +302,15 @@ internal class VoiceSession(
         if (!enabled || processing) return
         restart?.cancel(); restart = null
         commandTimeout?.cancel(); commandTimeout = null
-        speechTimeout?.cancel(); speechTimeout = null
-        utterance = null
         closeRecognition()
-        try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
-        onSpeechState(false)
+        stopPlayback()
         awaitingCommand = true
         commandTimerPending = true
         beginRecognition()
     }
 
     private fun scheduleRestart(failed: Boolean = false, delayMs: Long = 500L) {
-        if (!enabled || utterance != null || listening || processing) return
+        if (!enabled || utterance != null || pendingReply != null || listening || processing) return
         onInputLevel(0)
         failures = if (failed) failures + 1 else 0
         if (failures > 12) {
@@ -302,6 +327,7 @@ internal class VoiceSession(
 
     /** Keep the microphone closed while the local worker prepares its answer. */
     fun beginResponse() {
+        stopPlayback()
         if (!enabled) return
         processing = true
         awaitingCommand = false
@@ -309,11 +335,7 @@ internal class VoiceSession(
         restart?.cancel(); restart = null
         commandTimeout?.cancel(); commandTimeout = null
         responseTimeout?.cancel()
-        speechTimeout?.cancel(); speechTimeout = null
-        utterance = null
         closeRecognition()
-        try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
-        onSpeechState(false)
         onStatus("Nexus réfléchit — micro en pause")
         val session = generation
         responseTimeout = platform.after(10_000L) {
@@ -330,16 +352,58 @@ internal class VoiceSession(
         if (!enabled) return
         processing = false
         responseTimeout?.cancel(); responseTimeout = null
-        if (text == null || !speak(text)) scheduleRestart()
+        if (text == null) scheduleRestart() else playReply(text)
+    }
+
+    /** Play an explicit reply or test phrase without activating recognition. */
+    fun playReply(text: String) {
+        if (text.isBlank()) {
+            scheduleRestart()
+            return
+        }
+        if (utterance != null || pendingReply != null) stopPlayback()
+        prepareSpeech()
+        when (speechReady) {
+            true -> speak(text)
+            false -> {
+                onSpeechOutput(SpeechOutputState.UNAVAILABLE)
+                scheduleRestart()
+            }
+            null -> {
+                restart?.cancel(); restart = null
+                closeRecognition()
+                pendingReply = text
+                onSpeechOutput(SpeechOutputState.PREPARING)
+                val session = generation
+                speechSetupTimeout = platform.after(5_000L) {
+                    if (generation == session && pendingReply != null) {
+                        clearPendingReply()
+                        onSpeechOutput(SpeechOutputState.FAILED)
+                        scheduleRestart()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun clearPendingReply() {
+        pendingReply = null
+        speechSetupTimeout?.cancel()
+        speechSetupTimeout = null
+    }
+
+    private fun stopPlayback() {
+        clearPendingReply()
+        speechTimeout?.cancel(); speechTimeout = null
+        utterance = null
+        try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
+        onSpeechState(false)
+        onSpeechOutput(SpeechOutputState.IDLE)
     }
 
     /** Returns false when the local voice is absent or still initializing. */
     fun speak(text: String): Boolean {
-        if (!enabled || text.isBlank()) return false
-        if (!speechReady || speech == null) {
-            onStatus("Réponse affichée. Voix locale absente ou en cours de préparation.")
-            return false
-        }
+        if (text.isBlank() || speechReady != true || speech == null) return false
         restart?.cancel()
         restart = null
         commandTimeout?.cancel()
@@ -350,29 +414,29 @@ internal class VoiceSession(
         val id = "nexus-${generation}-${++utteranceSequence}"
         utterance = id
         onSpeechState(false)
-        onStatus("Nexus prépare sa réponse — micro en pause")
+        if (enabled) onStatus("Nexus prépare sa réponse — micro en pause")
+        onSpeechOutput(SpeechOutputState.PREPARING)
         val accepted = try { speech?.speak(text, id) == true } catch (_: RuntimeException) { false }
         if (!accepted) {
-            speechFinished(id)
-            onStatus("Réponse affichée. La voix locale n'a pas pu démarrer.")
+            speechFinished(id, SpeechOutputState.FAILED)
             return false
         }
         speechTimeout = platform.after((15_000L + text.length * 100L).coerceAtMost(90_000L)) {
             if (utterance == id) {
-                speechFinished(id)
+                speechFinished(id, SpeechOutputState.INTERRUPTED)
                 try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
-                onStatus("Réponse vocale interrompue. Retour à l'écoute locale.")
             }
         }
         return true
     }
 
-    private fun speechFinished(id: String) {
-        if (!enabled || utterance != id) return
+    private fun speechFinished(id: String, result: SpeechOutputState = SpeechOutputState.COMPLETED) {
+        if (utterance != id) return
         speechTimeout?.cancel()
         speechTimeout = null
         utterance = null
         onSpeechState(false)
+        onSpeechOutput(result)
         // Wait for the next ready callback: TTS completion does not mean the microphone is ready.
         if (awaitingCommand) commandTimerPending = true
         scheduleRestart(delayMs = 700L)
@@ -393,6 +457,7 @@ internal class VoiceSession(
         val wasEnabled = enabled
         enabled = false
         ++generation
+        clearPendingReply()
         restart?.cancel()
         commandTimeout?.cancel()
         speechTimeout?.cancel()
@@ -408,12 +473,13 @@ internal class VoiceSession(
         commandTimerPending = false
         capturing = false
         utterance = null
-        speechReady = false
+        speechReady = null
         closeRecognition()
         val previous = speech
         speech = null
         try { previous?.close() } catch (_: RuntimeException) { /* all callbacks invalidated */ }
         onSpeechState(false)
+        onSpeechOutput(SpeechOutputState.IDLE)
         if (wasEnabled) onSessionState(false)
         onStatus("Micro désactivé")
     }

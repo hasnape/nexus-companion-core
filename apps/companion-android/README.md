@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.2 native alpha
+# Nexus Companion Android — 0.4.3 native alpha
 
 Application Kotlin native, sans WebView, navigateur, serveur ni permission INTERNET. Android 12 minimum (API 31), cible Android 15 (API 35). Le produit Android reste une **alpha** : un APK signé ne prouve pas que le compagnon complet est terminé.
 
@@ -13,11 +13,11 @@ Application Kotlin native, sans WebView, navigateur, serveur ni permission INTER
 - Le délai de commande de 12 secondes commence quand le micro redevient réellement prêt après « Je t'écoute », y compris si la synthèse est absente. Il limite l'attente avant de parler, sans couper une phrase commencée. Récupération bornée si le service ne devient pas prêt sous 8 secondes, reste silencieux sans événement pendant 45 secondes, dépasse 60 secondes de capture ou ne rend pas de résultat sous 8 secondes après la fin de parole. Le statut distingue préparation, écoute, analyse, reprise et pause pendant la réponse.
 - Chaque capture terminée libère son client Android de reconnaissance avant d'en créer un nouveau à la reprise : les résultats, erreurs et aperçus d'un ancien client restent invalidés, même après une reprise normale suivant un silence.
 - Micro suspendu pendant le calcul local, la synthèse et les dialogues de notes. Événements périmés ignorés, reprise après la fin ou l'interruption, délai de récupération si le moteur TTS ne répond plus. Bouche ouverte seulement après le signal audio de la synthèse.
-- Voix française installée hors ligne uniquement. Sans service vocal ou modèle français, le texte reste disponible avec un message explicite.
+- Les réponses utilisent une voix française installée sur l’appareil. Après un envoi au clavier, la lecture reste disponible en mode vocal quand la dictée Android est indisponible. Nexus attend au plus cinq secondes que le moteur vocal soit prêt avant de laisser la réponse affichée et de reprendre l’écoute.
 - Propositions à retenir avec confirmation explicite ; consultation et suppression dans « Mes notes » ; rappel conversationnel des notes non sensibles, avec extraits courts et statut non vérifié. Notes privées, sauvegarde atomique, recherche sans accents et provenance ; chiffrement AES-256-GCM avec clé Android Keystore liée au compagnon. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture. Les données illisibles ne sont pas remplacées.
 - Sauvegarde système désactivée, exclusions explicites de sauvegarde cloud et de transfert entre appareils. Aucun audio ou historique de transcription enregistré par l'application.
 - Écran natif « Mises à jour » : choix explicite d'un APK local, contrôle du package, de la version, des signataires courants et du niveau Android, puis transmission d'une copie privée en lecture seule à l'installateur Android. Aucun téléchargement automatique ni permission de stockage étendue.
-- « Voix et diagnostic » : vérification explicite du français hors ligne sur API 33+, demande de modèle uniquement après action de l'utilisateur, accès aux réglages vocaux Android et diagnostic limité aux versions et signatures publiques. Le panneau n'ouvre pas l'audio et ne collecte pas de transcription.
+- « Voix et diagnostic » : vérification explicite du français hors ligne sur API 33+, demande de modèle uniquement après action de l'utilisateur, accès aux réglages vocaux Android et diagnostic limité aux versions et signatures publiques. Le bouton « Tester la voix locale » lit une phrase de test sur demande. Le panneau garde le microphone fermé.
 - Témoin indicatif du signal micro, borné et remis à zéro pendant les pauses. Les erreurs Android « occupé » et « trop de demandes » ont des reprises espacées, avec 15 secondes de repos pour une limitation de débit.
 
 La reconnaissance Android fonctionne par sessions finies et reprises. Elle ne constitue pas un moteur dédié de détection de mot-clé, et sa consommation et sa fiabilité sur téléphone restent à mesurer.
@@ -56,15 +56,15 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.2-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.3-native-alpha/` avec `SHA256SUMS.txt`. Sans variables de signature, il produit uniquement l'APK debug. Le fichier de sommes ne référence que les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (8 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
+Pour installer une mise à jour, l'application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (9 pour cette version). L'installation demande la confirmation Android. Une application précédemment signée avec une clé debug différente ne peut pas être remplacée par cet APK signé. **Ne pas désinstaller une version contenant des notes à conserver** : l'export Android portable et la restauration de sa clé Keystore ne sont pas encore disponibles.
 
 ### Canal Test installable à côté
 
-`NEXUS_ANDROID_PREVIEW=true bash scripts/build-android-apk.sh` compile la même base avec le nom **Nexus Companion Test**, l'identifiant `fr.nexuscompanion.android.preview` et le suffixe de version `-preview`. Les APK sont placés dans `apk-dist/0.4.2-native-alpha-preview/`. Dans Android Studio, utiliser la propriété Gradle `-PnexusPreview=true`. Le mode par défaut garde l'identifiant de diffusion ; une valeur de propriété invalide est refusée.
+`NEXUS_ANDROID_PREVIEW=true bash scripts/build-android-apk.sh` compile la même base avec le nom **Nexus Companion Test**, l'identifiant `fr.nexuscompanion.android.preview` et le suffixe de version `-preview`. Les APK sont placés dans `apk-dist/0.4.3-native-alpha-preview/`. Dans Android Studio, utiliser la propriété Gradle `-PnexusPreview=true`. Le mode par défaut garde l'identifiant de diffusion ; une valeur de propriété invalide est refusée.
 
 Le canal Test a ses propres notes, préférences, permissions et clés Android Keystore. Il ne remplace pas l'ancienne application et ne transfère pas ses données. Un bandeau le précise dans l'accueil. Chaque canal accepte uniquement les mises à jour de son propre identifiant. La signature permanente est conservée pour les deux variantes, ce qui permet au diagnostic Test de comparer les certificats avec l'application d'origine sans lire ses notes.
 
@@ -86,7 +86,7 @@ Le cache privé ne contient que des copies APK, limitées à 64 Mio par fichier 
 
 Le premier pont vers les règles TypeScript est intégré ; le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, un modèle ASR embarqué indépendant du téléphone, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer. Il n'y a ni LLM local embarqué, ni accès à Internet, ni mise à jour silencieuse.
 
-Voir le [rapport de validation 0.4.2](../../docs/releases/ANDROID-0.4.2-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l'interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les services vocaux, métadonnées de paquets et écrans système sont simulés ; les fichiers et octets transmis au fournisseur sont réels. Ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie. Aucun nouveau modèle acoustique n'est livré ; les indications de vocabulaire et résultats partiels dépendent du service Android installé.
+Voir le [rapport de validation 0.4.3](../../docs/releases/ANDROID-0.4.3-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l'interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les services vocaux, métadonnées de paquets et écrans système sont simulés ; les fichiers et octets transmis au fournisseur sont réels. Ils ne mesurent pas la qualité du microphone, la reconnaissance française, le Bluetooth ou l'autonomie. Aucun nouveau modèle acoustique n'est livré ; les indications de vocabulaire et résultats partiels dépendent du service Android installé.
 
 ## Développement du moteur partagé
 

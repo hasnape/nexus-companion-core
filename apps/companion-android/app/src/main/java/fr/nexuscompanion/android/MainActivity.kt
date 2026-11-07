@@ -32,6 +32,7 @@ class MainActivity : Activity() {
     private lateinit var face: TextView
     private lateinit var status: TextView
     private lateinit var answer: TextView
+    private lateinit var playbackNotice: TextView
     private lateinit var input: EditText
     private lateinit var voiceButton: Button
     private lateinit var directVoiceButton: Button
@@ -80,7 +81,16 @@ class MainActivity : Activity() {
                 )
                 transcript.visibility = if (heard.isEmpty()) View.GONE else View.VISIBLE
             },
-            onInputLevel = { microphoneLevel.progress = it }
+            onInputLevel = { microphoneLevel.progress = it },
+            onSpeechOutput = { output ->
+                when (output) {
+                    SpeechOutputState.UNAVAILABLE, SpeechOutputState.FAILED, SpeechOutputState.INTERRUPTED -> {
+                        playbackNotice.setText(output.messageResource())
+                        playbackNotice.visibility = View.VISIBLE
+                    }
+                    else -> playbackNotice.visibility = View.GONE
+                }
+            }
         )
     }
 
@@ -128,6 +138,7 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         answer = label(R.string.greeting, 18f)
+        playbackNotice = label(R.string.voice_output_idle, 15f).apply { visibility = View.GONE }
         input = EditText(this).apply {
             setHint(R.string.input_hint); setSingleLine(true); setTextColor(Color.WHITE)
             setHintTextColor(Color.LTGRAY); filters = arrayOf(InputFilter.LengthFilter(2000))
@@ -179,10 +190,16 @@ class MainActivity : Activity() {
         if (voiceActive && message != null) status.text = message else status.setText(R.string.local_ready)
     }
 
-    private fun <T> runLocal(progress: Int, failureMessage: Int, task: () -> T, success: (T) -> Unit) {
+    private fun <T> runLocal(
+        progress: Int,
+        failureMessage: Int,
+        task: () -> T,
+        voiceReply: (T) -> String? = { null },
+        success: (T) -> Unit
+    ) {
         if (busy || destroyed) return
         setBusy(true)
-        if (voiceActive) controller.beginResponse()
+        controller.beginResponse()
         status.setText(progress)
         worker.execute {
             try {
@@ -192,7 +209,7 @@ class MainActivity : Activity() {
                         setBusy(false)
                         restoreStatus()
                         success(result)
-                        if (foreground && voiceActive) controller.finishResponse(null)
+                        finishLocalVoice(voiceReply(result))
                     }
                 }
             } catch (failure: Exception) {
@@ -205,10 +222,20 @@ class MainActivity : Activity() {
                             else -> failureMessage
                         })
                         restoreStatus()
-                        if (foreground && voiceActive) controller.finishResponse(null)
+                        finishLocalVoice(null)
                     }
                 }
             }
+        }
+    }
+
+    private fun finishLocalVoice(text: String?) {
+        if (!foreground || dialogDepth > 0) return
+        if (voiceActive) controller.finishResponse(text)
+        else if (text != null && autoListenEnabled &&
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            // Keep the existing voice opt-in when the recognition service cannot run.
+            controller.playReply(text)
         }
     }
 
@@ -216,12 +243,11 @@ class MainActivity : Activity() {
         if (busy || message.isBlank() || message.length > 2000) return
         pendingCandidate = null
         retainButton.visibility = View.GONE
-        runLocal(R.string.thinking, R.string.brain_failed, { brain.reply(message) }) { reply ->
+        runLocal(R.string.thinking, R.string.brain_failed, { brain.reply(message) }, voiceReply = { it.text }) { reply ->
             answer.text = if (reply.notesAvailable) reply.text
                 else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
             pendingCandidate = if (reply.notesAvailable) reply.candidate else null
             retainButton.visibility = if (pendingCandidate != null) View.VISIBLE else View.GONE
-            if (foreground && voiceActive) controller.finishResponse(reply.text)
         }
     }
 
@@ -273,7 +299,7 @@ class MainActivity : Activity() {
     private fun showDialog(dialog: AlertDialog) {
         if (dialogDepth == 0) {
             resumeVoiceAfterDialogs = voiceActive
-            if (voiceActive) controller.stop()
+            controller.stop()
         }
         dialogDepth++
         dialogs.add(dialog)

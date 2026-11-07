@@ -2,7 +2,10 @@ package fr.nexuscompanion.android
 
 import android.app.AlertDialog
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -20,8 +23,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowAlertDialog
 import org.robolectric.shadows.ShadowSpeechRecognizer
+import org.robolectric.shadows.ShadowTextToSpeech
 import org.robolectric.Shadows.shadowOf
 import java.io.File
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -58,6 +63,25 @@ class MainActivityTest {
         send("Nexus, comment vas tu ?")
         await { hasText("Ça va, merci") }
         assertFalse(libraryFile().exists())
+        assertNull(ShadowTextToSpeech.getLastTextToSpeechInstance())
+    }
+
+    @Test @Config(sdk = [34]) fun writtenReplyIsSpokenWhenTheRecognitionServiceIsUnavailable() {
+        shadowOf(activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
+        ShadowSpeechRecognizer.setIsOnDeviceRecognitionAvailable(false)
+        activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))
+        ShadowTextToSpeech.addVoice(Voice("french-local", Locale.FRANCE, Voice.QUALITY_NORMAL,
+            Voice.LATENCY_NORMAL, false, emptySet()))
+        shadowOf(activity.getSystemService(AudioManager::class.java))
+            .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+
+        send("bonjour")
+        await { hasText("Bonjour ! Je t’écoute") && ShadowTextToSpeech.getLastTextToSpeechInstance() != null }
+        val speech = shadowOf(ShadowTextToSpeech.getLastTextToSpeechInstance())
+        speech.onInitListener.onInit(TextToSpeech.SUCCESS)
+        await { speech.lastSpokenText?.contains("Bonjour ! Je t’écoute") == true }
+        assertFalse(button(R.string.speak_now).isEnabled)
+        assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
     }
 
     @Test fun directDictationStaysDisabledWithoutAnActiveMicrophone() {
@@ -98,11 +122,18 @@ class MainActivityTest {
         button(R.string.remember).performClick()
         assertFalse(hasText("phrase privée provisoire"))
         assertFalse(button(R.string.speak_now).isEnabled)
+        val previousSpeech = ShadowTextToSpeech.getLastTextToSpeechInstance()
         ShadowAlertDialog.getLatestAlertDialog().getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val resumedSpeech = ShadowTextToSpeech.getLastTextToSpeechInstance()
+        assertNotSame(previousSpeech, resumedSpeech)
+        shadowOf(resumedSpeech).onInitListener.onInit(TextToSpeech.ERROR)
+        shadowOf(Looper.getMainLooper()).idle()
         send("bonjour")
         await { hasText("Bonjour ! Je t’écoute") }
         assertFalse(hasText(activity.getString(R.string.local_ready)))
         assertTrue(hasText("Reprise de l'écoute locale") || hasText("Micro actif") || hasText("Préparation du micro"))
+        assertTrue(hasText(activity.getString(R.string.voice_output_unavailable)))
     }
 
     @Test fun aMemoryProposalIsNotSavedAndCanBeCanceled() {

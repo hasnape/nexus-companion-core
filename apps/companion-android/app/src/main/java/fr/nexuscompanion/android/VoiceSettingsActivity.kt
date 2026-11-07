@@ -19,8 +19,10 @@ import android.widget.TextView
 /** The main screen is paused while this screen is open: no listening or transcript collection. */
 class VoiceSettingsActivity : Activity() {
     private lateinit var checker: FrenchVoiceSupport
+    private lateinit var playback: NativeVoiceController
     private lateinit var status: TextView
     private lateinit var download: Button
+    private var foreground = false
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -49,6 +51,14 @@ class VoiceSettingsActivity : Activity() {
             try { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }
             catch (_: ActivityNotFoundException) { status.setText(R.string.voice_settings_unavailable) }
         }
+        val outputStatus = label(getString(R.string.voice_output_idle), 17f)
+        val outputTest = button(R.string.voice_output_test) {
+            if (foreground) playback.playReply(getString(R.string.voice_output_sample))
+        }
+        playback = NativeVoiceController(this, onStatus = {}, onCommand = {}, onSpeechState = {}, onSpeechOutput = { output ->
+            outputStatus.setText(output.messageResource())
+            outputTest.isEnabled = output != SpeechOutputState.PREPARING && output != SpeechOutputState.PLAYING
+        })
         val diagnostic = InstallationDiagnostic.read(this)
         label(getString(R.string.voice_installation_summary, diagnostic.originalVersion ?: getString(R.string.voice_original_absent),
             getString(when (diagnostic.signaturesMatch) {
@@ -83,7 +93,7 @@ class VoiceSettingsActivity : Activity() {
         root.requestApplyInsets()
     }
 
-    override fun onResume() { super.onResume(); checker.check() }
-    override fun onPause() { checker.close(); super.onPause() }
-    override fun onDestroy() { checker.close(); super.onDestroy() }
+    override fun onResume() { super.onResume(); foreground = true; checker.check() }
+    override fun onPause() { foreground = false; checker.close(); playback.stop(); super.onPause() }
+    override fun onDestroy() { checker.close(); playback.stop(); super.onDestroy() }
 }

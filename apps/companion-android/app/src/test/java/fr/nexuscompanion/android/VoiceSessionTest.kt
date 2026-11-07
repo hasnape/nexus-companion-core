@@ -68,8 +68,9 @@ class VoiceSessionTest {
         val sessions = mutableListOf<Boolean>()
         val transcripts = mutableListOf<Pair<String, Boolean>>()
         val levels = mutableListOf<Int>()
+        val output = mutableListOf<SpeechOutputState>()
         val session = VoiceSession(platform, statuses::add, commands::add, mouths::add, sessions::add,
-            { text, final -> transcripts.add(text to final) }, levels::add)
+            { text, final -> transcripts.add(text to final) }, levels::add, output::add)
         fun start() { session.start(); platform.speaker.events.ready(true) }
     }
 
@@ -496,6 +497,81 @@ class VoiceSessionTest {
         assertTrue(f.sessions.isEmpty())
         assertTrue(f.platform.recognizers.isEmpty())
         assertTrue(f.platform.speakers.isEmpty())
+    }
+
+    @Test fun anExplicitReplyCanBeSpokenWithoutARecognitionService() {
+        val f = Fixture(); f.platform.supported = false; f.session.start()
+        f.session.playReply("Réponse écrite")
+        assertEquals(SpeechOutputState.PREPARING, f.output.last())
+        f.platform.speaker.events.ready(true)
+        val (text, id) = f.platform.speaker.utterances.single()
+        assertEquals("Réponse écrite", text)
+        f.platform.speaker.events.started(id)
+        assertEquals(SpeechOutputState.PLAYING, f.output.last())
+        f.platform.speaker.events.finished(id)
+        assertEquals(SpeechOutputState.COMPLETED, f.output.last())
+        f.platform.advance(5_000)
+        assertEquals(0, f.platform.totalStarts)
+        assertTrue(f.sessions.isEmpty())
+    }
+
+    @Test fun replyWaitsForLocalVoiceWithoutReopeningTheMicrophone() {
+        val f = Fixture(); f.session.start()
+        f.session.beginResponse(); f.session.finishResponse("Bonjour")
+        f.platform.advance(4_000)
+        assertEquals(1, f.platform.totalStarts)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        f.platform.speaker.events.ready(true)
+        val (text, id) = f.platform.speaker.utterances.single()
+        assertEquals("Bonjour", text)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.speaker.events.finished(id)
+        f.platform.advance(700)
+        assertEquals(2, f.platform.totalStarts)
+    }
+
+    @Test fun voiceInitializationTimeoutDiscardsTheReplyAndRestartsListening() {
+        val f = Fixture(); f.session.start()
+        f.session.beginResponse(); f.session.finishResponse("Réponse expirée")
+        f.platform.advance(5_500)
+        assertEquals(SpeechOutputState.FAILED, f.output.last())
+        assertEquals(2, f.platform.totalStarts)
+        f.platform.speaker.events.ready(true)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+    }
+
+    @Test fun stoppingTheActivityCancelsAnExplicitReplyWaitingForSpeech() {
+        val f = Fixture(); f.session.playReply("Réponse à annuler")
+        val speaker = f.platform.speaker
+        f.session.stop()
+        speaker.events.ready(true)
+        f.platform.advance(10_000)
+        assertTrue(speaker.closed)
+        assertTrue(speaker.utterances.isEmpty())
+        assertEquals(SpeechOutputState.IDLE, f.output.last())
+        assertEquals(0, f.platform.totalStarts)
+    }
+
+    @Test fun aMissingLocalVoiceKeepsItsOwnStatusWhenTheMicrophoneResumes() {
+        val f = Fixture(); f.session.start(); f.platform.speaker.events.ready(false)
+        f.session.beginResponse(); f.session.finishResponse("Bonjour")
+        f.platform.advance(500)
+        assertEquals(SpeechOutputState.UNAVAILABLE, f.output.last())
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        assertEquals(2, f.platform.totalStarts)
+    }
+
+    @Test fun aSpeechEngineErrorCannotBeReportedAsCompletedPlayback() {
+        val f = Fixture(); f.start()
+        f.session.beginResponse(); f.session.finishResponse("Bonjour")
+        val id = f.platform.speaker.utterances.single().second
+        f.platform.speaker.events.started(id)
+        f.platform.speaker.events.failed(id)
+        f.platform.speaker.events.finished(id)
+        f.platform.advance(700)
+        assertFalse(f.mouths.last())
+        assertEquals(SpeechOutputState.FAILED, f.output.last())
+        assertEquals(2, f.platform.totalStarts)
     }
 
     @Test fun audioInterruptionStopsTheSession() {

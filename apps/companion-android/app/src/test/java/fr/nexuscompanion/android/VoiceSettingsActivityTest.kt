@@ -2,8 +2,11 @@ package fr.nexuscompanion.android
 
 import android.Manifest
 import android.content.ClipboardManager
+import android.media.AudioManager
 import android.os.Looper
 import android.speech.RecognitionSupport
+import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -21,6 +24,8 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowSpeechRecognizer
+import org.robolectric.shadows.ShadowTextToSpeech
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -52,5 +57,27 @@ class VoiceSettingsActivityTest {
         assertTrue(text.contains("Android API")); assertTrue(text.contains("Signature"))
         assertFalse(text.contains("Entendu :"))
         assertNull(shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer()).lastRecognizerIntent)
+    }
+
+    @Test fun localVoiceTestPlaysTheSampleWithoutCapturingAudio() {
+        val recognizer = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.RECORD_AUDIO)
+        ShadowTextToSpeech.addVoice(Voice("french-online", Locale.FRANCE, Voice.QUALITY_VERY_HIGH,
+            Voice.LATENCY_NORMAL, true, emptySet()))
+        ShadowTextToSpeech.addVoice(Voice("french-local", Locale.FRANCE, Voice.QUALITY_NORMAL,
+            Voice.LATENCY_NORMAL, false, emptySet()))
+        shadowOf(activity.getSystemService(AudioManager::class.java))
+            .setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+
+        button(R.string.voice_output_test).performClick()
+        val speech = shadowOf(ShadowTextToSpeech.getLastTextToSpeechInstance())
+        speech.onInitListener.onInit(TextToSpeech.SUCCESS)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(activity.getString(R.string.voice_output_sample), speech.lastSpokenText)
+        assertEquals("french-local", speech.currentVoice.name)
+        assertSame(recognizer, ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        assertNull(shadowOf(recognizer).lastRecognizerIntent)
+        assertTrue(button(R.string.voice_output_test).isEnabled)
     }
 }

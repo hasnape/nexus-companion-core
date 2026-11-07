@@ -14,6 +14,15 @@
     <string name="voice_transcript_empty" translatable="false"></string>
     <string name="voice_hearing">En cours : %1$s</string>
     <string name="voice_heard">Entendu : %1$s</string>
+    <string name="voice_output_idle">Écoute la voix de Nexus.</string>
+    <string name="voice_output_test">Tester la voix locale</string>
+    <string name="voice_output_sample">Bonjour, je suis Nexus. Ceci est un essai de la voix française.</string>
+    <string name="voice_output_preparing">Préparation de la voix locale…</string>
+    <string name="voice_output_playing">Lecture de la voix locale…</string>
+    <string name="voice_output_completed">Lecture terminée. Si tu n’as rien entendu, vérifie le volume multimédia.</string>
+    <string name="voice_output_unavailable">Voix française hors ligne indisponible. Dans les paramètres Android, cherche « Synthèse vocale » et installe une voix française.</string>
+    <string name="voice_output_failed">La lecture vocale a échoué. Réessaie ou vérifie la synthèse vocale Android.</string>
+    <string name="voice_output_interrupted">Lecture vocale interrompue.</string>
     <string name="preview_warning">Version Test séparée : tes anciennes notes restent dans ton autre application Nexus.</string>
     <string name="microphone_level">Témoin du signal micro</string>
     <string name="voice_settings">Voix et diagnostic</string>

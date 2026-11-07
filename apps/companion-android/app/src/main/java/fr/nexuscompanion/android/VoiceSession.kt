@@ -1,5 +1,7 @@
 package fr.nexuscompanion.android
 
+private const val DEFAULT_RESTART_DELAY_MS = 500L
+
 internal fun interface VoiceTask { fun cancel() }
 
 internal enum class RecognitionFailure {
@@ -12,6 +14,8 @@ internal enum class SpeechOutputState {
 
 internal interface VoiceRecognition {
     val preparationTimeoutMs: Long get() = 8_000L
+    /** Delay before preparing the next capture after a normal recognition result or silence. */
+    val nextTurnDelayMs: Long get() = DEFAULT_RESTART_DELAY_MS
     fun start()
     fun close()
 }
@@ -164,6 +168,7 @@ internal class VoiceSession(
                     }
                     override fun alternatives(hypotheses: List<SpeechHypothesis>) {
                         if (!current()) return
+                        val nextTurnDelay = recognition?.nextTurnDelayMs ?: DEFAULT_RESTART_DELAY_MS
                         // A completed client must never forward a late vendor event into the next capture.
                         closeRecognition()
                         failures = 0
@@ -173,7 +178,7 @@ internal class VoiceSession(
                             acceptTranscript(text)
                         }
                         if (awaitingCommand && utterance == null && capturing && !commandTimerPending) armCommandTimeout()
-                        if (utterance == null) scheduleRestart()
+                        if (utterance == null) scheduleRestart(delayMs = nextTurnDelay)
                     }
                     override fun speechStarted() { if (current()) markSpeechStarted() }
                     override fun level(rmsDb: Float) {
@@ -192,10 +197,11 @@ internal class VoiceSession(
                     }
                     override fun error(failure: RecognitionFailure) {
                         if (!current()) return
+                        val nextTurnDelay = recognition?.nextTurnDelayMs ?: DEFAULT_RESTART_DELAY_MS
                         closeRecognition()
                         if (awaitingCommand && capturing) armCommandTimeout()
                         when (failure) {
-                            RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH -> scheduleRestart()
+                            RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH -> scheduleRestart(delayMs = nextTurnDelay)
                             RecognitionFailure.TEMPORARY -> scheduleRestart(failed = true)
                             RecognitionFailure.BUSY, RecognitionFailure.RATE_LIMIT -> {
                                 scheduleRestart(failed = true, delayMs = if (failure == RecognitionFailure.RATE_LIMIT) 15_000L else 1_500L)
@@ -311,7 +317,7 @@ internal class VoiceSession(
         beginRecognition()
     }
 
-    private fun scheduleRestart(failed: Boolean = false, delayMs: Long = 500L) {
+    private fun scheduleRestart(failed: Boolean = false, delayMs: Long = DEFAULT_RESTART_DELAY_MS) {
         if (!enabled || utterance != null || pendingReply != null || listening || processing) return
         onInputLevel(0)
         failures = if (failed) failures + 1 else 0

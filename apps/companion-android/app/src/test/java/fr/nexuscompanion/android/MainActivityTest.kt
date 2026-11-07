@@ -28,14 +28,18 @@ import org.robolectric.Shadows.shadowOf
 import java.io.File
 import java.util.Locale
 
+class MainActivityWithAndroidVoice : MainActivity() {
+    override fun createVoiceInput(): VoiceInput = AndroidVoiceInput(applicationContext)
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
-    private lateinit var lifecycle: ActivityController<MainActivity>
+    private lateinit var lifecycle: ActivityController<MainActivityWithAndroidVoice>
     private lateinit var activity: MainActivity
     @Before fun createActivity() {
-        lifecycle = Robolectric.buildActivity(MainActivity::class.java).setup()
+        lifecycle = Robolectric.buildActivity(MainActivityWithAndroidVoice::class.java).setup()
         activity = lifecycle.get()
     }
     @After fun destroyActivity() { lifecycle.pause().stop().destroy() }

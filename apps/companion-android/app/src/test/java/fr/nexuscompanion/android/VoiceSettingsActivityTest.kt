@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ClipboardManager
 import android.media.AudioManager
 import android.os.Looper
-import android.speech.RecognitionSupport
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import android.view.View
@@ -42,25 +41,19 @@ class VoiceSettingsActivityTest {
     private fun views(view: View = activity.findViewById(android.R.id.content)): List<View> =
         listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun button(id: Int) = views().filterIsInstance<Button>().single { it.text == activity.getString(id) }
-    @Test fun openingThePanelDoesNotListenOrDownloadAndReadyRequiresServiceConfirmation() {
-        val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
-        assertNull(recognizer.lastRecognizerIntent); assertNull(recognizer.latestModelDownloadIntent)
-        assertFalse(button(R.string.voice_download_model).isEnabled)
-        recognizer.triggerSupportResult(RecognitionSupport.Builder().setInstalledOnDeviceLanguages(listOf("fr-FR")).build())
-        shadowOf(Looper.getMainLooper()).idle()
-        assertTrue(views().filterIsInstance<TextView>().any { it.text == activity.getString(R.string.voice_model_ready) })
-        assertFalse(button(R.string.voice_download_model).isEnabled)
+    @Test fun openingThePanelShowsThePackagedFrenchModelWithoutStartingRecognition() {
+        assertTrue(views().filterIsInstance<TextView>().any { it.text == activity.getString(R.string.voice_model_embedded) })
+        assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
     }
     @Test fun diagnosticCopyContainsOnlyVersionAndPublicSignatureMetadata() {
         button(R.string.voice_copy_diagnostic).performClick()
         val text = activity.getSystemService(ClipboardManager::class.java).primaryClip!!.getItemAt(0).text.toString()
         assertTrue(text.contains("Android API")); assertTrue(text.contains("Signature"))
         assertFalse(text.contains("Entendu :"))
-        assertNull(shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer()).lastRecognizerIntent)
+        assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
     }
 
     @Test fun localVoiceTestPlaysTheSampleWithoutCapturingAudio() {
-        val recognizer = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
         shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.RECORD_AUDIO)
         ShadowTextToSpeech.addVoice(Voice("french-online", Locale.FRANCE, Voice.QUALITY_VERY_HIGH,
             Voice.LATENCY_NORMAL, true, emptySet()))
@@ -76,8 +69,7 @@ class VoiceSettingsActivityTest {
 
         assertEquals(activity.getString(R.string.voice_output_sample), speech.lastSpokenText)
         assertEquals("french-local", speech.currentVoice.name)
-        assertSame(recognizer, ShadowSpeechRecognizer.getLatestSpeechRecognizer())
-        assertNull(shadowOf(recognizer).lastRecognizerIntent)
+        assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
         assertTrue(button(R.string.voice_output_test).isEnabled)
     }
 }

@@ -19,6 +19,8 @@ import java.time.Duration
 @Config(sdk = [34])
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeVoiceControllerTest {
+    private fun input() = AndroidVoiceInput(RuntimeEnvironment.getApplication())
+
     private fun bundle(vararg texts: String, scores: FloatArray? = null) = Bundle().apply {
         putStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf(*texts))
         if (scores != null) putFloatArray(SpeechRecognizer.CONFIDENCE_SCORES, scores)
@@ -28,7 +30,7 @@ class NativeVoiceControllerTest {
         val commands = mutableListOf<String>()
         val heard = mutableListOf<Pair<String, Boolean>>()
         val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {}, {},
-            { text, final -> heard.add(text to final) })
+            { text, final -> heard.add(text to final) }, input = input())
         try {
             controller.start()
             shadowOf(Looper.getMainLooper()).idle()
@@ -50,7 +52,7 @@ class NativeVoiceControllerTest {
 
     @Test fun explicitDictationReplacesTheOldRecognizerAndAcceptsAnUnprefixedFinal() {
         val commands = mutableListOf<String>()
-        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {})
+        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {}, input = input())
         try {
             controller.start(); shadowOf(Looper.getMainLooper()).idle()
             val previous = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
@@ -65,7 +67,7 @@ class NativeVoiceControllerTest {
 
     @Test fun silenceRestartsReleaseTheOldClientAndRejectItsLateCallbacks() {
         val commands = mutableListOf<String>()
-        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {})
+        val controller = NativeVoiceController(RuntimeEnvironment.getApplication(), {}, commands::add, {}, input = input())
         try {
             controller.start(); shadowOf(Looper.getMainLooper()).idle()
             repeat(10) {

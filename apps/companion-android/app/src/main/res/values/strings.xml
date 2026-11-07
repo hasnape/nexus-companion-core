@@ -15,6 +15,7 @@
     <string name="voice_hearing">En cours : %1$s</string>
     <string name="voice_heard">Entendu : %1$s</string>
     <string name="voice_output_idle">Écoute la voix de Nexus.</string>
+    <string name="voice_model_embedded">La reconnaissance française est intégrée à Nexus. Elle se prépare au premier démarrage du micro et fonctionne sans connexion.</string>
     <string name="voice_output_test">Tester la voix locale</string>
     <string name="voice_output_sample">Bonjour, je suis Nexus. Ceci est un essai de la voix française.</string>
     <string name="voice_output_preparing">Préparation de la voix locale…</string>

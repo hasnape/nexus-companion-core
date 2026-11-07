@@ -40,9 +40,9 @@ fi
 (cd "$OUT" && sha256sum "${artifacts[@]}" > SHA256SUMS.txt)
 printf '%s\n' \
   "Nexus Companion $version — Android native alpha, Android 12+." \
-  'Install the release APK for owner-key-signed alpha testing.' \
+  'The signed release APK is the distribution build for the main app.' \
   'An update requires the same installed certificate and a higher versionCode.' \
   'Do not uninstall an existing app with notes: there is no portable Android backup yet.' \
   'The shared Nexus rule engine is embedded locally; this is not a general-purpose LLM.' \
-  'This build is not device-certified and does not include a bundled ASR model or full cognitive engine.' > "$OUT/README.txt"
+  'French speech recognition uses the bundled offline model.' > "$OUT/README.txt"
 echo "APK files and checksums: $OUT"

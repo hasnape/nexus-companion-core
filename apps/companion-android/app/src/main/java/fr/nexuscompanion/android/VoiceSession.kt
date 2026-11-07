@@ -3,7 +3,7 @@ package fr.nexuscompanion.android
 internal fun interface VoiceTask { fun cancel() }
 
 internal enum class RecognitionFailure {
-    SILENCE, NO_MATCH, PERMISSION, LANGUAGE_NOT_SUPPORTED, LANGUAGE_NOT_INSTALLED, TEMPORARY, BUSY, RATE_LIMIT
+    SILENCE, NO_MATCH, PERMISSION, LANGUAGE_NOT_SUPPORTED, LANGUAGE_NOT_INSTALLED, MODEL_UNAVAILABLE, TEMPORARY, BUSY, RATE_LIMIT
 }
 
 internal enum class SpeechOutputState {
@@ -11,6 +11,7 @@ internal enum class SpeechOutputState {
 }
 
 internal interface VoiceRecognition {
+    val preparationTimeoutMs: Long get() = 8_000L
     fun start()
     fun close()
 }
@@ -207,6 +208,7 @@ internal class VoiceSession(
                                 onStatus(when (failure) {
                                     RecognitionFailure.PERMISSION -> "Micro non autorisé. Vérifie l'autorisation dans Android."
                                     RecognitionFailure.LANGUAGE_NOT_INSTALLED -> "Français hors ligne non installé. Installe-le dans le service vocal Android."
+                                    RecognitionFailure.MODEL_UNAVAILABLE -> "Le modèle français intégré ne s’est pas chargé. Relance Nexus pour réessayer."
                                     else -> "Français non pris en charge par le service vocal hors ligne de cet appareil."
                                 })
                             }
@@ -219,7 +221,7 @@ internal class VoiceSession(
             ++recognitionCycle
             listening = true
             onStatus("Préparation du micro…")
-            armRecognitionTimeout(8_000L)
+            armRecognitionTimeout(recognition?.preparationTimeoutMs ?: 8_000L)
             recognition?.start()
         } catch (_: SecurityException) {
             stop()

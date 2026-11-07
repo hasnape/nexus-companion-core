@@ -18,10 +18,9 @@ import android.widget.TextView
 
 /** The main screen is paused while this screen is open: no listening or transcript collection. */
 class VoiceSettingsActivity : Activity() {
-    private lateinit var checker: FrenchVoiceSupport
+    private var checker: FrenchVoiceSupport? = null
     private lateinit var playback: NativeVoiceController
     private lateinit var status: TextView
-    private lateinit var download: Button
     private var foreground = false
 
     override fun onCreate(state: Bundle?) {
@@ -43,13 +42,31 @@ class VoiceSettingsActivity : Activity() {
             setText(text); setOnClickListener { action() }; root.addView(this, LinearLayout.LayoutParams(-1, -2))
         }
         label(getString(R.string.voice_settings), 24f)
-        label(getString(R.string.voice_setup_explanation), 17f)
-        status = label(getString(R.string.voice_model_checking), 17f)
-        button(R.string.voice_check_model) { checker.check() }
-        download = button(R.string.voice_download_model) { checker.requestDownload() }.apply { isEnabled = false }
-        button(R.string.voice_android_settings) {
-            try { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }
-            catch (_: ActivityNotFoundException) { status.setText(R.string.voice_settings_unavailable) }
+        if (EmbeddedFrenchInput.isPackaged(this)) {
+            status = label(getString(R.string.voice_model_embedded), 17f)
+        } else {
+            label(getString(R.string.voice_setup_explanation), 17f)
+            status = label(getString(R.string.voice_model_checking), 17f)
+            button(R.string.voice_check_model) { checker?.check() }
+            val download = button(R.string.voice_download_model) { checker?.requestDownload() }.apply { isEnabled = false }
+            button(R.string.voice_android_settings) {
+                try { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }
+                catch (_: ActivityNotFoundException) { status.setText(R.string.voice_settings_unavailable) }
+            }
+            checker = FrenchVoiceSupport(this) { model ->
+                download.isEnabled = model == FrenchModelState.DOWNLOADABLE
+                status.setText(when (model) {
+                    FrenchModelState.CHECKING -> R.string.voice_model_checking
+                    FrenchModelState.READY -> R.string.voice_model_ready
+                    FrenchModelState.DOWNLOADABLE -> R.string.voice_model_missing
+                    FrenchModelState.PENDING -> R.string.voice_model_pending
+                    FrenchModelState.REQUESTED -> R.string.voice_model_requested
+                    FrenchModelState.UNAVAILABLE -> R.string.voice_model_unavailable
+                    FrenchModelState.UNKNOWN -> R.string.voice_model_unknown
+                    FrenchModelState.SERVICE_ABSENT -> R.string.offline_recognition_unavailable
+                    FrenchModelState.PERMISSION -> R.string.microphone_permission_needed
+                })
+            }
         }
         val outputStatus = label(getString(R.string.voice_output_idle), 17f)
         val outputTest = button(R.string.voice_output_test) {
@@ -71,20 +88,6 @@ class VoiceSettingsActivity : Activity() {
             status.setText(R.string.voice_diagnostic_copied)
         }
         button(R.string.close) { finish() }
-        checker = FrenchVoiceSupport(this) { model ->
-            download.isEnabled = model == FrenchModelState.DOWNLOADABLE
-            status.setText(when (model) {
-                FrenchModelState.CHECKING -> R.string.voice_model_checking
-                FrenchModelState.READY -> R.string.voice_model_ready
-                FrenchModelState.DOWNLOADABLE -> R.string.voice_model_missing
-                FrenchModelState.PENDING -> R.string.voice_model_pending
-                FrenchModelState.REQUESTED -> R.string.voice_model_requested
-                FrenchModelState.UNAVAILABLE -> R.string.voice_model_unavailable
-                FrenchModelState.UNKNOWN -> R.string.voice_model_unknown
-                FrenchModelState.SERVICE_ABSENT -> R.string.offline_recognition_unavailable
-                FrenchModelState.PERMISSION -> R.string.microphone_permission_needed
-            })
-        }
         setContentView(ScrollView(this).apply {
             isFillViewport = true; setBackgroundColor(Color.rgb(10, 22, 43)); addView(root)
         })
@@ -93,7 +96,7 @@ class VoiceSettingsActivity : Activity() {
         root.requestApplyInsets()
     }
 
-    override fun onResume() { super.onResume(); foreground = true; checker.check() }
-    override fun onPause() { foreground = false; checker.close(); playback.stop(); super.onPause() }
-    override fun onDestroy() { checker.close(); playback.stop(); super.onDestroy() }
+    override fun onResume() { super.onResume(); foreground = true; checker?.check() }
+    override fun onPause() { foreground = false; checker?.close(); playback.stop(); super.onPause() }
+    override fun onDestroy() { checker?.close(); playback.close(); super.onDestroy() }
 }

@@ -25,7 +25,7 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 
 /** Native UI. A single worker owns the packaged brain and private library operations. */
-class MainActivity : Activity() {
+open class MainActivity : Activity() {
     private lateinit var controller: NativeVoiceController
     private lateinit var library: LocalKnowledgeLibrary
     private lateinit var brain: NativeBrainService
@@ -90,9 +90,12 @@ class MainActivity : Activity() {
                     }
                     else -> playbackNotice.visibility = View.GONE
                 }
-            }
+            },
+            input = createVoiceInput()
         )
     }
+
+    internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
 
     private fun buildScreen() {
         fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -372,7 +375,7 @@ class MainActivity : Activity() {
         foreground = false
         dialogs.toList().forEach { it.dismiss() }
         dialogs.clear()
-        if (::controller.isInitialized) controller.stop()
+        if (::controller.isInitialized) controller.close()
         worker.execute { brain.close() }
         worker.shutdown()
         super.onDestroy()

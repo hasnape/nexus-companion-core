@@ -13,6 +13,15 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
+internal interface VoiceInput : AutoCloseable {
+    fun available(): Boolean
+    fun recognizer(events: RecognitionEvents): VoiceRecognition
+    override fun close() = Unit
+}
+
+internal fun defaultVoiceInput(context: Context): VoiceInput =
+    if (EmbeddedFrenchInput.isPackaged(context)) EmbeddedFrenchInput(context) else AndroidVoiceInput(context)
+
 /** Android adapters only. No network recognizer fallback or raw audio persistence. */
 internal class NativeVoiceController(
     context: Context,
@@ -22,9 +31,10 @@ internal class NativeVoiceController(
     onSessionState: (Boolean) -> Unit = {},
     onTranscript: (String, Boolean) -> Unit = { _, _ -> },
     onInputLevel: (Int) -> Unit = {},
-    onSpeechOutput: (SpeechOutputState) -> Unit = {}
+    onSpeechOutput: (SpeechOutputState) -> Unit = {},
+    private val input: VoiceInput = defaultVoiceInput(context)
 ) {
-    private val session = VoiceSession(AndroidVoicePlatform(context), onStatus, onCommand, onSpeechState,
+    private val session = VoiceSession(AndroidVoicePlatform(context, input), onStatus, onCommand, onSpeechState,
         onSessionState, onTranscript, onInputLevel, onSpeechOutput)
     fun available() = session.available()
     fun start() = session.start()
@@ -33,6 +43,7 @@ internal class NativeVoiceController(
     fun beginResponse() = session.beginResponse()
     fun finishResponse(text: String?) = session.finishResponse(text)
     fun stop() = session.stop()
+    fun close() { session.stop(); input.close() }
 }
 
 internal fun SpeechOutputState.messageResource() = when (this) {
@@ -45,14 +56,21 @@ internal fun SpeechOutputState.messageResource() = when (this) {
     SpeechOutputState.INTERRUPTED -> R.string.voice_output_interrupted
 }
 
-private class AndroidVoicePlatform(private val context: Context) : VoicePlatform {
+private class AndroidVoicePlatform(private val context: Context, private val input: VoiceInput) : VoicePlatform {
     private val handler = Handler(Looper.getMainLooper())
-    override fun available() = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+    override fun available() = input.available()
+    override fun recognizer(events: RecognitionEvents) = input.recognizer(events)
     override fun after(delayMs: Long, action: () -> Unit): VoiceTask {
         val task = Runnable(action)
         handler.postDelayed(task, delayMs)
         return VoiceTask { handler.removeCallbacks(task) }
     }
+
+    override fun speech(events: SpeechEvents): VoiceSpeech = AndroidSpeech(context, handler, events)
+}
+
+internal class AndroidVoiceInput(private val context: Context) : VoiceInput {
+    override fun available() = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     override fun recognizer(events: RecognitionEvents): VoiceRecognition {
         val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
@@ -88,7 +106,6 @@ private class AndroidVoicePlatform(private val context: Context) : VoicePlatform
         }
     }
 
-    override fun speech(events: SpeechEvents): VoiceSpeech = AndroidSpeech(context, handler, events)
 }
 
 private class AndroidSpeech(context: Context, private val handler: Handler, private val events: SpeechEvents) : VoiceSpeech {

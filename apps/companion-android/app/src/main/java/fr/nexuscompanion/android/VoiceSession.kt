@@ -441,7 +441,9 @@ internal class VoiceSession(
         onSpeechOutput(result)
         // Wait for the next ready callback: TTS completion does not mean the microphone is ready.
         if (awaitingCommand) commandTimerPending = true
-        scheduleRestart(delayMs = 700L)
+        // After confirmed playback, leave a short margin for residual speaker sound.
+        val restartDelay = if (result == SpeechOutputState.COMPLETED) 200L else 700L
+        scheduleRestart(delayMs = restartDelay)
     }
 
     private fun closeRecognition() {

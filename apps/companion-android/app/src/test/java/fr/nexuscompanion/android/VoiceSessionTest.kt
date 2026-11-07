@@ -568,9 +568,11 @@ class VoiceSessionTest {
         f.platform.speaker.events.started(id)
         f.platform.speaker.events.failed(id)
         f.platform.speaker.events.finished(id)
-        f.platform.advance(700)
+        f.platform.advance(699)
         assertFalse(f.mouths.last())
         assertEquals(SpeechOutputState.FAILED, f.output.last())
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1)
         assertEquals(2, f.platform.totalStarts)
     }
 
@@ -582,7 +584,7 @@ class VoiceSessionTest {
         assertEquals(1, f.platform.totalStarts)
     }
 
-    @Test fun asynchronousBrainProcessingKeepsRecognitionPausedUntilReplyFinishes() {
+    @Test fun recognitionResumesTwoHundredMillisecondsAfterConfirmedPlayback() {
         val f = Fixture(); f.start()
         val previous = f.platform.recognition
         f.session.beginResponse()
@@ -591,10 +593,14 @@ class VoiceSessionTest {
         assertTrue(f.commands.isEmpty())
         assertEquals(1, f.platform.totalStarts)
         f.session.finishResponse("Bonjour")
+        val id = f.platform.speaker.utterances.single().second
+        f.platform.speaker.events.started(id)
         f.platform.advance(1_000)
         assertEquals(1, f.platform.totalStarts)
-        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
-        f.platform.advance(700)
+        f.platform.speaker.events.finished(id)
+        f.platform.advance(199)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1)
         assertEquals(2, f.platform.totalStarts)
     }
 

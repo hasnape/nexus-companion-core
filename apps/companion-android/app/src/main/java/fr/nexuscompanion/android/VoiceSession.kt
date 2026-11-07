@@ -135,15 +135,15 @@ internal class VoiceSession(
                     }
                     override fun alternatives(hypotheses: List<SpeechHypothesis>) {
                         if (!current()) return
-                        recognitionTimeout?.cancel(); recognitionTimeout = null
-                        listening = false
+                        // A completed client must never forward a late vendor event into the next capture.
+                        closeRecognition()
                         failures = 0
                         val text = VoiceTranscriptPolicy.select(hypotheses, awaitingCommand)
                         if (text != null) {
                             showTranscript(text, true)
                             acceptTranscript(text)
                         }
-                        if (awaitingCommand && utterance == null && capturing) armCommandTimeout()
+                        if (awaitingCommand && utterance == null && capturing && !commandTimerPending) armCommandTimeout()
                         if (utterance == null) scheduleRestart()
                     }
                     override fun speechStarted() { if (current()) markSpeechStarted() }
@@ -163,18 +163,12 @@ internal class VoiceSession(
                     }
                     override fun error(failure: RecognitionFailure) {
                         if (!current()) return
-                        recognitionTimeout?.cancel(); recognitionTimeout = null
-                        listening = false
-                        onInputLevel(0)
+                        closeRecognition()
                         if (awaitingCommand && capturing) armCommandTimeout()
                         when (failure) {
                             RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH -> scheduleRestart()
-                            RecognitionFailure.TEMPORARY -> {
-                                closeRecognition()
-                                scheduleRestart(failed = true)
-                            }
+                            RecognitionFailure.TEMPORARY -> scheduleRestart(failed = true)
                             RecognitionFailure.BUSY, RecognitionFailure.RATE_LIMIT -> {
-                                closeRecognition()
                                 scheduleRestart(failed = true, delayMs = if (failure == RecognitionFailure.RATE_LIMIT) 15_000L else 1_500L)
                                 if (enabled) onStatus(if (failure == RecognitionFailure.RATE_LIMIT)
                                     "Android limite les demandes vocales — reprise dans 15 secondes."
@@ -217,9 +211,11 @@ internal class VoiceSession(
         commandTimeout = null
         if (command.isBlank()) {
             awaitingCommand = true
-            if (!speak("Je t'écoute.")) armCommandTimeout()
+            commandTimerPending = true
+            speak("Je t'écoute.")
         } else {
             awaitingCommand = false
+            commandTimerPending = false
             onCommand(command)
         }
     }
@@ -377,8 +373,8 @@ internal class VoiceSession(
         speechTimeout = null
         utterance = null
         onSpeechState(false)
-        // Start the command window after the acknowledgement, not while TTS is speaking.
-        armCommandTimeout()
+        // Wait for the next ready callback: TTS completion does not mean the microphone is ready.
+        if (awaitingCommand) commandTimerPending = true
         scheduleRestart(delayMs = 700L)
     }
 

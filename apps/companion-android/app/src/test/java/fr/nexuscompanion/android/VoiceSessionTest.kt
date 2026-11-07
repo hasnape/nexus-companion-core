@@ -84,6 +84,63 @@ class VoiceSessionTest {
         assertTrue(f.commands.isEmpty())
     }
 
+    @Test fun previousSilentTurnCannotExecuteOrDisableTheNextTurn() {
+        for (failure in listOf(RecognitionFailure.SILENCE, RecognitionFailure.NO_MATCH)) {
+            val f = Fixture(); f.start()
+            val previous = f.platform.recognition.events
+            previous.error(failure)
+            f.platform.advance(500)
+            previous.partial("phrase périmée")
+            previous.level(12f)
+            previous.result("Nexus ancienne commande")
+            previous.error(RecognitionFailure.PERMISSION)
+            assertTrue(f.commands.isEmpty())
+            assertTrue(f.transcripts.isEmpty())
+            assertEquals(0, f.levels.last())
+            assertEquals(listOf(true), f.sessions)
+            f.platform.recognition.events.result("Nexus bonjour")
+            assertEquals(listOf("bonjour"), f.commands)
+        }
+    }
+
+    @Test fun completedAmbientTurnCannotDeliverAnotherCommandAfterRestart() {
+        val f = Fixture(); f.start()
+        val previous = f.platform.recognition.events
+        previous.result("conversation ambiante")
+        f.platform.advance(500)
+        previous.result("Nexus ancienne commande")
+        assertTrue(f.commands.isEmpty())
+        assertEquals("conversation ambiante" to true, f.transcripts.last())
+        f.platform.recognition.events.result("Nexus bonjour")
+        assertEquals(listOf("bonjour"), f.commands)
+        assertEquals(2, f.platform.recognizers.size)
+        assertTrue(f.platform.recognizers.first().closed)
+    }
+
+    @Test fun wakeCommandWindowStartsWhenTheMicrophoneIsActuallyReady() {
+        val f = Fixture(); f.start()
+        f.platform.recognition.events.result("Nexus")
+        f.platform.autoReady = false
+        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(6_700)
+        f.platform.recognition.events.ready()
+        f.platform.advance(10_000)
+        f.platform.recognition.events.result("bonjour")
+        assertEquals(listOf("bonjour"), f.commands)
+    }
+
+    @Test fun wakeWithoutTtsAlsoWaitsForTheMicrophoneToBeReady() {
+        val f = Fixture(); f.session.start(); f.platform.speaker.events.ready(false)
+        f.platform.autoReady = false
+        f.platform.recognition.events.speechStarted()
+        f.platform.recognition.events.result("Nexus")
+        f.platform.advance(6_500)
+        f.platform.recognition.events.ready()
+        f.platform.advance(10_000)
+        f.platform.recognition.events.result("bonjour")
+        assertEquals(listOf("bonjour"), f.commands)
+    }
+
     @Test fun androidRateLimitsUseACooldownInsteadOfRapidRestarts() {
         val f = Fixture(); f.start()
         f.platform.recognition.events.error(RecognitionFailure.RATE_LIMIT)
@@ -304,6 +361,7 @@ class VoiceSessionTest {
         val f = Fixture(); f.start()
         f.platform.recognition.events.result("Nexus")
         f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(700)
         f.platform.advance(12_000)
         f.platform.recognition.events.result("bonjour")
         assertTrue(f.commands.isEmpty())

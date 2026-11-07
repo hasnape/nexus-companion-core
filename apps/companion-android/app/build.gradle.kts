@@ -15,8 +15,8 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 7
-  versionName = "0.4.1-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 8
+  versionName = "0.4.2-native-alpha" + if (nexusPreview) "-preview" else ""
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
   manifestPlaceholders["nexusLabel"] = if (nexusPreview) "Nexus Companion Test" else "@string/app_name"
  }

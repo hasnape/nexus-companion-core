@@ -42,6 +42,8 @@ internal class NativeVoiceController(
     fun playReply(text: String) = session.playReply(text)
     fun beginResponse() = session.beginResponse()
     fun finishResponse(text: String?) = session.finishResponse(text)
+    fun setSpokenRepliesEnabled(enabled: Boolean) = session.setSpokenRepliesEnabled(enabled)
+    fun stopListening() = session.stopListening()
     fun stop() = session.stop()
     fun close() { session.stop(); input.close() }
 }
@@ -115,7 +117,7 @@ private class AndroidSpeech(context: Context, private val handler: Handler, priv
     private var engine: TextToSpeech? = null
     private var activeUtterance: String? = null
     private val attributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+        .setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
     private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
         .setAudioAttributes(attributes)
         .setOnAudioFocusChangeListener({ change ->

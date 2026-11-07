@@ -1,6 +1,8 @@
 package fr.nexuscompanion.android
 
 private const val DEFAULT_RESTART_DELAY_MS = 500L
+private const val POST_PLAYBACK_RESTART_DELAY_MS = 200L
+private const val INTERRUPTED_PLAYBACK_RESTART_DELAY_MS = 700L
 
 internal fun interface VoiceTask { fun cancel() }
 
@@ -65,6 +67,7 @@ internal class VoiceSession(
     private val onSpeechOutput: (SpeechOutputState) -> Unit = {}
 ) {
     private var enabled = false
+    private var playbackEnabled = true
     private var listening = false
     private var speechReady: Boolean? = null
     private var awaitingCommand = false
@@ -99,7 +102,7 @@ internal class VoiceSession(
         enabled = true
         failures = 0
         onSessionState(true)
-        prepareSpeech()
+        if (playbackEnabled) prepareSpeech()
         onStatus("Écoute locale activée : dis « Nexus ».")
         beginRecognition()
     }
@@ -115,6 +118,7 @@ internal class VoiceSession(
                     speechReady = available
                     val reply = pendingReply
                     clearPendingReply()
+                    if (!playbackEnabled) return
                     if (!available) {
                         onSpeechOutput(SpeechOutputState.UNAVAILABLE)
                         if (reply != null) scheduleRestart()
@@ -365,7 +369,7 @@ internal class VoiceSession(
 
     /** Play an explicit reply or test phrase without activating recognition. */
     fun playReply(text: String) {
-        if (text.isBlank()) {
+        if (!playbackEnabled || text.isBlank()) {
             scheduleRestart()
             return
         }
@@ -394,6 +398,22 @@ internal class VoiceSession(
         }
     }
 
+    fun setSpokenRepliesEnabled(active: Boolean) {
+        if (playbackEnabled == active) return
+        playbackEnabled = active
+        if (active) {
+            if (enabled) prepareSpeech()
+            return
+        }
+        val playbackWasActive = utterance != null
+        val replyWasPending = pendingReply != null
+        stopPlayback()
+        if (playbackWasActive || replyWasPending) {
+            if (awaitingCommand) commandTimerPending = true
+            scheduleRestart(delayMs = if (playbackWasActive) INTERRUPTED_PLAYBACK_RESTART_DELAY_MS else DEFAULT_RESTART_DELAY_MS)
+        }
+    }
+
     private fun clearPendingReply() {
         pendingReply = null
         speechSetupTimeout?.cancel()
@@ -411,7 +431,7 @@ internal class VoiceSession(
 
     /** Returns false when the local voice is absent or still initializing. */
     fun speak(text: String): Boolean {
-        if (text.isBlank() || speechReady != true || speech == null) return false
+        if (!playbackEnabled || text.isBlank() || speechReady != true || speech == null) return false
         restart?.cancel()
         restart = null
         commandTimeout?.cancel()
@@ -448,7 +468,8 @@ internal class VoiceSession(
         // Wait for the next ready callback: TTS completion does not mean the microphone is ready.
         if (awaitingCommand) commandTimerPending = true
         // After confirmed playback, leave a short margin for residual speaker sound.
-        val restartDelay = if (result == SpeechOutputState.COMPLETED) 200L else 700L
+        val restartDelay = if (result == SpeechOutputState.COMPLETED) POST_PLAYBACK_RESTART_DELAY_MS
+            else INTERRUPTED_PLAYBACK_RESTART_DELAY_MS
         scheduleRestart(delayMs = restartDelay)
     }
 
@@ -463,34 +484,37 @@ internal class VoiceSession(
         try { previous?.close() } catch (_: RuntimeException) { /* callbacks already invalidated */ }
     }
 
-    fun stop() {
+    fun stopListening() {
         val wasEnabled = enabled
         enabled = false
-        ++generation
-        clearPendingReply()
         restart?.cancel()
         commandTimeout?.cancel()
-        speechTimeout?.cancel()
         responseTimeout?.cancel()
         transcriptTimeout?.cancel(); transcriptTimeout = null
         onTranscript("", false)
         restart = null
         commandTimeout = null
-        speechTimeout = null
         responseTimeout = null
         processing = false
         awaitingCommand = false
         commandTimerPending = false
         capturing = false
+        closeRecognition()
+        if (wasEnabled) onSessionState(false)
+        onStatus("Micro désactivé")
+    }
+
+    fun stop() {
+        ++generation
+        clearPendingReply()
+        speechTimeout?.cancel(); speechTimeout = null
         utterance = null
         speechReady = null
-        closeRecognition()
         val previous = speech
         speech = null
+        stopListening()
         try { previous?.close() } catch (_: RuntimeException) { /* all callbacks invalidated */ }
         onSpeechState(false)
         onSpeechOutput(SpeechOutputState.IDLE)
-        if (wasEnabled) onSessionState(false)
-        onStatus("Micro désactivé")
     }
 }

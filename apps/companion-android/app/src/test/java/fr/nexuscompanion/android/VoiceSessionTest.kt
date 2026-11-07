@@ -124,13 +124,70 @@ class VoiceSessionTest {
         assertTrue(f.commands.isEmpty())
     }
 
-    @Test fun stoppingTheMicrophoneCancelsAQueuedLocalRestart() {
+    @Test fun stoppingOnlyTheMicrophoneCancelsAQueuedLocalRestart() {
         val f = Fixture(localTurnDelayMs = 0L); f.start()
         f.platform.recognition.events.error(RecognitionFailure.SILENCE)
-        f.session.stop()
+        f.session.stopListening()
         f.platform.advance(0)
         assertEquals(1, f.platform.totalStarts)
         assertEquals(listOf(true, false), f.sessions)
+    }
+
+    @Test fun stoppingOnlyTheMicrophoneAllowsTheCurrentReplyToFinish() {
+        val f = Fixture(); f.start()
+        f.session.playReply("Une réponse en cours")
+        val id = f.platform.speaker.utterances.single().second
+        f.platform.speaker.events.started(id)
+
+        f.session.stopListening()
+
+        assertEquals(listOf(true, false), f.sessions)
+        assertFalse(f.platform.speaker.closed)
+        assertTrue(f.mouths.last())
+        f.platform.speaker.events.finished(id)
+        f.platform.advance(200)
+        assertEquals(1, f.platform.totalStarts)
+        assertEquals(SpeechOutputState.COMPLETED, f.output.last())
+        f.session.playReply("Une autre réponse")
+        assertEquals(2, f.platform.speaker.utterances.size)
+    }
+
+    @Test fun mutingWhileTheVoiceInitializesCancelsPlaybackAndResumesListening() {
+        val f = Fixture(); f.session.start()
+        f.session.beginResponse()
+        f.session.finishResponse("Une réponse en attente")
+        assertEquals(SpeechOutputState.PREPARING, f.output.last())
+
+        f.session.setSpokenRepliesEnabled(false)
+        f.platform.speaker.events.ready(true)
+        f.platform.advance(500)
+
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        assertEquals(2, f.platform.totalStarts)
+        f.platform.recognition.events.result("Nexus")
+        f.platform.advance(500)
+        f.platform.recognition.events.result("bonjour")
+        assertEquals(listOf("bonjour"), f.commands)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+    }
+
+    @Test fun mutingAnActiveReplyStopsItBeforeResumingListening() {
+        val f = Fixture(); f.start()
+        f.session.playReply("Une réponse en cours")
+        val id = f.platform.speaker.utterances.single().second
+        f.platform.speaker.events.started(id)
+
+        f.session.setSpokenRepliesEnabled(false)
+        f.platform.speaker.events.finished(id)
+
+        assertEquals(1, f.platform.speaker.stops)
+        assertFalse(f.mouths.last())
+        assertEquals(SpeechOutputState.IDLE, f.output.last())
+        f.platform.advance(699)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1)
+        assertEquals(2, f.platform.totalStarts)
+        assertEquals(listOf(true), f.sessions)
     }
 
     @Test fun completedAmbientTurnCannotDeliverAnotherCommandAfterRestart() {

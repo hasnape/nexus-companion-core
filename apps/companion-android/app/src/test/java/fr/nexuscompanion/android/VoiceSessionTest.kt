@@ -4,11 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceSessionTest {
-    private class FakePlatform : VoicePlatform {
+    private class FakePlatform(private val localTurnDelayMs: Long?) : VoicePlatform {
         data class Task(val due: Long, val action: () -> Unit, var canceled: Boolean = false)
         inner class Recognition(val events: RecognitionEvents) : VoiceRecognition {
             var starts = 0
             var closed = false
+            override val nextTurnDelayMs get() = localTurnDelayMs ?: super.nextTurnDelayMs
             override fun start() { starts++; totalStarts++; if (autoReady) events.ready() }
             override fun close() {
                 closed = true
@@ -60,8 +61,8 @@ class VoiceSessionTest {
             now = end
         }
     }
-    private class Fixture {
-        val platform = FakePlatform()
+    private class Fixture(localTurnDelayMs: Long? = null) {
+        val platform = FakePlatform(localTurnDelayMs)
         val commands = mutableListOf<String>()
         val statuses = mutableListOf<String>()
         val mouths = mutableListOf<Boolean>()
@@ -104,11 +105,41 @@ class VoiceSessionTest {
         }
     }
 
+    @Test fun localRecognitionRestartsOnTheNextDispatchAfterSilenceOrAmbientSpeech() {
+        val f = Fixture(localTurnDelayMs = 0L); f.start()
+        val finishTurns: List<(RecognitionEvents) -> Unit> = listOf(
+            { it.error(RecognitionFailure.SILENCE) },
+            { it.error(RecognitionFailure.NO_MATCH) },
+            { it.result("conversation ambiante") }
+        )
+        for (finish in finishTurns) {
+            val previous = f.platform.recognition
+            val starts = f.platform.totalStarts
+            finish(previous.events)
+            assertTrue(previous.closed)
+            assertEquals(starts, f.platform.totalStarts)
+            f.platform.advance(0)
+            assertEquals(starts + 1, f.platform.totalStarts)
+        }
+        assertTrue(f.commands.isEmpty())
+    }
+
+    @Test fun stoppingTheMicrophoneCancelsAQueuedLocalRestart() {
+        val f = Fixture(localTurnDelayMs = 0L); f.start()
+        f.platform.recognition.events.error(RecognitionFailure.SILENCE)
+        f.session.stop()
+        f.platform.advance(0)
+        assertEquals(1, f.platform.totalStarts)
+        assertEquals(listOf(true, false), f.sessions)
+    }
+
     @Test fun completedAmbientTurnCannotDeliverAnotherCommandAfterRestart() {
         val f = Fixture(); f.start()
         val previous = f.platform.recognition.events
         previous.result("conversation ambiante")
-        f.platform.advance(500)
+        f.platform.advance(499)
+        assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1)
         previous.result("Nexus ancienne commande")
         assertTrue(f.commands.isEmpty())
         assertEquals("conversation ambiante" to true, f.transcripts.last())

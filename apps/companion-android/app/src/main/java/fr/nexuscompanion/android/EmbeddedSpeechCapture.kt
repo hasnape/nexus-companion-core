@@ -29,6 +29,7 @@ internal class EmbeddedSpeechCapture(
     @Volatile private var cancelled = false
     private var activeRecorder: PcmRecorder? = null
     override val preparationTimeoutMs = 30_000L
+    override val nextTurnDelayMs = 0L
 
     override fun start() {
         worker.execute { capture() }

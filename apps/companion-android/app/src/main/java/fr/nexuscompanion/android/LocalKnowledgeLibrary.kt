@@ -21,6 +21,12 @@ internal class LocalKnowledgeLibrary(
     companionId: String = "nexus-default",
     private val cipher: KnowledgeCipher = LocalKnowledgeCipher(companionId)
 ) {
+    private companion object {
+        // AtomicFile requires callers to serialize readers and writers across instances.
+        val storeLock = Any()
+        const val MAX_ENCRYPTED_BYTES = KnowledgePayload.MAX_JSON_BYTES + 32
+    }
+
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
     private val maxEntries = 500
@@ -35,22 +41,21 @@ internal class LocalKnowledgeLibrary(
         val verified: Boolean
     )
 
-    @Synchronized
-    fun list(): List<Entry> {
-        val bytes = try { store.openRead().use { it.readBytes() } }
+    data class NoteSave(val entry: Entry, val created: Boolean)
+
+    fun list(): List<Entry> = synchronized(storeLock) { readEntries() }
+
+    private fun readEntries(): List<Entry> {
+        val bytes = try { store.openRead().use { KnowledgePayload.readBounded(it, MAX_ENCRYPTED_BYTES) } }
             catch (_: java.io.FileNotFoundException) { return emptyList() }
         // Legacy alpha files were plaintext. Convert only recognized schema-v1 JSON,
         // atomically, before returning records. Do not overwrite on decrypt failure.
         val legacyPlaintext = !cipher.isEncrypted(bytes)
         val plaintext = if (!legacyPlaintext) {
-            cipher.decrypt(bytes)
+            KnowledgePayload.decode(cipher.decrypt(bytes))
         } else {
             require(bytes.size <= 2_000_000 && bytes.firstOrNull() == '{'.code.toByte()) {
                 "Unknown library format"
-            }
-            val legacy = JSONObject(String(bytes, StandardCharsets.UTF_8))
-            require(legacy.optInt("schema") == 1 && legacy.has("entries")) {
-                "Unknown legacy library schema"
             }
             bytes
         }
@@ -77,52 +82,63 @@ internal class LocalKnowledgeLibrary(
         return parsed
     }
 
-    @Synchronized
-    fun addUserNote(title: String, excerpt: String): Entry =
-        add(title, excerpt, "user:manual", verified = false, expiresAt = null)
+    fun addUserNote(title: String, excerpt: String): NoteSave =
+        saveNote(title, excerpt, "user:manual", verified = false, expiresAt = null)
 
     /**
      * Intended for future explicit import flow; do not silently fetch URLs.
      * verified=true requires a separate verification process, not user input.
      */
-    @Synchronized
     fun add(
         title: String, excerpt: String, source: String,
         verified: Boolean = false, expiresAt: Long? = null
-    ): Entry {
+    ): Entry = saveNote(title, excerpt, source, verified, expiresAt).entry
+
+    private fun saveNote(
+        title: String, excerpt: String, source: String, verified: Boolean, expiresAt: Long?
+    ): NoteSave = synchronized(storeLock) {
         if (!KnowledgePolicy.isValidUserNote(title, excerpt)) throw InvalidKnowledgeNote()
         require(source.isNotBlank() && source.length <= 512)
         require(!verified) { "Verification must be performed by a separate trusted verifier" }
-        val existing = list()
+        val existing = readEntries()
+        val cleanTitle = title.trim()
+        val cleanExcerpt = excerpt.trim()
+        val cleanSource = source.trim()
+        val duplicate = existing.firstOrNull {
+            it.title == cleanTitle && it.excerpt == cleanExcerpt && it.source == cleanSource &&
+                it.expiresAt == expiresAt && !it.verified
+        }
+        if (duplicate != null) return@synchronized NoteSave(duplicate, created = false)
         if (existing.size >= maxEntries) throw KnowledgeCapacityReached()
-        val entry = Entry(UUID.randomUUID().toString(), title.trim(), excerpt.trim(),
-            source.trim(), System.currentTimeMillis(), expiresAt, false)
+        val entry = Entry(UUID.randomUUID().toString(), cleanTitle, cleanExcerpt,
+            cleanSource, System.currentTimeMillis(), expiresAt, false)
         save(existing + entry)
-        return entry
+        NoteSave(entry, created = true)
     }
 
-    @Synchronized
-    fun remove(id: String): Boolean {
-        val existing = list()
+    fun remove(id: String): Boolean = synchronized(storeLock) {
+        val existing = readEntries()
         val updated = existing.filterNot { it.id == id }
-        if (updated.size == existing.size) return false
+        if (updated.size == existing.size) return@synchronized false
         save(updated)
-        return true
+        true
     }
 
     fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
-        return matchingEntries(list(), query, now).take(5)
+        val terms = KnowledgePolicy.recallTopic(query) ?: KnowledgePolicy.queryTerms(query)
+        return matchingEntries(list(), terms, now).take(5)
     }
 
     /** One atomic read per conversation turn; expired notes never enter the brain context. */
     fun contextFor(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
         val entries = list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
-        val matches = matchingEntries(entries, query, now)
-        return (if (matches.isEmpty()) entries.sortedByDescending { it.recordedAt } else matches).take(8)
+        val topic = KnowledgePolicy.recallTopic(query)
+        val matches = matchingEntries(entries, topic ?: KnowledgePolicy.queryTerms(query), now)
+        val ranked = if (matches.isEmpty() && topic == null) entries.sortedByDescending { it.recordedAt } else matches
+        return ranked.distinctBy { it.title to it.excerpt }.take(8)
     }
 
-    private fun matchingEntries(entries: List<Entry>, query: String, now: Long): List<Entry> {
-        val tokens = KnowledgePolicy.queryTerms(query)
+    private fun matchingEntries(entries: List<Entry>, tokens: List<String>, now: Long): List<Entry> {
         if (tokens.isEmpty()) return emptyList()
         return entries.filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
             .map { entry ->
@@ -153,7 +169,7 @@ internal class LocalKnowledgeLibrary(
     }
 
     private fun writeEncrypted(plaintext: ByteArray) {
-        val encrypted = cipher.encrypt(plaintext)
+        val encrypted = cipher.encrypt(KnowledgePayload.encode(plaintext))
         val stream = store.startWrite()
         try {
             stream.write(encrypted)

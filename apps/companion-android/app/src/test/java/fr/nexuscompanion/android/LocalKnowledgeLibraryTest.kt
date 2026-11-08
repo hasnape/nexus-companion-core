@@ -10,6 +10,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPOutputStream
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -59,6 +64,60 @@ class LocalKnowledgeLibraryTest {
         assertEquals("ancienne note", library().list().single().excerpt)
     }
 
+    @Test fun opensOlderEncryptedJsonAndCompressesTheNextWrite() {
+        val entries = (0 until 24).map {
+            entry("id-$it", "Compte rendu $it")
+                .put("excerpt", "Échange local sur la sécurité et la mémoire. ".repeat(36) + "Échange $it.")
+        }
+        val cipher = JvmCipher("test")
+        val oldFile = cipher.encrypt(legacy(*entries.toTypedArray()).toByteArray(Charsets.UTF_8))
+        file().writeBytes(oldFile)
+        assertEquals(24, library().list().size)
+        assertArrayEquals(oldFile, file().readBytes())
+
+        assertTrue(library().addUserNote("Nouvelle note", "Une information à retenir").created)
+        val compressedFile = file().readBytes()
+        assertTrue(cipher.isEncrypted(compressedFile))
+        assertTrue("Repeated synthetic text should compress", compressedFile.size < oldFile.size / 4)
+        assertEquals(25, library().list().size)
+        assertEquals(entries.first().getString("excerpt"), library().list().first().excerpt)
+    }
+
+    @Test fun rejectsExcessiveDecompressionBeforeAnyWrite() {
+        val output = ByteArrayOutputStream()
+        val block = ByteArray(8192)
+        GZIPOutputStream(output).use { stream ->
+            repeat(KnowledgePayload.MAX_JSON_BYTES / block.size + 1) { stream.write(block) }
+        }
+        val stored = JvmCipher("test").encrypt(output.toByteArray())
+        file().writeBytes(stored)
+        assertThrows(IllegalArgumentException::class.java) { library().list() }
+        assertThrows(IllegalArgumentException::class.java) { library().addUserNote("Note", "Texte") }
+        assertArrayEquals(stored, file().readBytes())
+    }
+
+    @Test fun concurrentInstancesKeepOneCopyOfEachExactNote() {
+        val instances = List(6) { library() }
+        val start = CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(instances.size)
+        try {
+            val writes = instances.mapIndexed { index, library ->
+                pool.submit<LocalKnowledgeLibrary.NoteSave> {
+                    start.await()
+                    val note = index % 3
+                    library.addUserNote("Titre $note", "Information $note")
+                }
+            }
+            start.countDown()
+            val results = writes.map { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(3, results.count { it.created })
+            assertEquals(3, results.map { it.entry.id }.distinct().size)
+            assertEquals(3, library().list().size)
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
     @Test fun refusesTamperedCiphertextAndNeverOverwritesItWithANewNote() {
         library().addUserNote("Note", "Première note")
         val bytes = file().readBytes(); bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
@@ -77,7 +136,7 @@ class LocalKnowledgeLibraryTest {
     @Test fun explicitDeleteKeepsOtherNotesAcrossRestart() {
         val removed = library().addUserNote("À supprimer", "Première note")
         library().addUserNote("À conserver", "Seconde note")
-        assertTrue(library().remove(removed.id))
+        assertTrue(library().remove(removed.entry.id))
         assertEquals("Seconde note", library().list().single().excerpt)
     }
 
@@ -100,6 +159,7 @@ class LocalKnowledgeLibraryTest {
         file().writeText(legacy(*entries.toTypedArray()))
         assertEquals(500, library().list().size)
         val before = file().readBytes()
+        assertFalse(library().addUserNote("note 0", "note 0").created)
         assertThrows(KnowledgeCapacityReached::class.java) { library().addUserNote("Titre", "note supplémentaire") }
         assertArrayEquals(before, file().readBytes())
     }

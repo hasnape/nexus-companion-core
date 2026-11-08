@@ -48,15 +48,19 @@ class NativeBrainServiceTest {
         library.addUserNote("Batterie", "La batterie de secours se recharge en USB.")
         library.addUserNote("Préférence", "Je préfère le thé vert.")
         NativeBrainService(context, library).use { brain ->
-            val match = brain.reply("Nexus, mes notes sur la batterie")
-            assertTrue(match.text.contains("batterie de secours"))
-            assertFalse(match.text.contains("thé vert"))
+            for (question in listOf("Nexus, mes notes sur la batterie", "Qu’est-ce que j’ai noté sur la batterie ?")) {
+                val match = brain.reply(question)
+                assertTrue(question, match.text.contains("batterie de secours"))
+                assertFalse(question, match.text.contains("thé vert"))
+            }
 
-            val missing = brain.reply("Mes notes sur le permis")
-            assertTrue(missing.text.contains("Je ne retrouve pas"))
-            assertFalse(missing.text.contains("batterie de secours") || missing.text.contains("thé vert"))
+            for (question in listOf("Mes notes sur le permis", "Tu te souviens de mon permis ?", "Mes notes sur")) {
+                val missing = brain.reply(question)
+                assertTrue(question, missing.text.contains("Je ne retrouve pas"))
+                assertFalse(question, missing.text.contains("batterie de secours") || missing.text.contains("thé vert"))
+            }
 
-            val overview = brain.reply("Mes notes")
+            val overview = brain.reply("Qu’ai-je noté ?")
             assertTrue(overview.text.contains("batterie de secours") && overview.text.contains("thé vert"))
         }
     }

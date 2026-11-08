@@ -29,6 +29,16 @@ class KnowledgePolicyTest {
         assertNull(KnowledgePolicy.recallTopic("mes notes"))
     }
 
+    @Test fun distinguishesNaturalTopicRecallFromAnOverviewOrLearningRequest() {
+        val expected = KnowledgePolicy.Recall.Topic(listOf("batterie"))
+        assertEquals(expected, KnowledgePolicy.recallFor("Nexus Companion, qu’est-ce que j’ai noté sur la batterie ?"))
+        assertEquals(expected, KnowledgePolicy.recallFor("Rappelle-moi ce que tu as mémorisé au sujet de ma batterie."))
+        assertEquals(expected, KnowledgePolicy.recallFor("Tu te souviens de ma batterie ?"))
+        assertEquals(KnowledgePolicy.Recall.Topic(emptyList()), KnowledgePolicy.recallFor("Mes notes sur"))
+        assertEquals(KnowledgePolicy.Recall.Overview, KnowledgePolicy.recallFor("Qu’ai-je noté ?"))
+        assertNull(KnowledgePolicy.recallFor("Souviens-toi que la batterie se recharge en USB."))
+    }
+
     @Test fun filtersExpiredKnowledge() {
         assertTrue(KnowledgePolicy.isExpired(100L, 100L))
         assertFalse(KnowledgePolicy.isExpired(null, 100L))

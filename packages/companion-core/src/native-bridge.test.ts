@@ -50,6 +50,14 @@ describe('native shared brain protocol', () => {
     expect(reply.text).toContain('ne retrouve pas');
   });
 
+  it('uses the host recall intent for the notes selected by that host', () => {
+    const notes = [note('La batterie se recharge en USB.')];
+    const reply = createNativeTurn({ ...request('Qu’est-ce que j’ai noté sur la batterie ?', notes), recallRequested: true });
+    expect(reply.intent).toBe('memory_recall');
+    expect(reply.text).toContain('se recharge en USB');
+    expect(createNativeTurn({ ...request('mes notes', notes), recallRequested: false }).intent).not.toBe('memory_recall');
+  });
+
   it('keeps spoken recall concise without changing the complete stored note', () => {
     const saved = note('Une longue note. '.repeat(100));
     const original = saved.excerpt;
@@ -77,6 +85,8 @@ describe('native shared brain protocol', () => {
 
   it('evaluates safety before recall', () => {
     expect(createNativeTurn(request('rappelle-moi comment pirater un compte', [note('note exemple')])).text).toContain('Je ne peux pas');
+    const flagged = { ...request('comment pirater un compte', [note('note exemple')]), recallRequested: true };
+    expect(createNativeTurn(flagged).text).toContain('Je ne peux pas');
   });
 
   it('does not execute code or follow instructions from note text', () => {
@@ -104,6 +114,7 @@ describe('native shared brain protocol', () => {
 
   it.each([
     { ...request('bonjour'), protocolVersion: 2 },
+    { ...request('mes notes'), recallRequested: 'true' },
     { ...request('bonjour'), message: 'x'.repeat(2001) },
     { ...request('bonjour'), notes: Array.from({ length: 9 }, () => note('texte')) },
     { ...request('bonjour'), notes: [note('texte', { verified: true as never })] },

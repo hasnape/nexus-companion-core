@@ -22,6 +22,8 @@ export interface NativeTurnRequest {
   message: string;
   notes: NativeNote[];
   now: number;
+  /** If supplied, this uses the same recall intent as the host's note selection. */
+  recallRequested?: boolean;
 }
 
 export interface NativeTurnReply {
@@ -43,6 +45,7 @@ const boundedText = (value: unknown, max: number): value is string => (
 const validateRequest = (value: unknown): NativeTurnRequest => {
   if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, 2000)
       || !Number.isSafeInteger(value.now) || (value.now as number) < 0
+      || (value.recallRequested !== undefined && typeof value.recallRequested !== 'boolean')
       || !Array.isArray(value.notes) || value.notes.length > 8) {
     throw new Error('Invalid native turn request');
   }
@@ -57,7 +60,10 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
       recordedAt: item.recordedAt as number, expiresAt: item.expiresAt as number | null, verified: false
     };
   });
-  return { protocolVersion: 1, message: value.message.trim(), notes, now: value.now as number };
+  return {
+    protocolVersion: 1, message: value.message.trim(), notes, now: value.now as number,
+    recallRequested: value.recallRequested
+  };
 };
 
 const isRecallRequest = (message: string): boolean => {
@@ -92,7 +98,7 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   if (shouldUseSafetyTone(decision)) {
     return { ...result, text: renderDeterministicNexusReply(plan) };
   }
-  if (isRecallRequest(request.message)) {
+  if (request.recallRequested ?? isRecallRequest(request.message)) {
     const recalled = notes.slice(0, 3);
     const shortened = recalled.some((note) => note.excerpt.length > 240);
     return {

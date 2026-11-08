@@ -15,9 +15,25 @@ internal object KnowledgePolicy {
         "ne", "on", "ou", "sa", "se", "ta", "te", "tu", "un", "va", "que", "qui", "les", "des", "une",
         "pour", "dans", "avec", "sur", "mes", "mon", "moi", "est", "sais", "souviens", "rappelle"
     )
-    private val notesByTopic = Regex(
-        "^(?:(?:rappelle moi|montre moi|montre) )?mes notes (?:sur|concernant|au sujet de) (.+)$"
+    private val overviewRequests = setOf(
+        "mes notes", "montre mes notes", "montre moi mes notes", "rappelle moi mes notes",
+        "que sais tu de moi", "tu te souviens de moi", "te souviens tu de moi", "de quoi te souviens tu",
+        "qu ai je note", "qu est ce que j ai note", "qu as tu retenu", "qu as tu memorise",
+        "qu est ce que tu as retenu", "qu est ce que tu as memorise"
     )
+    private val recallRequest = Regex(
+        "^(?:(?:(?:rappelle moi|montre(?: moi)?) )?mes notes|" +
+            "(?:(?:rappelle moi )?ce que|qu est ce que) (?:j ai note|tu as (?:retenu|memorise))|" +
+            "qu (?:ai je note|as tu (?:retenu|memorise))|de quoi te souviens tu|" +
+            "rappelle moi|tu te souviens|te souviens tu|que sais tu|mes preferences)(?: (.*))?$"
+    )
+    private val subjectPrefix = Regex("^(?:sur|concernant|au sujet de)(?: |$)")
+
+    sealed interface Recall {
+        object Overview : Recall
+        data class Topic(val terms: List<String>) : Recall
+    }
+
     private fun normalize(value: String): String =
         accents.replace(Normalizer.normalize(value, Normalizer.Form.NFD), "").lowercase(Locale.ROOT)
 
@@ -25,12 +41,17 @@ internal object KnowledgePolicy {
         normalize(query).split(separators)
             .filter { it.length >= 2 && it !in stopWords }.distinct().take(8)
 
-    /** A targeted recall may only use notes matching the requested topic. */
-    fun recallTopic(query: String): List<String>? {
+    /** Recognize an overview separately so a missing topic never falls back to recent notes. */
+    fun recallFor(query: String): Recall? {
         val command = VoiceTranscriptPolicy.parse(query).command
         val words = normalize(command).split(separators).filter { it.isNotEmpty() }.joinToString(" ")
-        return notesByTopic.matchEntire(words)?.groupValues?.get(1)?.let(::queryTerms)
+        if (words in overviewRequests) return Recall.Overview
+        if (words == "mes preferences") return Recall.Topic(listOf("preference", "preferences", "prefere"))
+        val subject = recallRequest.matchEntire(words)?.groupValues?.get(1) ?: return null
+        return Recall.Topic(queryTerms(subject.replaceFirst(subjectPrefix, "")))
     }
+
+    fun recallTopic(query: String): List<String>? = (recallFor(query) as? Recall.Topic)?.terms
 
     fun isExpired(expiresAt: Long?, now: Long): Boolean =
         expiresAt != null && expiresAt <= now

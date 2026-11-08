@@ -25,7 +25,8 @@ internal class NativeBrainService(private val context: Context, private val libr
     fun reply(message: String): Reply {
         require(message.isNotBlank() && message.length <= 2000)
         val now = System.currentTimeMillis()
-        val notes = try { library.contextFor(message, now) } catch (_: Exception) { null }
+        val recall = KnowledgePolicy.recallFor(message)
+        val notes = try { library.contextFor(message, now, recall) } catch (_: Exception) { null }
         val array = JSONArray()
         notes.orEmpty().forEach { note ->
             array.put(JSONObject().apply {
@@ -35,7 +36,7 @@ internal class NativeBrainService(private val context: Context, private val libr
             })
         }
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
-            .put("notes", array).put("now", now)
+            .put("notes", array).put("now", now).put("recallRequested", recall != null)
         // JSON escaping can expand valid note text. Bound context without truncating stored notes.
         while (request.toString().length > SharedBrainRuntime.MAX_REQUEST_CHARS && array.length() > 0) {
             array.remove(array.length() - 1)

@@ -130,11 +130,21 @@ internal class LocalKnowledgeLibrary(
     }
 
     /** One atomic read per conversation turn; expired notes never enter the brain context. */
-    fun contextFor(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
+    fun contextFor(
+        query: String,
+        now: Long = System.currentTimeMillis(),
+        recall: KnowledgePolicy.Recall? = KnowledgePolicy.recallFor(query)
+    ): List<Entry> {
         val entries = list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
-        val topic = KnowledgePolicy.recallTopic(query)
-        val matches = matchingEntries(entries, topic ?: KnowledgePolicy.queryTerms(query), now)
-        val ranked = if (matches.isEmpty() && topic == null) entries.sortedByDescending { it.recordedAt } else matches
+        val terms = when (recall) {
+            is KnowledgePolicy.Recall.Topic -> recall.terms
+            KnowledgePolicy.Recall.Overview -> emptyList()
+            null -> KnowledgePolicy.queryTerms(query)
+        }
+        val matches = matchingEntries(entries, terms, now)
+        val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic) {
+            entries.sortedByDescending { it.recordedAt }
+        } else matches
         return ranked.distinctBy { it.title to it.excerpt }.take(8)
     }
 

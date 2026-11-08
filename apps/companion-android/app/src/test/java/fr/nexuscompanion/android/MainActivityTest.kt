@@ -3,6 +3,7 @@ package fr.nexuscompanion.android
 import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -11,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import org.junit.After
@@ -20,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
@@ -145,7 +148,11 @@ class MainActivityTest {
         activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))
         shadowOf(Looper.getMainLooper()).idle()
         val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        val avatar = activity.findViewById<NexusAvatarView>(R.id.nexus_avatar)
+        assertEquals(CompanionPresence.READY, avatar.presence)
         recognizer.triggerOnReadyForSpeech(android.os.Bundle())
+        assertEquals(CompanionPresence.LISTENING, avatar.presence)
+        assertTrue(hasText(activity.getString(R.string.home_presence_listening)))
         assertTrue(hasText("Micro actif"))
         assertTrue(button(R.string.speak_now).isEnabled)
         recognizer.triggerOnPartialResults(android.os.Bundle().apply {
@@ -154,6 +161,7 @@ class MainActivityTest {
         assertTrue(hasText("En cours : phrase privée provisoire"))
         input().setText("Une note à relire")
         button(R.string.remember).performClick()
+        assertEquals(CompanionPresence.READY, avatar.presence)
         assertFalse(hasText("phrase privée provisoire"))
         assertFalse(button(R.string.speak_now).isEnabled)
         val previousSpeech = ShadowTextToSpeech.getLastTextToSpeechInstance()
@@ -168,6 +176,33 @@ class MainActivityTest {
         assertFalse(hasText(activity.getString(R.string.local_ready)))
         assertTrue(hasText("Reprise de l'écoute locale") || hasText("Micro actif") || hasText("Préparation du micro"))
         assertTrue(hasText(activity.getString(R.string.voice_output_unavailable)))
+    }
+
+    @Test @Config(qualifiers = "w320dp-h640dp-mdpi") fun homeControlsFitOnANarrowScreenWithLargerText() {
+        RuntimeEnvironment.setFontScale(1.5f)
+        lifecycle.recreate()
+        activity = lifecycle.get()
+        assertEquals(1.5f, activity.resources.configuration.fontScale, 0.01f)
+        val scroll = activity.findViewById<ScrollView>(R.id.home_scroll)
+        scroll.measure(
+            View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(640, View.MeasureSpec.EXACTLY)
+        )
+        scroll.layout(0, 0, 320, 640)
+
+        val controlIds = listOf(R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
+            R.id.home_input, R.id.home_send, R.id.home_notes, R.id.home_remember, R.id.home_updates)
+        for (id in controlIds) {
+            val control = activity.findViewById<TextView>(id)
+            val name = activity.resources.getResourceEntryName(id)
+            assertTrue(name, control.height >= 48)
+            val bounds = Rect(0, 0, control.width, control.height)
+            scroll.offsetDescendantRectToMyCoords(control, bounds)
+            assertTrue(name, bounds.left >= 0 && bounds.right <= scroll.width)
+            val label = if (control is EditText) control.hint else control.text
+            assertFalse(name, label.isNullOrBlank())
+        }
+        assertTrue(scroll.canScrollVertically(1))
     }
 
     @Test fun aMemoryProposalIsNotSavedAndCanBeCanceled() {

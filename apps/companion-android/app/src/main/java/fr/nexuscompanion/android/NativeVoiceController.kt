@@ -32,10 +32,11 @@ internal class NativeVoiceController(
     onTranscript: (String, Boolean) -> Unit = { _, _ -> },
     onInputLevel: (Int) -> Unit = {},
     onSpeechOutput: (SpeechOutputState) -> Unit = {},
-    private val input: VoiceInput = defaultVoiceInput(context)
+    private val input: VoiceInput = defaultVoiceInput(context),
+    onMicrophoneReady: (Boolean) -> Unit = {}
 ) {
     private val session = VoiceSession(AndroidVoicePlatform(context, input), onStatus, onCommand, onSpeechState,
-        onSessionState, onTranscript, onInputLevel, onSpeechOutput)
+        onSessionState, onTranscript, onInputLevel, onSpeechOutput, onMicrophoneReady)
     fun available() = session.available()
     fun start() = session.start()
     fun listenForCommand() = session.listenForCommand()

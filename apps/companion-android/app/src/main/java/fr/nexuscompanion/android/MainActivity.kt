@@ -3,25 +3,20 @@ package fr.nexuscompanion.android
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.Typeface
 import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputFilter
-import android.text.TextUtils
-import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import java.util.concurrent.Executors
@@ -35,7 +30,8 @@ open class MainActivity : Activity() {
     private lateinit var controller: NativeVoiceController
     private lateinit var library: LocalKnowledgeLibrary
     private lateinit var brain: NativeBrainService
-    private lateinit var face: TextView
+    private lateinit var avatar: NexusAvatarView
+    private lateinit var presenceLabel: TextView
     private lateinit var status: TextView
     private lateinit var answer: TextView
     private lateinit var playbackNotice: TextView
@@ -50,6 +46,8 @@ open class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private var pendingCandidate: NativeBrainService.Candidate? = null
     private var voiceActive = false
+    private var microphoneReady = false
+    private var speaking = false
     private var voiceStatus: String? = null
     private var autoListenEnabled = true
     private var foreground = false
@@ -80,7 +78,10 @@ open class MainActivity : Activity() {
                 if (!busy) status.text = message
             },
             onCommand = ::respond,
-            onSpeechState = { audible -> face.text = getString(if (audible) R.string.face_speaking else R.string.face_idle) },
+            onSpeechState = { audible ->
+                speaking = audible
+                renderPresence()
+            },
             onSessionState = { active ->
                 voiceActive = active
                 voiceButton.setText(if (active) R.string.deactivate_microphone else R.string.activate_microphone)
@@ -102,72 +103,61 @@ open class MainActivity : Activity() {
                     else -> playbackNotice.visibility = View.GONE
                 }
             },
-            input = createVoiceInput()
+            input = createVoiceInput(),
+            onMicrophoneReady = { ready ->
+                microphoneReady = ready
+                renderPresence()
+            }
         ).also { it.setSpokenRepliesEnabled(spokenRepliesEnabled) }
     }
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
 
     private fun buildScreen(spokenRepliesEnabled: Boolean) {
-        fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.rgb(10, 22, 43))
-            setPadding(dp(20), dp(24), dp(20), dp(20))
-            setOnApplyWindowInsetsListener { view, insets ->
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
-                view.setPadding(bars.left + dp(20), bars.top + dp(16), bars.right + dp(20), bars.bottom + dp(20))
-                insets
+        setContentView(R.layout.activity_main)
+        val scroll = findViewById<ScrollView>(R.id.home_scroll)
+        scroll.setOnApplyWindowInsetsListener { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.ime() or WindowInsets.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+        window.insetsController?.setSystemBarsAppearance(0,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
+        scroll.requestApplyInsets()
+
+        avatar = findViewById(R.id.nexus_avatar)
+        presenceLabel = findViewById(R.id.home_presence)
+        status = findViewById(R.id.home_status)
+        transcript = findViewById(R.id.home_transcript)
+        answer = findViewById(R.id.home_answer)
+        playbackNotice = findViewById(R.id.home_playback_notice)
+        input = findViewById(R.id.home_input)
+        microphoneLevel = findViewById(R.id.home_microphone_level)
+        if (BuildConfig.IS_PREVIEW) findViewById<TextView>(R.id.home_preview_warning).apply {
+            setText(R.string.preview_warning)
+            visibility = View.VISIBLE
+        }
+
+        fun bindButton(id: Int, disableWhileBusy: Boolean = true, action: () -> Unit): Button =
+            findViewById<Button>(id).also {
+                it.setOnClickListener { action() }
+                if (disableWhileBusy) taskButtons.add(it)
             }
+
+        voiceButton = bindButton(R.id.home_microphone, disableWhileBusy = false) { toggleVoice() }
+        directVoiceButton = bindButton(R.id.home_speak_now, disableWhileBusy = false) {
+            if (foreground && voiceActive && !busy) controller.listenForCommand()
         }
-        val layout = LinearLayout.LayoutParams(-1, -2)
-        fun label(resource: Int, size: Float): TextView = TextView(this).apply {
-            setText(resource); textSize = size; setTextColor(Color.WHITE); gravity = Gravity.CENTER
-            root.addView(this, layout)
-        }
-        fun button(resource: Int, action: () -> Unit): Button = Button(this).apply {
-            setText(resource); setOnClickListener { action() }; root.addView(this, layout)
-            taskButtons.add(this)
-        }
-        face = label(R.string.face_idle, 60f).apply {
-            contentDescription = getString(R.string.app_name)
-            setTextColor(Color.CYAN); typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(12), 0, dp(12))
-        }
-        if (BuildConfig.IS_PREVIEW) label(R.string.preview_warning, 15f)
-        status = label(R.string.offline_status, 16f)
-        voiceButton = button(R.string.activate_microphone) { toggleVoice() }
-        taskButtons.remove(voiceButton) // Keep Stop visible above long replies and available during work.
-        root.addView(Switch(this).apply {
-            setText(R.string.spoken_replies)
-            setTextColor(Color.WHITE)
+        findViewById<Switch>(R.id.home_spoken_replies).apply {
             isChecked = spokenRepliesEnabled
             setOnCheckedChangeListener { _, enabled ->
                 voicePreferences.edit().putBoolean(SPOKEN_REPLIES_KEY, enabled).apply()
                 controller.setSpokenRepliesEnabled(enabled)
             }
-        }, layout)
-        directVoiceButton = button(R.string.speak_now) {
-            if (foreground && voiceActive && !busy) controller.listenForCommand()
-        }.apply { isEnabled = false }
-        taskButtons.remove(directVoiceButton)
-        microphoneLevel = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100; contentDescription = getString(R.string.microphone_level)
-            root.addView(this, LinearLayout.LayoutParams(-1, dp(8)))
         }
-        button(R.string.voice_settings) { startActivity(android.content.Intent(this, VoiceSettingsActivity::class.java)) }
-        transcript = label(R.string.voice_transcript_empty, 16f).apply {
-            setTextColor(Color.LTGRAY); maxLines = 4; ellipsize = TextUtils.TruncateAt.END
-            visibility = View.GONE
-        }
-        answer = label(R.string.greeting, 18f)
-        playbackNotice = label(R.string.voice_output_idle, 15f).apply { visibility = View.GONE }
-        input = EditText(this).apply {
-            setHint(R.string.input_hint); setSingleLine(true); setTextColor(Color.WHITE)
-            setHintTextColor(Color.LTGRAY); filters = arrayOf(InputFilter.LengthFilter(2000))
-            root.addView(this, layout)
-        }
-        button(R.string.send) {
+        bindButton(R.id.home_send) {
             val message = input.text.toString().trim()
             if (message.isNotEmpty() && !busy) {
                 input.setText("")
@@ -176,15 +166,17 @@ open class MainActivity : Activity() {
                 respond(message)
             }
         }
-        button(R.string.remember) {
+        bindButton(R.id.home_remember) {
             val content = input.text.toString().trim()
             if (content.isNotEmpty()) confirmNote(content)
         }
-        retainButton = button(R.string.retain_proposal) { pendingCandidate?.let { confirmNote(it.content, it.sensitive) } }
-            .apply { visibility = View.GONE }
-        button(R.string.my_notes) { showNotes() }
-        button(R.string.updates) { startActivity(android.content.Intent(this, UpdateActivity::class.java)) }
-        button(R.string.about) {
+        retainButton = bindButton(R.id.home_retain) {
+            pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
+        }
+        bindButton(R.id.home_notes) { showNotes() }
+        bindButton(R.id.home_voice_settings) { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
+        bindButton(R.id.home_updates) { startActivity(Intent(this, UpdateActivity::class.java)) }
+        bindButton(R.id.home_about) {
             runLocal(R.string.working, R.string.operation_failed, {
                 assets.open("THIRD_PARTY_NOTICES.txt").bufferedReader().use { it.readText() }
             }) { notices ->
@@ -193,16 +185,24 @@ open class MainActivity : Activity() {
                     .setPositiveButton(R.string.close, null).create())
             }
         }
-        setContentView(ScrollView(this).apply {
-            setBackgroundColor(Color.rgb(10, 22, 43)); isFillViewport = true; addView(root)
-        })
-        window.insetsController?.setSystemBarsAppearance(0,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        root.requestApplyInsets()
+    }
+
+    private fun renderPresence() {
+        val presence = when {
+            speaking -> CompanionPresence.SPEAKING
+            busy -> CompanionPresence.THINKING
+            microphoneReady -> CompanionPresence.LISTENING
+            else -> CompanionPresence.READY
+        }
+        if (avatar.presence == presence) return
+        avatar.presence = presence
+        presenceLabel.setText(presence.label)
+        presenceLabel.setTextColor(getColor(presence.accent))
     }
 
     private fun setBusy(active: Boolean) {
         busy = active
+        renderPresence()
         taskButtons.forEach { it.isEnabled = !active }
         input.isEnabled = !active
         directVoiceButton.isEnabled = voiceActive && !active

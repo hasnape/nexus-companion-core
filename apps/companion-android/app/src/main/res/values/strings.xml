@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nexus Companion</string>
-    <string name="face_idle" translatable="false">●   ●\n⌣</string>
-    <string name="face_speaking" translatable="false">●   ●\n◯</string>
-    <string name="offline_status">Nexus Companion — Android natif, hors ligne</string>
+    <string name="home_offline">Hors ligne</string>
+    <string name="home_presence_ready">Disponible</string>
+    <string name="home_presence_listening">À l’écoute</string>
+    <string name="home_presence_thinking">Je réfléchis</string>
+    <string name="home_presence_speaking">Nexus parle</string>
+    <string name="home_voice">Voix</string>
+    <string name="home_conversation">Conversation</string>
+    <string name="home_memory">Mémoire locale</string>
+    <string name="home_settings">Réglages</string>
     <string name="greeting">Bonjour ! Je suis Nexus.</string>
     <string name="input_hint">Écris à Nexus</string>
     <string name="send">Envoyer</string>
@@ -12,7 +18,6 @@
     <string name="deactivate_microphone">Désactiver le micro</string>
     <string name="speak_now">Parler maintenant</string>
     <string name="spoken_replies">Réponses vocales</string>
-    <string name="voice_transcript_empty" translatable="false"></string>
     <string name="voice_hearing">En cours : %1$s</string>
     <string name="voice_heard">Entendu : %1$s</string>
     <string name="voice_output_idle">Écoute la voix de Nexus.</string>

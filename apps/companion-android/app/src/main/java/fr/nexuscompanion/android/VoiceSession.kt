@@ -64,7 +64,8 @@ internal class VoiceSession(
     private val onSessionState: (Boolean) -> Unit,
     private val onTranscript: (String, Boolean) -> Unit = { _, _ -> },
     private val onInputLevel: (Int) -> Unit = {},
-    private val onSpeechOutput: (SpeechOutputState) -> Unit = {}
+    private val onSpeechOutput: (SpeechOutputState) -> Unit = {},
+    private val onMicrophoneReady: (Boolean) -> Unit = {}
 ) {
     private var enabled = false
     private var playbackEnabled = true
@@ -165,6 +166,7 @@ internal class VoiceSession(
                         if (!current() || capturing) return
                         armRecognitionTimeout(45_000L)
                         if (commandTimerPending) armCommandTimeout()
+                        onMicrophoneReady(true)
                         onStatus(if (awaitingCommand) "Micro actif : je t'écoute." else "Micro actif : dis « Nexus ».")
                     }
                     override fun result(text: String) {
@@ -197,6 +199,7 @@ internal class VoiceSession(
                         if (!current()) return
                         markSpeechStarted()
                         armRecognitionTimeout(8_000L)
+                        onMicrophoneReady(false)
                         onStatus("Analyse locale de ta phrase…")
                     }
                     override fun error(failure: RecognitionFailure) {
@@ -284,6 +287,7 @@ internal class VoiceSession(
             commandTimeout?.cancel(); commandTimeout = null
         }
         armRecognitionTimeout(60_000L)
+        onMicrophoneReady(true)
         onStatus("Je t'écoute — parle naturellement.")
     }
 
@@ -478,6 +482,7 @@ internal class VoiceSession(
         ++recognitionCycle
         ++recognitionGeneration
         listening = false
+        onMicrophoneReady(false)
         onInputLevel(0)
         val previous = recognition
         recognition = null

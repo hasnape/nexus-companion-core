@@ -10,6 +10,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsetsController
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
@@ -147,7 +148,8 @@ class MainActivityTest {
         shadowOf(activity.application).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
         activity.onRequestPermissionsResult(410, arrayOf(android.Manifest.permission.RECORD_AUDIO), intArrayOf(PackageManager.PERMISSION_GRANTED))
         shadowOf(Looper.getMainLooper()).idle()
-        val recognizer = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        val activeRecognizer = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
+        val recognizer = shadowOf(activeRecognizer)
         val avatar = activity.findViewById<NexusAvatarView>(R.id.nexus_avatar)
         assertEquals(CompanionPresence.READY, avatar.presence)
         recognizer.triggerOnReadyForSpeech(android.os.Bundle())
@@ -155,6 +157,16 @@ class MainActivityTest {
         assertTrue(hasText(activity.getString(R.string.home_presence_listening)))
         assertTrue(hasText("Micro actif"))
         assertTrue(button(R.string.speak_now).isEnabled)
+
+        button(R.string.full_face_mode).performClick()
+        val fullFace = activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar)
+        assertTrue(fullFace.isShown)
+        assertEquals(CompanionPresence.LISTENING, fullFace.presence)
+        assertSame(activeRecognizer, ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        button(R.string.leave_face).performClick()
+        assertEquals(CompanionPresence.LISTENING, avatar.presence)
+        assertSame(activeRecognizer, ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+
         recognizer.triggerOnPartialResults(android.os.Bundle().apply {
             putStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION, arrayListOf("phrase privée provisoire"))
         })
@@ -190,7 +202,7 @@ class MainActivityTest {
         )
         scroll.layout(0, 0, 320, 640)
 
-        val controlIds = listOf(R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
+        val controlIds = listOf(R.id.home_face_mode, R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
             R.id.home_input, R.id.home_send, R.id.home_notes, R.id.home_remember, R.id.home_updates)
         for (id in controlIds) {
             val control = activity.findViewById<TextView>(id)
@@ -203,6 +215,52 @@ class MainActivityTest {
             assertFalse(name, label.isNullOrBlank())
         }
         assertTrue(scroll.canScrollVertically(1))
+    }
+
+    @Test fun fullFaceExitRestoresTheSameHomeAndKeepsTheDraft() {
+        val home = activity.findViewById<ScrollView>(R.id.home_scroll)
+        val face = activity.findViewById<View>(R.id.face_mode_screen)
+        input().setText("Note en cours de rédaction")
+        assertTrue(home.isShown)
+        assertFalse(face.isShown)
+
+        button(R.string.full_face_mode).performClick()
+        assertTrue(face.isShown)
+        assertFalse(home.isShown)
+        assertEquals(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
+            activity.window.insetsController?.systemBarsBehavior)
+        button(R.string.leave_face).performClick()
+        assertFalse(face.isShown)
+        assertTrue(home.isShown)
+        assertEquals(WindowInsetsController.BEHAVIOR_DEFAULT, activity.window.insetsController?.systemBarsBehavior)
+        assertEquals("Note en cours de rédaction", input().text.toString())
+        assertFalse(libraryFile().exists())
+    }
+
+    @Test @Config(qualifiers = "w640dp-h320dp-land-mdpi") fun fullFaceRestoresAfterRecreationAndFitsInLandscape() {
+        button(R.string.full_face_mode).performClick()
+        RuntimeEnvironment.setFontScale(1.5f)
+        lifecycle.recreate()
+        activity = lifecycle.get()
+        val face = activity.findViewById<View>(R.id.face_mode_screen)
+        assertTrue(face.isShown)
+        assertFalse(activity.findViewById<ScrollView>(R.id.home_scroll).isShown)
+
+        face.measure(View.MeasureSpec.makeMeasureSpec(640, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY))
+        face.layout(0, 0, 640, 320)
+        val portrait = activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar)
+        val status = activity.findViewById<TextView>(R.id.face_mode_presence)
+        val exit = button(R.string.leave_face)
+        assertTrue(exit.height >= 48)
+        assertTrue(exit.right <= face.width)
+        assertEquals(face.width, portrait.width)
+        assertTrue(portrait.height > exit.height)
+        assertTrue(portrait.top >= exit.bottom)
+        assertTrue(portrait.bottom <= status.top)
+
+        exit.performClick()
+        assertTrue(activity.findViewById<ScrollView>(R.id.home_scroll).isShown)
     }
 
     @Test fun aMemoryProposalIsNotSavedAndCanBeCanceled() {
@@ -265,5 +323,27 @@ class MainActivityTest {
         activity = lifecycle.get()
         assertFalse(dialog.isShowing)
         assertFalse(libraryFile().exists())
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [31])
+class LegacyFullFaceModeTest {
+    @Test fun android12BackExitsTheFaceBeforeLeavingTheActivity() {
+        // An attached Android 12 test window initializes Robolectric's incompatible Bluetooth shadow.
+        val lifecycle = Robolectric.buildActivity(MainActivity::class.java).create()
+        try {
+            val activity = lifecycle.get()
+            activity.findViewById<Button>(R.id.home_face_mode).performClick()
+            val face = activity.findViewById<View>(R.id.face_mode_screen)
+            assertEquals(View.VISIBLE, face.visibility)
+
+            activity.onBackPressed()
+            assertEquals(View.GONE, face.visibility)
+            assertEquals(View.VISIBLE, activity.findViewById<View>(R.id.home_scroll).visibility)
+            assertFalse(activity.isFinishing)
+        } finally {
+            lifecycle.destroy()
+        }
     }
 }

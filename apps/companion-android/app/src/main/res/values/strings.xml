@@ -6,6 +6,9 @@
     <string name="home_presence_listening">À l’écoute</string>
     <string name="home_presence_thinking">Je réfléchis</string>
     <string name="home_presence_speaking">Nexus parle</string>
+    <string name="full_face_mode">Mode plein visage</string>
+    <string name="leave_face">Quitter</string>
+    <string name="leave_full_face_mode">Quitter le mode plein visage</string>
     <string name="home_voice">Voix</string>
     <string name="home_conversation">Conversation</string>
     <string name="home_memory">Mémoire locale</string>

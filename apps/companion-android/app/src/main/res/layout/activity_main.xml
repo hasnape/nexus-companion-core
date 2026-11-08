@@ -91,6 +91,14 @@
                 android:text="@string/local_ready"
                 android:textColor="@color/home_muted_text"
                 android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/home_face_mode"
+                style="@style/HomeAction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="9dp"
+                android:text="@string/full_face_mode" />
         </LinearLayout>
 
         <LinearLayout

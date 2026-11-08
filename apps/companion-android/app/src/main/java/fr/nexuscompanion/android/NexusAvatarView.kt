@@ -57,6 +57,12 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
             invalidate()
         }
 
+    internal var expanded = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     override fun onVisibilityAggregated(isVisible: Boolean) {
         super.onVisibilityAggregated(isVisible)
         if (visibleForMotion == isVisible) return
@@ -107,7 +113,8 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val scale = minOf(width / 300f, height / 156f)
+        // The immersive view frames the portrait more tightly while keeping the same proportions.
+        val scale = minOf(width / (if (expanded) 188f else 300f), height / 156f)
         if (scale <= 0f) return
         val saved = canvas.save()
         canvas.translate((width - 300f * scale) / 2f, (height - 156f * scale) / 2f)

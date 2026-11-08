@@ -20,6 +20,15 @@ class KnowledgePolicyTest {
             KnowledgePolicy.score(terms, "Énergie", "batterie faible"))
     }
 
+    @Test fun acceptsShortTopicsAndRanksCoverageBeforeTitleMatches() {
+        val topic = KnowledgePolicy.recallTopic("Hé Nexus, montre-moi mes notes sur l’IA et la sécurité.")
+        assertEquals(listOf("ia", "securite"), topic)
+        val terms = requireNotNull(topic)
+        assertTrue(KnowledgePolicy.score(terms, "Projet", "Sécurité de l’IA") >
+            KnowledgePolicy.score(terms, "IA", "Réunion"))
+        assertNull(KnowledgePolicy.recallTopic("mes notes"))
+    }
+
     @Test fun filtersExpiredKnowledge() {
         assertTrue(KnowledgePolicy.isExpired(100L, 100L))
         assertFalse(KnowledgePolicy.isExpired(null, 100L))

@@ -41,4 +41,23 @@ class NativeBrainServiceTest {
             assertArrayEquals(before, file.readBytes())
         }
     }
+
+    @Test fun topicRecallUsesMatchingNotesAndAvoidsAnUnrelatedFallback() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "topic", LocalKnowledgeLibraryTest.JvmCipher("topic"))
+        library.addUserNote("Batterie", "La batterie de secours se recharge en USB.")
+        library.addUserNote("Préférence", "Je préfère le thé vert.")
+        NativeBrainService(context, library).use { brain ->
+            val match = brain.reply("Nexus, mes notes sur la batterie")
+            assertTrue(match.text.contains("batterie de secours"))
+            assertFalse(match.text.contains("thé vert"))
+
+            val missing = brain.reply("Mes notes sur le permis")
+            assertTrue(missing.text.contains("Je ne retrouve pas"))
+            assertFalse(missing.text.contains("batterie de secours") || missing.text.contains("thé vert"))
+
+            val overview = brain.reply("Mes notes")
+            assertTrue(overview.text.contains("batterie de secours") && overview.text.contains("thé vert"))
+        }
+    }
 }

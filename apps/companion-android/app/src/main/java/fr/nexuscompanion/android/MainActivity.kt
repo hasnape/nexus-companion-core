@@ -277,8 +277,8 @@ open class MainActivity : Activity() {
             .setPositiveButton(R.string.save_note) { _, _ ->
                 runLocal(R.string.working, R.string.library_write_failed, {
                     library.addUserNote(content.take(80), content)
-                }) {
-                    answer.setText(R.string.note_saved)
+                }) { saved ->
+                    answer.setText(if (saved.created) R.string.note_saved else R.string.note_already_saved)
                     if (input.text.toString().trim() == content) input.setText("")
                     if (pendingCandidate?.content == content) {
                         pendingCandidate = null; retainButton.visibility = View.GONE

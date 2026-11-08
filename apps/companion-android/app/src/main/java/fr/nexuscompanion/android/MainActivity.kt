@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,16 +16,20 @@ import android.view.WindowInsetsController
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import java.util.concurrent.Executors
 
 /** Native UI. A single worker owns the packaged brain and private library operations. */
 open class MainActivity : Activity() {
     private companion object {
         const val SPOKEN_REPLIES_KEY = "spoken_replies_enabled"
+        const val FACE_MODE_STATE = "face_mode"
     }
 
     private lateinit var controller: NativeVoiceController
@@ -32,6 +37,10 @@ open class MainActivity : Activity() {
     private lateinit var brain: NativeBrainService
     private lateinit var avatar: NexusAvatarView
     private lateinit var presenceLabel: TextView
+    private lateinit var homeScroll: ScrollView
+    private lateinit var faceScreen: View
+    private lateinit var faceAvatar: NexusAvatarView
+    private lateinit var facePresenceLabel: TextView
     private lateinit var status: TextView
     private lateinit var answer: TextView
     private lateinit var playbackNotice: TextView
@@ -53,6 +62,8 @@ open class MainActivity : Activity() {
     private var foreground = false
     private var destroyed = false
     private var busy = false
+    private var faceMode = false
+    private var unregisterFaceBack: (() -> Unit)? = null
     private var permissionRequestInFlight = false
     private var dialogDepth = 0
     private val dialogs = mutableSetOf<AlertDialog>()
@@ -109,26 +120,35 @@ open class MainActivity : Activity() {
                 renderPresence()
             }
         ).also { it.setSpokenRepliesEnabled(spokenRepliesEnabled) }
+        if (savedInstanceState?.getBoolean(FACE_MODE_STATE) == true) setFaceMode(true)
     }
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
 
     private fun buildScreen(spokenRepliesEnabled: Boolean) {
         setContentView(R.layout.activity_main)
-        val scroll = findViewById<ScrollView>(R.id.home_scroll)
-        scroll.setOnApplyWindowInsetsListener { view, insets ->
-            val bars = insets.getInsets(
-                WindowInsets.Type.systemBars() or WindowInsets.Type.ime() or WindowInsets.Type.displayCutout()
-            )
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
+        homeScroll = findViewById(R.id.home_scroll)
+        faceScreen = layoutInflater.inflate(R.layout.face_mode, findViewById(android.R.id.content), false)
+        addContentView(faceScreen, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        for (screen in listOf(homeScroll, faceScreen)) {
+            screen.setOnApplyWindowInsetsListener { view, insets ->
+                val bars = insets.getInsets(
+                    WindowInsets.Type.systemBars() or WindowInsets.Type.ime() or WindowInsets.Type.displayCutout()
+                )
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                insets
+            }
+            screen.requestApplyInsets()
         }
         window.insetsController?.setSystemBarsAppearance(0,
             WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        scroll.requestApplyInsets()
 
         avatar = findViewById(R.id.nexus_avatar)
         presenceLabel = findViewById(R.id.home_presence)
+        faceAvatar = faceScreen.findViewById<NexusAvatarView>(R.id.face_mode_avatar).apply { expanded = true }
+        facePresenceLabel = faceScreen.findViewById(R.id.face_mode_presence)
         status = findViewById(R.id.home_status)
         transcript = findViewById(R.id.home_transcript)
         answer = findViewById(R.id.home_answer)
@@ -147,6 +167,8 @@ open class MainActivity : Activity() {
             }
 
         voiceButton = bindButton(R.id.home_microphone, disableWhileBusy = false) { toggleVoice() }
+        bindButton(R.id.home_face_mode) { setFaceMode(true) }
+        faceScreen.findViewById<Button>(R.id.face_mode_exit).setOnClickListener { setFaceMode(false) }
         directVoiceButton = bindButton(R.id.home_speak_now, disableWhileBusy = false) {
             if (foreground && voiceActive && !busy) controller.listenForCommand()
         }
@@ -187,6 +209,54 @@ open class MainActivity : Activity() {
         }
     }
 
+    private fun setFaceMode(enabled: Boolean) {
+        if (faceMode == enabled) return
+        faceMode = enabled
+        if (enabled && input.hasFocus()) {
+            getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(input.windowToken, 0)
+            input.clearFocus()
+        }
+        homeScroll.visibility = if (enabled) View.GONE else View.VISIBLE
+        faceScreen.visibility = if (enabled) View.VISIBLE else View.GONE
+        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val dispatcher = onBackInvokedDispatcher
+            val callback = OnBackInvokedCallback { setFaceMode(false) }
+            dispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback)
+            unregisterFaceBack = { dispatcher.unregisterOnBackInvokedCallback(callback) }
+        } else {
+            unregisterFaceBack?.invoke()
+            unregisterFaceBack = null
+        }
+        updateSystemBars()
+        window.decorView.requestApplyInsets()
+    }
+
+    private fun updateSystemBars() {
+        val insets = window.insetsController ?: return
+        if (faceMode) {
+            insets.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insets.hide(WindowInsets.Type.systemBars())
+        } else {
+            insets.systemBarsBehavior = WindowInsetsController.BEHAVIOR_DEFAULT
+            insets.show(WindowInsets.Type.systemBars())
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && faceMode) updateSystemBars()
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onBackPressed() {
+        if (faceMode) setFaceMode(false) else super.onBackPressed()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(FACE_MODE_STATE, faceMode)
+    }
+
     private fun renderPresence() {
         val presence = when {
             speaking -> CompanionPresence.SPEAKING
@@ -196,8 +266,11 @@ open class MainActivity : Activity() {
         }
         if (avatar.presence == presence) return
         avatar.presence = presence
-        presenceLabel.setText(presence.label)
-        presenceLabel.setTextColor(getColor(presence.accent))
+        faceAvatar.presence = presence
+        for (label in listOf(presenceLabel, facePresenceLabel)) {
+            label.setText(presence.label)
+            label.setTextColor(getColor(presence.accent))
+        }
     }
 
     private fun setBusy(active: Boolean) {
@@ -389,6 +462,8 @@ open class MainActivity : Activity() {
     override fun onDestroy() {
         destroyed = true
         foreground = false
+        unregisterFaceBack?.invoke()
+        unregisterFaceBack = null
         dialogs.toList().forEach { it.dismiss() }
         dialogs.clear()
         if (::controller.isInitialized) controller.close()

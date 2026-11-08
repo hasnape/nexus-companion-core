@@ -156,9 +156,9 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
             CompanionPresence.THINKING -> 8f
             CompanionPresence.SPEAKING -> 13f
         }
-        val gaze = if (presence == CompanionPresence.THINKING) 3f else 0f
-        drawEye(canvas, 127f + gaze, eyeHeight)
-        drawEye(canvas, 173f + gaze, eyeHeight)
+        val gazeOffset = if (presence == CompanionPresence.THINKING) 3f else 0f
+        drawEye(canvas, 127f, eyeHeight, gazeOffset)
+        drawEye(canvas, 173f, eyeHeight, gazeOffset)
         if (presence == CompanionPresence.SPEAKING) {
             val depth = 3f + 5f * mouthOpening
             fill(accent)
@@ -173,7 +173,7 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.restoreToCount(saved)
     }
 
-    private fun drawEye(canvas: Canvas, x: Float, height: Float) {
+    private fun drawEye(canvas: Canvas, x: Float, height: Float, gazeOffset: Float) {
         if (eyesClosed) {
             stroke(accent, 2.7f)
             canvas.drawLine(x - 8f, 72f, x + 8f, 72f, paint)
@@ -183,8 +183,12 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.drawRoundRect(x - 13f, 72f - height - 2f, x + 13f, 72f + height + 2f, 10f, 10f, paint)
         fill(accent)
         canvas.drawRoundRect(x - 9.5f, 72f - height, x + 9.5f, 72f + height, 8f, 8f, paint)
-        fill(0xCFFFFFFF.toInt())
-        canvas.drawCircle(x - 3f, 74f - height, 2.4f, paint)
+        val pupilX = x + gazeOffset
+        val pupilRadiusY = height * 0.55f
+        fill(0xFF14243B.toInt())
+        canvas.drawOval(pupilX - 4.5f, 72f - pupilRadiusY, pupilX + 4.5f, 72f + pupilRadiusY, paint)
+        fill(0xEFFFFFFF.toInt())
+        canvas.drawCircle(pupilX - 1.4f, 72f - pupilRadiusY * 0.46f, 1.5f, paint)
     }
 
     private fun fill(color: Int) {

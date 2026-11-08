@@ -1352,7 +1352,7 @@ var NexusNativeBrain = function () {
     return typeof value === "string" && value.trim().length > 0 && value.length <= max;
   };
   var validateRequest = function validateRequest(value) {
-    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, 2e3) || !Number.isSafeInteger(value.now) || value.now < 0 || !Array.isArray(value.notes) || value.notes.length > 8) {
+    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, 2e3) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || !Array.isArray(value.notes) || value.notes.length > 8) {
       throw new Error("Invalid native turn request");
     }
     var notes = value.notes.map(function (item) {
@@ -1371,7 +1371,8 @@ var NexusNativeBrain = function () {
       protocolVersion: 1,
       message: value.message.trim(),
       notes: notes,
-      now: value.now
+      now: value.now,
+      recallRequested: value.recallRequested
     };
   };
   var isRecallRequest = function isRecallRequest(message) {
@@ -1381,6 +1382,7 @@ var NexusNativeBrain = function () {
     return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text) || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
   };
   var _createNativeTurn = function _createNativeTurn(input) {
+    var _a;
     var request = validateRequest(input);
     var notes = request.notes.filter(function (note) {
       return (note.expiresAt === null || note.expiresAt > request.now) && !isSensitiveMemoryContent("".concat(note.title, " ").concat(note.excerpt)) && !shouldRequireLocationConfirmation(note.excerpt);
@@ -1428,7 +1430,7 @@ var NexusNativeBrain = function () {
         text: renderDeterministicNexusReply(plan)
       });
     }
-    if (isRecallRequest(request.message)) {
+    if ((_a = request.recallRequested) != null ? _a : isRecallRequest(request.message)) {
       var recalled = notes.slice(0, 3);
       var shortened = recalled.some(function (note) {
         return note.excerpt.length > 240;

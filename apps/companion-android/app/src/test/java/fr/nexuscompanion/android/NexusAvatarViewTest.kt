@@ -18,7 +18,7 @@ import org.robolectric.annotation.LooperMode
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NexusAvatarViewTest {
@@ -29,15 +29,41 @@ class NexusAvatarViewTest {
             avatar.expanded = false
             val home = render(avatar, 300, 156)
             avatar.expanded = true
-            val fullFace = render(avatar, 376, 312)
+            val fullFace = render(avatar, 320, 236)
             // In the full-face frame the same portrait is doubled and centered.
             val gaze = if (presence == CompanionPresence.THINKING) 6 else 0
             for (eyeX in listOf(127, 173)) {
                 assertDarkPupil(home, eyeX + gaze, eyeX - 7, 72)
-                val expandedEyeX = eyeX * 2 - 112
-                assertDarkPupil(fullFace, expandedEyeX + gaze * 2, expandedEyeX - 14, 144)
+                val expandedEyeX = eyeX * 2 - 140
+                assertDarkPupil(fullFace, expandedEyeX + gaze * 2, expandedEyeX - 14, 106)
             }
         }
+    }
+
+    @Test fun theFaceUsesTheScreenWithoutCoveringEitherControl() {
+        val avatar = NexusAvatarView(RuntimeEnvironment.getApplication()).apply { expanded = true }
+        avatar.setFaceControls(259, 12, 346, 60, 716)
+        val portrait = shellOutline(render(avatar, 360, 760))
+        assertTrue(portrait.width() > 280)
+        assertTrue(portrait.top > 60 && portrait.bottom < 716)
+
+        avatar.setFaceControls(673, 12, 766, 60, 314)
+        val landscape = shellOutline(render(avatar, 780, 360))
+        assertTrue(landscape.height() > 285)
+        assertTrue(landscape.top < 60 && landscape.right < 673 && landscape.bottom < 314)
+
+        avatar.setFaceControls(226, 12, 346, 72, 306)
+        val compact = shellOutline(render(avatar, 360, 360))
+        assertTrue(compact.top >= 80 && compact.bottom < 306)
+    }
+
+    private fun shellOutline(bitmap: Bitmap): android.graphics.Rect {
+        val bounds = android.graphics.Rect()
+        val outline = 0xFF7B98B5.toInt()
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
+            if (bitmap.getPixel(x, y) == outline) bounds.union(x, y, x + 1, y + 1)
+        }
+        return bounds
     }
 
     @Test fun aBlinkHidesAndRestoresBothPupils() {

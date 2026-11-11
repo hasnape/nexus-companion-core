@@ -12,7 +12,7 @@ const FULL_NAME_WAKE_PREFIX_PATTERNS = [
   /^(?:nexus\b[\s,;:!?.-]*companion\b)/i
 ] as const;
 
-const COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux-tu|fais|planifie|active|d[ée]sactive)\b/i;
+const COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux[- ]tu|fais|cherche|recherche|planifie|active|d[ée]sactive)\b/i;
 
 const MEMORY_PREFIXES = [
   'souviens toi',

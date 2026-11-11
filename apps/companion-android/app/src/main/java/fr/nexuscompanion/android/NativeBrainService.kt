@@ -3,12 +3,22 @@ package fr.nexuscompanion.android
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.security.MessageDigest
 
 /** Called only by the dedicated worker. Android owns persistence; the shared brain sees data only. */
-internal class NativeBrainService(private val context: Context, private val library: LocalKnowledgeLibrary) : AutoCloseable {
+internal class NativeBrainService(
+    private val context: Context,
+    private val library: LocalKnowledgeLibrary,
+    private val search: (String) -> WikipediaKnowledgeSearch.Article? = { WikipediaKnowledgeSearch.search(context, it) }
+) : AutoCloseable {
     data class Candidate(val content: String, val sensitive: Boolean)
-    data class Reply(val text: String, val candidate: Candidate?, val notesAvailable: Boolean)
+    data class Reply(
+        val text: String,
+        val candidate: Candidate?,
+        val notesAvailable: Boolean,
+        val source: WikipediaKnowledgeSearch.Article? = null
+    )
     private var runtime: SharedBrainRuntime? = null
 
     private fun brain(): SharedBrainRuntime {
@@ -22,7 +32,7 @@ internal class NativeBrainService(private val context: Context, private val libr
         return SharedBrainRuntime(source.toString(Charsets.UTF_8)).also { runtime = it }
     }
 
-    fun reply(message: String): Reply {
+    fun reply(message: String, onlineEnabled: Boolean = true): Reply {
         require(message.isNotBlank() && message.length <= 2000)
         val now = System.currentTimeMillis()
         val recall = KnowledgePolicy.recallFor(message)
@@ -50,7 +60,17 @@ internal class NativeBrainService(private val context: Context, private val libr
             check(content.isNotBlank() && content.length <= 2000)
             Candidate(content, it.getBoolean("sensitive"))
         }
-        return Reply(text, candidate, notes != null)
+        val local = Reply(text, candidate, notes != null)
+        val query = result.optString("publicLookupQuery")
+        if (query.isEmpty()) return local
+        check(query.isNotBlank() && query.length <= 180 && candidate == null)
+        if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
+        return try {
+            val article = search(query) ?: return local.copy(text = context.getString(R.string.online_no_match))
+            local.copy(text = context.getString(R.string.online_answer, article.extract), source = article)
+        } catch (_: IOException) {
+            local.copy(text = context.getString(R.string.online_unavailable))
+        }
     }
 
     override fun close() { runtime?.close(); runtime = null }

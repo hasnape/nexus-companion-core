@@ -52,7 +52,8 @@ class MainActivityTest {
     private fun views(view: View = activity.findViewById(android.R.id.content)): List<View> =
         listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun input() = views().filterIsInstance<EditText>().single()
-    private fun spokenReplies() = views().filterIsInstance<Switch>().single()
+    private fun spokenReplies() = activity.findViewById<Switch>(R.id.home_spoken_replies)
+    private fun onlineAccess() = activity.findViewById<Switch>(R.id.home_online_access)
     private fun button(text: Int) = views().filterIsInstance<Button>().single { it.text.toString() == activity.getString(text) }
     private fun hasText(text: String) = views().filterIsInstance<TextView>().any { text in it.text.toString() }
     private fun await(condition: () -> Boolean) {
@@ -67,10 +68,9 @@ class MainActivityTest {
     private fun send(text: String) { input().setText(text); button(R.string.send).performClick() }
     private fun libraryFile() = File(activity.filesDir, "knowledge-nexus-default.json")
 
-    @Test @Config(sdk = [34]) fun typedConversationIsSpokenWithoutMicrophoneOrInternetPermission() {
+    @Test @Config(sdk = [34]) fun typedConversationIsSpokenWithMicrophoneAndOnlineAccessDisabled() {
         assertEquals(PackageManager.PERMISSION_DENIED, activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))
-        val requested = activity.packageManager.getPackageInfo(activity.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
-        assertFalse(requested.contains(android.Manifest.permission.INTERNET))
+        onlineAccess().isChecked = false
         assertTrue(spokenReplies().isChecked)
         assertEquals(AudioManager.STREAM_MUSIC, activity.volumeControlStream)
         ShadowTextToSpeech.addVoice(Voice("french-local", Locale.FRANCE, Voice.QUALITY_NORMAL,
@@ -85,6 +85,20 @@ class MainActivityTest {
         await { speech.lastSpokenText?.contains("Ça va, merci") == true }
         assertFalse(libraryFile().exists())
         assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+    }
+
+    @Test fun onlineAccessStartsEnabledAndKeepsTheChoiceAfterRecreation() {
+        assertTrue(onlineAccess().isChecked)
+        assertTrue(hasText(activity.getString(R.string.online_allowed)))
+        onlineAccess().performClick()
+        lifecycle.recreate()
+        activity = lifecycle.get()
+        assertFalse(onlineAccess().isChecked)
+        assertTrue(hasText(activity.getString(R.string.online_disabled_badge)))
+
+        send("Nexus, cherche sur Internet la tour Eiffel")
+        await { hasText(activity.getString(R.string.online_disabled_reply)) }
+        assertEquals(View.GONE, activity.findViewById<TextView>(R.id.home_answer_source).visibility)
     }
 
     @Test fun aPreviouslySilentInstallationCanEnableSpokenRepliesIndependently() {
@@ -203,7 +217,7 @@ class MainActivityTest {
         scroll.layout(0, 0, 320, 640)
 
         val controlIds = listOf(R.id.home_face_mode, R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
-            R.id.home_input, R.id.home_send, R.id.home_notes, R.id.home_remember, R.id.home_updates)
+            R.id.home_input, R.id.home_send, R.id.home_notes, R.id.home_remember, R.id.home_updates, R.id.home_online_access)
         for (id in controlIds) {
             val control = activity.findViewById<TextView>(id)
             val name = activity.resources.getResourceEntryName(id)
@@ -255,9 +269,9 @@ class MainActivityTest {
         assertTrue(exit.height >= 48)
         assertTrue(exit.right <= face.width)
         assertEquals(face.width, portrait.width)
-        assertTrue(portrait.height > exit.height)
-        assertTrue(portrait.top >= exit.bottom)
-        assertTrue(portrait.bottom <= status.top)
+        assertEquals(face.height, portrait.height)
+        assertTrue(exit.bottom < status.top)
+        assertTrue(status.bottom <= face.height)
 
         exit.performClick()
         assertTrue(activity.findViewById<ScrollView>(R.id.home_scroll).isShown)

@@ -1,7 +1,7 @@
 {
   "protocolVersion": 1,
   "engine": "nexus-core-rules-v1",
-  "sha256": "efb2a509502a66c6d0daf536f7635090c3e8959b5dc916bb582090e13505b424",
+  "sha256": "69669504969f8c1f1a7de615714a5b8f479e6c3e2b8d2b26223135491b986294",
   "sources": {
     "package-lock.json": "98aa4e51b4413754680e93d4aa3427649f4c784bee1073e6f76a375b9a8acd16",
     "package.json": "1ed6a85a7c173bf94ecf164e0931541b2af067dc683b637e40e9d743ffee3828",
@@ -9,11 +9,12 @@
     "packages/companion-core/src/context.ts": "a0a8a7b3f4fc7944e2fb2c9bd5ea1ea00e0711437a092b083cce9e527f91e194",
     "packages/companion-core/src/decision.ts": "9a40574f97ca500ba8482cf8fa945f92af3f30b6a7e273a353862a8e6f4b24f3",
     "packages/companion-core/src/memory.ts": "6a1356becd1faa0259b517ef3f971c065f428879590debd793377cea4e262ee1",
-    "packages/companion-core/src/native-bridge.ts": "161de4861744516eea5d6bc8fd56aa85fe301cacc3a1ca834ec9d545057f7835",
+    "packages/companion-core/src/native-bridge.ts": "a25d441b2074d6922a5032f3654beb13df8c6e4d7b4285cae545c4d5f12c37eb",
     "packages/companion-core/src/personality.ts": "090b0071042430e7baa3e1cf33d8862bc1404d3440003cd8e8f313ec6f46dfd2",
     "packages/companion-core/src/profile.ts": "cca2fd991d1032b3e8ffe6c8c37c1c197b6547bba70462eb7539c9cea1f9db22",
     "packages/companion-core/src/response.ts": "e55db3383bd5cb9fb408d77cc99243f7dc1c865f4cb089ad753780a8d85eabec",
-    "packages/companion-core/src/wake.ts": "f1a7e91696e5e1e0729c952399ac04d99ca41cfd29785470c97f624ad5e04ea1",
+    "packages/companion-core/src/support-knowledge.ts": "96227720ed72b84e1de6447d0a7502769439cd5638b99b3c7dbc6912d200ca2b",
+    "packages/companion-core/src/wake.ts": "f2037e4a16d1190426cb6fdd7f5248e30ebac044514f48ced9c315fddabeb19d",
     "scripts/build-native-brain.mjs": "74ccf62266653ea3c62687a351544e53fd696e7b46b17dcb2a5a79f665b2d78c"
   }
 }

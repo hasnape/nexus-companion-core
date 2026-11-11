@@ -31,6 +31,7 @@
                 android:textSize="20sp" />
 
             <TextView
+                android:id="@+id/home_network_mode"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
@@ -38,7 +39,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:paddingHorizontal="10dp"
                 android:paddingVertical="5dp"
-                android:text="@string/home_offline"
+                android:text="@string/online_allowed"
                 android:textColor="@color/home_mint"
                 android:textSize="12sp" />
         </LinearLayout>
@@ -196,6 +197,17 @@
                 android:textSize="19sp" />
 
             <TextView
+                android:id="@+id/home_answer_source"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:textColorLink="@color/home_sky"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/home_playback_notice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -285,6 +297,26 @@
                 android:layout_height="wrap_content"
                 android:accessibilityHeading="true"
                 android:text="@string/home_settings" />
+
+            <Switch
+                android:id="@+id/home_online_access"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:saveEnabled="false"
+                android:switchPadding="12dp"
+                android:text="@string/online_access"
+                android:textColor="@color/home_text"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/online_access_hint"
+                android:textColor="@color/home_muted_text"
+                android:textSize="14sp" />
 
             <Button
                 android:id="@+id/home_voice_settings"

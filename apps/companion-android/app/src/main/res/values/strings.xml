@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nexus Companion</string>
-    <string name="home_offline">Hors ligne</string>
+    <string name="online_allowed">Web autorisé</string>
+    <string name="online_disabled_badge">Web désactivé</string>
+    <string name="online_access">Accès en ligne</string>
+    <string name="online_access_hint">Dis ou écris « Cherche sur Internet la tour Eiffel ». Nexus envoie le sujet demandé à Wikipédia. Le micro et les notes restent sur ce téléphone.</string>
+    <string name="online_disabled_reply">L’accès en ligne est désactivé. Tu peux l’activer dans Réglages.</string>
+    <string name="online_unavailable">Wikipédia est inaccessible pour le moment. Tu peux continuer à me parler et consulter tes notes hors ligne.</string>
+    <string name="online_no_match">Je n’ai pas trouvé d’article précis sur ce sujet. Peux-tu reformuler avec quelques mots-clés ?</string>
+    <string name="online_answer">D’après Wikipédia. %1$s</string>
+    <string name="online_source">Wikipédia · %1$s</string>
     <string name="home_presence_ready">Disponible</string>
     <string name="home_presence_listening">À l’écoute</string>
     <string name="home_presence_thinking">Je réfléchis</string>
@@ -106,7 +114,7 @@
     <string name="delete_note">Supprimer cette note</string>
     <string name="delete_note_confirmation">Supprimer définitivement cette note de ce téléphone ?</string>
     <string name="note_deleted">Note supprimée.</string>
-    <string name="about_text">Nexus Companion %1$s\nCompagnon local en version alpha. Réponses fondées sur des règles, sans modèle de langage général embarqué.\n\nLogiciels libres et licences :</string>
+    <string name="about_text">Nexus Companion %1$s\nCompagnon Android en version alpha. Le cerveau local utilise des règles et peut consulter Wikipédia sur demande.\n\nLogiciels libres et licences :</string>
     <string name="reply_with_library_warning">%1$s\n\n%2$s</string>
     <string name="confirm_sensitive_note_message">Cette information semble personnelle. Veux-tu la conserver uniquement dans tes notes locales ?\n\n%1$s\n\nTu pourras la supprimer dans « Mes notes ».</string>
 </resources>

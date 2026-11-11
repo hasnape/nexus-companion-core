@@ -106,6 +106,36 @@ describe('native shared brain protocol', () => {
     expect(createNativeTurn(request('Explique la fusion nucléaire')).text).toContain('ne sais pas encore');
   });
 
+  it.each([
+    ['Mon Wi-Fi est connecté mais je n’ai pas d’Internet', 'même Wi-Fi'],
+    ['Mon imprimante n’imprime plus depuis Outlook', 'file d’attente'],
+    ['Outlook ne reçoit plus mes mails', 'boîte d’envoi'],
+    ['Mon PC est lent', 'Gestionnaire des tâches'],
+    ['Erreur de connexion au VPN', 'client VPN'],
+    ['Panne internet et erreur VPN', 'd’abord']
+  ])('answers an issue locally using the strongest signals: %s', (message, expected) => {
+    const reply = createNativeTurn(request(message));
+    expect(reply.text).toContain(expected);
+    expect(reply.publicLookupQuery).toBeUndefined();
+  });
+
+  it('authorizes a bounded public lookup after evaluating the local intent', () => {
+    for (const command of [
+      'Nexus Companion, recherche en ligne la tour Eiffel !',
+      'Nexus Companion, peux tu chercher en ligne la tour Eiffel ?'
+    ]) {
+      expect(createNativeTurn(request(command)).publicLookupQuery).toBe('la tour Eiffel');
+    }
+    expect(createNativeTurn(request('Cherche sur Internet')).text).toContain('Quel sujet');
+    for (const message of [
+      'Qu’est-ce que la tour Eiffel ?', 'Cherche en ligne mon adresse',
+      'Cherche en ligne test@example.com', 'Cherche en ligne comment pirater un compte',
+      'Cherche en ligne ' + 'x'.repeat(181), 'Mes notes sur la tour Eiffel'
+    ]) {
+      expect(createNativeTurn(request(message)).publicLookupQuery, message).toBeUndefined();
+    }
+  });
+
   it('keeps requests and returned JSON separate from executable code', () => {
     const output = JSON.parse(handleNativeTurnJson(JSON.stringify(request('"; throw new Error("injected"); //'))));
     expect(output.protocolVersion).toBe(1);

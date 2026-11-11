@@ -83,12 +83,11 @@ class UpdateActivityTest {
     }
     private fun drainStartedActivities() { while (shadowOf(activity).nextStartedActivity != null) { /* consume previous user actions */ } }
 
-    @Test fun emptyScreenCannotInstallAndRequestsNoNetworkOrBroadStoragePermission() {
+    @Test fun emptyScreenCannotInstallAndUsesTheLocalDocumentPermission() {
         create()
         assertFalse(button(R.string.install_update).isEnabled)
         val permissions = activity.packageManager.getPackageInfo(activity.packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
         assertTrue(permissions.contains(android.Manifest.permission.REQUEST_INSTALL_PACKAGES))
-        assertFalse(permissions.contains(android.Manifest.permission.INTERNET))
         assertFalse(permissions.contains(android.Manifest.permission.MANAGE_EXTERNAL_STORAGE))
     }
     @Test fun pickerUsesTheDocumentGrantAndCancelDoesNotEnableInstallation() {

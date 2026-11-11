@@ -15,6 +15,11 @@ internal object VoiceTranscriptPolicy {
     )
     data class Parsed(val hasWake: Boolean, val command: String)
 
+    /** Whole-command matching for conversational approvals and display controls. */
+    fun commandWords(transcript: String): String = Normalizer.normalize(parse(transcript).command, Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
+        .replace(Regex("[^a-z0-9]+"), " ").trim()
+
     fun parse(transcript: String): Parsed {
         val text = Normalizer.normalize(transcript.trim(), Normalizer.Form.NFC)
         val prefix = wake.find(text)

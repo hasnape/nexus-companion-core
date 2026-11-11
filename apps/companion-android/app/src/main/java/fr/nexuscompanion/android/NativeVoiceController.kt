@@ -42,7 +42,7 @@ internal class NativeVoiceController(
     fun listenForCommand() = session.listenForCommand()
     fun playReply(text: String) = session.playReply(text)
     fun beginResponse() = session.beginResponse()
-    fun finishResponse(text: String?) = session.finishResponse(text)
+    fun finishResponse(text: String?, expectAnswer: Boolean = false) = session.finishResponse(text, expectAnswer)
     fun setSpokenRepliesEnabled(enabled: Boolean) = session.setSpokenRepliesEnabled(enabled)
     fun stopListening() = session.stopListening()
     fun stop() = session.stop()

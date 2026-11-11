@@ -85,6 +85,10 @@ internal class LocalKnowledgeLibrary(
     fun addUserNote(title: String, excerpt: String): NoteSave =
         saveNote(title, excerpt, "user:manual", verified = false, expiresAt = null)
 
+    /** The conversation must obtain explicit approval before calling this method. */
+    fun addApprovedSource(title: String, excerpt: String, source: String): NoteSave =
+        saveNote(title, excerpt, source, verified = false, expiresAt = null)
+
     /**
      * Intended for future explicit import flow; do not silently fetch URLs.
      * verified=true requires a separate verification process, not user input.
@@ -133,13 +137,14 @@ internal class LocalKnowledgeLibrary(
     fun contextFor(
         query: String,
         now: Long = System.currentTimeMillis(),
-        recall: KnowledgePolicy.Recall? = KnowledgePolicy.recallFor(query)
+        recall: KnowledgePolicy.Recall? = KnowledgePolicy.recallFor(query),
+        queryTerms: List<String> = KnowledgePolicy.queryTerms(query)
     ): List<Entry> {
         val entries = list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
         val terms = when (recall) {
             is KnowledgePolicy.Recall.Topic -> recall.terms
             KnowledgePolicy.Recall.Overview -> emptyList()
-            null -> KnowledgePolicy.queryTerms(query)
+            null -> queryTerms
         }
         val matches = matchingEntries(entries, terms, now)
         val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic) {

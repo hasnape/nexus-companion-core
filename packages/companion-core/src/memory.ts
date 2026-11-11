@@ -199,6 +199,9 @@ export const extractMemoryCandidates = (
   source: MemorySource = 'user_message'
 ): CompanionMemoryItem[] => {
   const raw = stripWakePrefix(userMessage, { allowFullNameWake: true }).trim();
+  // An ASR transcript may omit '?'. A question about a fact is not a new fact.
+  const isQuestion = /\?\s*$/.test(raw) || /^(?:quels?\b|quelles?\b|qu['’]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu]\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi(?! de mani[èe]re\b)\b|d[ée]cris\b)/i.test(raw);
+  if (isQuestion && !MEMORY_WRAPPER_PREFIX.test(raw) && !/^(?:apprends|remember that)\b/i.test(raw)) return [];
   const rawForDetection = stripMemoryCommandWrapper(raw);
   const content = normalizeMemoryCandidateContent(raw);
   if (!content || content.length < 12) return [];

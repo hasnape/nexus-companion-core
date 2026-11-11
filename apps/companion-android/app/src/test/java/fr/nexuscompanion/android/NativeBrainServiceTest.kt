@@ -13,6 +13,103 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun spokenSearchLearningAndOfflineReuseKeepTheEvidenceAndNeverSaveBeforeApproval() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "learn", LocalKnowledgeLibraryTest.JvmCipher("learn"))
+        val queries = mutableListOf<String>()
+        val article = WikipediaKnowledgeSearch.Article(42, "Volcan", "Un volcan émet de la lave.")
+        NativeBrainService(context, library) { topic -> queries.add(topic); article }.use { brain ->
+            val offer = brain.reply("Qu’est-ce qu’un volcan ?")
+            assertTrue(offer.text.contains("Tu veux"))
+            assertTrue(offer.expectsAnswer)
+            assertTrue(queries.isEmpty())
+            assertTrue(library.list().isEmpty())
+            val answer = brain.reply("oui")
+            assertEquals(article, answer.source)
+            assertTrue(answer.text.contains("Veux-tu que je retienne"))
+            assertEquals(listOf("un volcan"), queries)
+            assertTrue(library.list().isEmpty())
+            assertTrue(brain.reply("oui je confirme").text.contains("enregistrée"))
+            val stored = library.list().single()
+            assertEquals(article.url, stored.source)
+            assertFalse(stored.verified)
+            val offline = brain.reply("Qu’est-ce qu’un volcan ?", onlineEnabled = false)
+            assertTrue(offline.text.contains("émet de la lave"))
+            assertEquals(article, offline.source)
+            assertEquals(1, queries.size)
+        }
+    }
+
+    @Test fun ordinaryQuestionsRetrieveOlderPersonalFactsUsingTheSharedVocabulary() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "profile", LocalKnowledgeLibraryTest.JvmCipher("profile"))
+        library.addUserNote("Identité", "Le créateur est Amine.")
+        library.addUserNote("Métier", "Je travaille comme technicien informatique.")
+        repeat(15) { library.addUserNote("Repère-$it", "Le créateur préfère les objets numéro $it.") }
+        NativeBrainService(context, library).use { brain ->
+            assertTrue(brain.reply("Quel est mon prénom ?", false).text.contains("Tu es Amine"))
+            assertTrue(brain.reply("C’est quoi mon prénom", false).text.contains("Tu es Amine"))
+            assertTrue(brain.reply("Quel est mon métier ?", false).text.contains("Tu travailles comme technicien"))
+            assertFalse(brain.reply("Quelle est ma couleur préférée ?", false).text.contains("objets numéro"))
+        }
+    }
+
+    @Test fun voiceCanApproveAMemoryProposalAndExactDuplicatesAreNotAdded() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "approve", LocalKnowledgeLibraryTest.JvmCipher("approve"))
+        NativeBrainService(context, library).use { brain ->
+            assertTrue(brain.reply("retiens que je préfère le thé vert").text.contains("Tu confirmes"))
+            assertTrue(library.list().isEmpty())
+            assertTrue(brain.reply("oui").text.contains("enregistrée"))
+            assertTrue(brain.reply("retiens que je préfère le thé vert").text.contains("déjà"))
+            brain.reply("oui")
+            assertEquals(1, library.list().size)
+            assertTrue(brain.reply("Quelle boisson je préfère ?", false).text.contains("Tu préfères le thé vert"))
+        }
+    }
+
+    @Test fun noExpiryTopicChangeAndBackgroundClearPreventStaleApprovals() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "cancel", LocalKnowledgeLibraryTest.JvmCipher("cancel"))
+        var elapsed = 0L
+        var calls = 0
+        NativeBrainService(context, library, { elapsed }) { calls++; WikipediaKnowledgeSearch.Article(42, "Volcan", "La lave.") }.use { brain ->
+            brain.reply("Qu’est-ce qu’un volcan ?"); brain.reply("non"); brain.reply("oui")
+            brain.reply("Qu’est-ce qu’un volcan ?"); elapsed += 90_000L; brain.reply("oui")
+            brain.reply("Qu’est-ce qu’un volcan ?"); brain.reply("bonjour"); brain.reply("oui")
+            brain.reply("Qu’est-ce qu’un volcan ?"); brain.clearConversation(); brain.reply("oui")
+            assertEquals(0, calls)
+            brain.reply("Cherche en ligne volcan"); assertEquals(1, calls)
+            brain.reply("non merci"); brain.reply("oui")
+            assertTrue(library.list().isEmpty())
+        }
+    }
+
+    @Test fun ambiguousApprovalAndDisablingInternetNeverSendAQuery() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "privacy", LocalKnowledgeLibraryTest.JvmCipher("privacy"))
+        var calls = 0
+        NativeBrainService(context, library) { calls++; null }.use { brain ->
+            brain.reply("Qu’est-ce qu’un volcan ?")
+            brain.reply("je dis oui parfois mais pas cette fois")
+            brain.reply("oui")
+            brain.reply("Qu’est-ce qu’un volcan ?")
+            assertEquals(context.getString(R.string.online_disabled_reply), brain.reply("oui", false).text)
+            brain.reply("Quelle est mon adresse ?"); brain.reply("oui")
+            assertEquals(0, calls)
+        }
+    }
+
+    @Test fun sensitiveProposalsKeepTheExplicitReviewScreen() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "sensitive", LocalKnowledgeLibraryTest.JvmCipher("sensitive"))
+        NativeBrainService(context, library).use { brain ->
+            assertTrue(brain.reply("retiens que mon adresse exacte est 12 rue du Test").candidate?.sensitive == true)
+            brain.reply("oui")
+            assertTrue(library.list().isEmpty())
+        }
+    }
+
     @Test fun onlyAnExplicitPublicTopicReachesSearchAndAnOutageLeavesLocalAnswersAvailable() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "online", LocalKnowledgeLibraryTest.JvmCipher("online"))

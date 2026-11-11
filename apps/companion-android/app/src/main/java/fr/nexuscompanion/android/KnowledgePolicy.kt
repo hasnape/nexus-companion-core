@@ -60,7 +60,8 @@ internal object KnowledgePolicy {
         if (queryTerms.isEmpty()) return 0
         val titleWords = normalize(title).split(separators).toSet()
         val excerptWords = normalize(excerpt).split(separators).toSet()
-        val coverage = queryTerms.count { it in titleWords || it in excerptWords }
+        val normalizedText = " " + normalize("$title $excerpt").split(separators).joinToString(" ") + " "
+        val coverage = queryTerms.count { it in titleWords || it in excerptWords || (it.contains(' ') && normalizedText.contains(" $it ")) }
         val titleMatches = queryTerms.count { it in titleWords }
         // Coverage ranks first. Title matches break ties at the same coverage.
         return coverage * (queryTerms.size + 1) + titleMatches

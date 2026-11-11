@@ -4,6 +4,51 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceSessionTest {
+    @Test fun conversationalReplyAcceptsTheNextSentenceOnlyAfterPlaybackCompletes() {
+        val f = Fixture(); f.start()
+        val before = f.platform.recognition
+        f.session.beginResponse()
+        f.session.finishResponse("Tu veux que je cherche ?", expectAnswer = true)
+        val id = f.platform.speaker.utterances.last().second
+        before.events.result("oui")
+        f.platform.advance(5_000)
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.platform.recognition.closed)
+        f.platform.speaker.events.finished(id)
+        f.platform.advance(200)
+        f.platform.recognition.events.result("oui")
+        assertEquals(listOf("oui"), f.commands)
+    }
+
+    @Test fun conversationalWindowStartsWhenTheMicrophoneIsReadyAndExpiresBackToWakeMode() {
+        val f = Fixture(); f.start()
+        f.platform.autoReady = false
+        f.session.beginResponse()
+        f.session.finishResponse("Une réponse", expectAnswer = true)
+        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(200 + 5_000L)
+        f.platform.recognition.events.ready()
+        f.platform.advance(12_001)
+        f.platform.recognition.events.result("oui")
+        assertTrue(f.commands.isEmpty())
+        f.platform.advance(500)
+        f.platform.recognition.events.result("Nexus bonjour")
+        assertEquals(listOf("bonjour"), f.commands)
+    }
+
+    @Test fun failedOrStoppedPlaybackCannotOpenAConfirmationWindow() {
+        for (stop in listOf(false, true)) {
+            val f = Fixture(); f.start()
+            f.session.beginResponse()
+            f.session.finishResponse("Tu confirmes ?", expectAnswer = true)
+            val id = f.platform.speaker.utterances.last().second
+            if (stop) { f.session.stop(); f.start() } else f.platform.speaker.events.failed(id)
+            f.platform.advance(700)
+            f.platform.recognition.events.result("oui")
+            assertTrue(f.commands.isEmpty())
+        }
+    }
+
     private class FakePlatform(private val localTurnDelayMs: Long?) : VoicePlatform {
         data class Task(val due: Long, val action: () -> Unit, var canceled: Boolean = false)
         inner class Recognition(val events: RecognitionEvents) : VoiceRecognition {

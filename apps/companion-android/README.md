@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.13 native alpha
+# Nexus Companion Android — 0.4.14 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
 
@@ -6,11 +6,15 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 
 - Accueil natif avec portrait dessiné, indicateur textuel de l’état et sections distinctes pour la voix, la conversation, la mémoire et les réglages. Le portrait réagit à la disponibilité du micro, au calcul et à la lecture. Les clignements et la bouche animée suivent le réglage d’animation d’Android.
 - Les deux pupilles restent visibles dans les quatre états du portrait. Elles se décalent ensemble pendant la réflexion et disparaissent au clignement.
+- **Mode robot** affiche un corps turquoise, un visage ivoire et des yeux verts avec pupilles. « Nexus, affiche ton corps », « affiche ton visage » et « retour à l’accueil » commandent aussi cet affichage. Le choix est restauré après une rotation.
 - **Mode plein visage** sous le portrait. Le dessin se dimensionne selon la place disponible en portrait et en paysage. Le halo se fond dans le fond de l’écran. **Quitter** ou **Retour** réaffiche l’accueil. Le changement d’affichage conserve la session vocale et la saisie en cours.
 - Conversation locale dans un interpréteur Java embarqué. Les règles partagées couvrent les salutations, le soutien simple, la mémoire explicite et les limites de sécurité. Une base de dépannage locale reprend de Nexus Support Hub les signaux par famille de panne et le classement par pertinence. Une demande ambiguë appelle une précision.
+- Les questions ordinaires exploitent les notes pertinentes : « Quel est mon prénom ? », « Quel est mon métier ? » ou « Quelle boisson je préfère ? ». Le même vocabulaire partagé guide la sélection native et les extraits de réponse. Les informations contradictoires provoquent une question ; les notes sans rapport ne deviennent pas une réponse.
+- Une question publique sans réponse locale peut déclencher une **proposition** de recherche. Un « oui » explicite envoie seulement le sujet à Wikipédia. Après lecture, un autre « oui » peut enregistrer le résultat avec sa source dans la mémoire locale chiffrée et compressée. La réponse est ensuite retrouvable hors ligne. Refus, changement de sujet, arrière-plan ou expiration annulent la proposition.
 - **Accès en ligne** dans **Réglages**, activé au départ. Dire ou écrire « Cherche sur Internet la tour Eiffel » lance la recherche du sujet sur Wikipédia en français. Le réglage mémorise le choix. La réponse affiche l’extrait et son article source. Les notes et l’audio restent locaux. L’API renvoie des extraits attribués à leurs auteurs via le lien de l’article. [Conditions de réutilisation](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
 - Écoute automatique à l'ouverture si l'autorisation micro a été accordée et si l'utilisateur ne l'a pas désactivée. Bouton d'arrêt visible, préférence conservée. Le micro et la synthèse sont arrêtés dès `onPause`.
 - Reconnaissance française sur le téléphone via le modèle Vosk inclus dans l’APK. Dire « Nexus, bonjour » ou « Nexus », puis la commande après « Je t'écoute ». Les silences ordinaires relancent l'écoute sans épuiser le budget de reprise des pannes.
+- Après une réponse, la conversation peut continuer sans répéter « Nexus » pendant 12 secondes à partir du micro prêt. La fenêtre suit la fin effective de la lecture. Une lecture échouée ne l’ouvre pas. Après le délai, le mot d’activation redevient nécessaire.
 - « Parler maintenant » lance une dictée directe sans mot d'activation. Le bouton reste désactivé si le micro est arrêté ou pendant un calcul. La dictée peut interrompre une réponse vocale.
 - Aperçu « En cours » puis « Entendu », conservé uniquement en mémoire, effacé après 15 secondes sans transcription et à l'arrêt du micro, en arrière-plan ou dans un dialogue privé. Seul le résultat final peut déclencher une commande ; le texte saisi au clavier reste indépendant.
 - Le mot d’activation et ses variantes restent reconnus uniquement en début de phrase, sur un mot complet. La dictée directe utilise le résultat du décodeur sans exiger de mot d’activation.
@@ -18,7 +22,7 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 - Chaque capture libère le micro et le décodeur avant de transmettre son résultat. Après un silence ou une phrase ambiante, le moteur embarqué prépare la capture suivante dès le prochain passage de la boucle Android. La reprise réutilise le modèle chargé et ignore les événements de l’ancienne capture.
 - Micro suspendu pendant le calcul local, la synthèse et les dialogues de notes. La préparation du micro redémarre 200 ms après la fin confirmée de la lecture. Un délai de 700 ms s’applique après une erreur ou une expiration de la lecture. La bouche s’ouvre au signal de début de la synthèse.
 - L’interrupteur **Réponses vocales** règle la lecture indépendamment du microphone. Une réponse écrite peut être lue avec le micro coupé ou sa permission refusée. La voix française locale utilise le volume multimédia. Au premier lancement après mise à jour, l’ancien choix concernant le micro initialise l’interrupteur, puis chaque réglage est enregistré séparément.
-- Propositions à retenir avec confirmation explicite, consultation et suppression dans **Mes notes**. Un doublon exact réutilise la note existante et l’application l’indique. La recherche sans accents privilégie le nombre de mots trouvés, puis le titre et la date.
+- Propositions non sensibles à retenir avec confirmation vocale explicite (« oui »), consultation et suppression dans **Mes notes**. Un doublon exact réutilise la note existante et l’application l’indique. La recherche sans accents privilégie le nombre de mots trouvés, puis le titre et la date.
 - « Qu’est-ce que j’ai noté sur la batterie ? » et « Tu te souviens de ma batterie ? » recherchent des notes sur le sujet. Si la recherche est vide, Nexus l’indique. « Qu’ai-je noté ? » demande un aperçu des notes récentes. Le rappel conversationnel présente des extraits non sensibles et leur statut non vérifié.
 - Les notes sont enregistrées atomiquement avec leur provenance. Le stockage applique GZIP si le contenu diminue, puis chiffre les données avec AES-256-GCM et une clé Android Keystore liée au compagnon. Les anciennes notes chiffrées peuvent être lues et leur prochaine écriture applique la compression. Les anciens fichiers JSON v1 reconnus sont chiffrés lors de la lecture.
 - Sauvegarde système désactivée, exclusions explicites de sauvegarde cloud et de transfert entre appareils. Aucun audio ou historique de transcription enregistré par l'application.
@@ -62,13 +66,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.13-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.14-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
 Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (19 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.13-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.14-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -86,7 +90,7 @@ Le cache privé ne contient que des copies APK, limitées à 64 Mio par fichier 
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Le modèle français est également vérifié séparément sur des enregistrements réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Le modèle français est également vérifié séparément sur des enregistrements réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 
@@ -98,4 +102,4 @@ npm run build:native-brain
 npm run check:native-brain
 ```
 
-Voir la [décision d'architecture](../../docs/architecture/ADR-0002-android-shared-brain.md). Une conversation ne sauvegarde pas automatiquement des informations ; le bouton « Retenir cette information » propose une relecture et une confirmation. Dans « Mes notes », saisir d'abord un sujet dans le champ texte pour rechercher ; sans sujet, les cinquante notes les plus récentes sont affichées.
+Voir la [décision d'architecture](../../docs/architecture/ADR-0002-android-shared-brain.md). Une conversation ne sauvegarde pas automatiquement des informations : les propositions courtes et non sensibles se confirment à la voix, et le bouton « Retenir cette information » garde la relecture manuelle. Les propositions sensibles nécessitent cette relecture manuelle. Le moteur assemble des phrases à partir des extraits pertinents ; ce n’est pas un modèle génératif généraliste. Dans « Mes notes », saisir d'abord un sujet dans le champ texte pour rechercher ; sans sujet, les cinquante notes les plus récentes sont affichées.

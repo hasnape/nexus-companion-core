@@ -22,6 +22,23 @@ import java.time.Duration
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class NexusAvatarViewTest {
+    @Test fun theRobotShowsItsBodyAndFitsBothOrientationsAroundTheControls() {
+        val avatar = NexusAvatarView(RuntimeEnvironment.getApplication()).apply { expanded = true; showBody = true }
+        for ((width, height) in listOf(360 to 760, 780 to 360)) {
+            avatar.setFaceControls(width - 101, 12, width - 14, 60, height - 44)
+            val bitmap = render(avatar, width, height)
+            val head = shellOutline(bitmap)
+            assertTrue(head.width() > 80)
+            assertTrue(head.bottom < height - 100)
+            val report = java.io.File("build/reports/avatar-robot-${width}x$height.png")
+            report.parentFile?.mkdirs()
+            report.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            // The body remains visible below the head, away from the status label.
+            val center = bitmap.getPixel(width / 2, (head.bottom + (height - 44)) / 2)
+            assertTrue(Color.green(center) > Color.red(center))
+        }
+    }
+
     @Test fun bothPupilsRenderInEveryPresenceAndMoveTogetherWhileThinking() {
         val avatar = NexusAvatarView(RuntimeEnvironment.getApplication())
         for (presence in CompanionPresence.entries) {
@@ -91,6 +108,7 @@ class NexusAvatarViewTest {
     private fun render(avatar: NexusAvatarView, width: Int, height: Int): Bitmap {
         avatar.layout(0, 0, width, height)
         return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+            it.eraseColor(0xFF0B1425.toInt())
             avatar.draw(Canvas(it))
         }
     }

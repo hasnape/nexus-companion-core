@@ -42,6 +42,28 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun robotModeRestoresItsBodyAndFullFaceRemainsAvailable() {
+        button(R.string.full_robot_mode).performClick()
+        assertTrue(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)
+        lifecycle.recreate(); activity = lifecycle.get()
+        assertTrue(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)
+        button(R.string.leave_face).performClick()
+        button(R.string.full_face_mode).performClick()
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)
+        assertTrue(activity.findViewById<View>(R.id.face_mode_screen).isShown)
+    }
+
+    @Test fun displayCommandsWorkFromTheConversationWithoutOpeningADialog() {
+        send("Nexus, affiche ton corps")
+        assertTrue(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)
+        assertTrue(activity.findViewById<View>(R.id.face_mode_screen).isShown)
+        send("affiche ton visage")
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)
+        send("retour à l’accueil")
+        assertTrue(activity.findViewById<View>(R.id.home_scroll).isShown)
+        assertNull(ShadowAlertDialog.getLatestAlertDialog())
+    }
+
     private lateinit var lifecycle: ActivityController<MainActivityWithAndroidVoice>
     private lateinit var activity: MainActivity
     @Before fun createActivity() {
@@ -216,7 +238,7 @@ class MainActivityTest {
         )
         scroll.layout(0, 0, 320, 640)
 
-        val controlIds = listOf(R.id.home_face_mode, R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
+        val controlIds = listOf(R.id.home_face_mode, R.id.home_robot_mode, R.id.home_microphone, R.id.home_spoken_replies, R.id.home_speak_now,
             R.id.home_input, R.id.home_send, R.id.home_notes, R.id.home_remember, R.id.home_updates, R.id.home_online_access)
         for (id in controlIds) {
             val control = activity.findViewById<TextView>(id)

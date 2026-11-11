@@ -1,6 +1,7 @@
 package fr.nexuscompanion.android
 
 import android.content.Context
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -10,6 +11,7 @@ import java.security.MessageDigest
 internal class NativeBrainService(
     private val context: Context,
     private val library: LocalKnowledgeLibrary,
+    private val elapsed: () -> Long = SystemClock::elapsedRealtime,
     private val search: (String) -> WikipediaKnowledgeSearch.Article? = { WikipediaKnowledgeSearch.search(context, it) }
 ) : AutoCloseable {
     data class Candidate(val content: String, val sensitive: Boolean)
@@ -17,9 +19,29 @@ internal class NativeBrainService(
         val text: String,
         val candidate: Candidate?,
         val notesAvailable: Boolean,
-        val source: WikipediaKnowledgeSearch.Article? = null
+        val source: WikipediaKnowledgeSearch.Article? = null,
+        val expectsAnswer: Boolean = false
     )
     private var runtime: SharedBrainRuntime? = null
+    private sealed interface Pending {
+        val expires: Long
+        data class Lookup(val query: String, override val expires: Long) : Pending
+        data class Save(val title: String, val excerpt: String, val source: String, override val expires: Long) : Pending
+    }
+    private var pending: Pending? = null
+
+    /** Session context is transient and confined to the worker, never written as history. */
+    fun clearConversation() { pending = null }
+
+    private fun confirmation(message: String): Boolean? {
+        val words = VoiceTranscriptPolicy.commandWords(message)
+        return when (words) {
+            "oui", "oui merci", "oui je confirme", "je confirme", "d accord", "vas y",
+            "oui cherche", "oui retiens", "oui retiens le", "retiens le", "enregistre le" -> true
+            "non", "non merci", "annule", "laisse tomber", "n enregistre pas" -> false
+            else -> null
+        }
+    }
 
     private fun brain(): SharedBrainRuntime {
         runtime?.let { return it }
@@ -34,9 +56,25 @@ internal class NativeBrainService(
 
     fun reply(message: String, onlineEnabled: Boolean = true): Reply {
         require(message.isNotBlank() && message.length <= 2000)
+        val previous = pending?.takeIf { elapsed() < it.expires }
+        pending = null
+        val approval = confirmation(message)
+        if (approval != null) {
+            if (previous == null) return Reply("Je n’ai aucune recherche ou information en attente de confirmation. Que veux-tu savoir ?", null, true, expectsAnswer = true)
+            if (!approval) return Reply("D’accord, j’annule cette proposition.", null, true, expectsAnswer = true)
+            when (previous) {
+                is Pending.Lookup -> return lookup(previous.query, onlineEnabled, true)
+                is Pending.Save -> {
+                    val saved = library.addApprovedSource(previous.title, previous.excerpt, previous.source)
+                    return Reply(context.getString(if (saved.created) R.string.note_saved else R.string.note_already_saved), null, true, expectsAnswer = true)
+                }
+            }
+        }
         val now = System.currentTimeMillis()
         val recall = KnowledgePolicy.recallFor(message)
-        val notes = try { library.contextFor(message, now, recall) } catch (_: Exception) { null }
+        val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")
+        val queryTerms = (0 until terms.length()).map { terms.getString(it) }
+        val notes = try { library.contextFor(message, now, recall, queryTerms) } catch (_: Exception) { null }
         val array = JSONArray()
         notes.orEmpty().forEach { note ->
             array.put(JSONObject().apply {
@@ -60,18 +98,43 @@ internal class NativeBrainService(
             check(content.isNotBlank() && content.length <= 2000)
             Candidate(content, it.getBoolean("sensitive"))
         }
-        val local = Reply(text, candidate, notes != null)
+        val evidence = result.optJSONArray("evidenceIds")
+        val recalledSource = notes.orEmpty().firstOrNull { note ->
+            (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
+                && note.source.matches(Regex("https://fr\\.wikipedia\\.org/\\?curid=[1-9][0-9]*"))
+        }?.let { note -> note.source.substringAfter("curid=").toIntOrNull()?.let { id ->
+            WikipediaKnowledgeSearch.Article(id, note.title, note.excerpt)
+        } }
+        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true)
+        if (candidate != null && !candidate.sensitive && notes != null && candidate.content.length <= 600) {
+            pending = Pending.Save(candidate.content.take(80), candidate.content, "user:manual", elapsed() + 90_000L)
+            return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
+        }
+        val offer = result.optString("publicLookupOffer")
+        if (offer.isNotEmpty()) {
+            check(offer.length <= 180 && candidate == null)
+            if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
+            pending = Pending.Lookup(offer, elapsed() + 90_000L)
+            return local
+        }
         val query = result.optString("publicLookupQuery")
         if (query.isEmpty()) return local
         check(query.isNotBlank() && query.length <= 180 && candidate == null)
+        return lookup(query, onlineEnabled, notes != null)
+    }
+
+    private fun lookup(query: String, onlineEnabled: Boolean, notesAvailable: Boolean): Reply {
+        val local = Reply("", null, notesAvailable, expectsAnswer = true)
         if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
         return try {
             val article = search(query) ?: return local.copy(text = context.getString(R.string.online_no_match))
-            local.copy(text = context.getString(R.string.online_answer, article.extract), source = article)
+            if (notesAvailable) pending = Pending.Save(article.title, article.extract, article.url, elapsed() + 90_000L)
+            local.copy(text = context.getString(R.string.online_answer, article.extract) +
+                if (notesAvailable) " Veux-tu que je retienne cette information dans mes notes locales ?" else "", source = article)
         } catch (_: IOException) {
             local.copy(text = context.getString(R.string.online_unavailable))
         }
     }
 
-    override fun close() { runtime?.close(); runtime = null }
+    override fun close() { clearConversation(); runtime?.close(); runtime = null }
 }

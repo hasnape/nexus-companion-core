@@ -35,8 +35,9 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         moveTo(140f, 98f)
         quadTo(150f, 105f, 160f, 98f)
     }
-    private val shell = LinearGradient(0f, 23f, 0f, 133f, 0xFF4A6289.toInt(), 0xFF233855.toInt(), Shader.TileMode.CLAMP)
-    private val visor = LinearGradient(0f, 37f, 0f, 121f, 0xFF1D3550.toInt(), 0xFF0B1425.toInt(), Shader.TileMode.CLAMP)
+    private val shell = LinearGradient(0f, 23f, 0f, 133f, 0xFF32999A.toInt(), 0xFF0B515D.toInt(), Shader.TileMode.CLAMP)
+    private val visor = LinearGradient(0f, 37f, 0f, 121f, 0xFFF5F6E9.toInt(), 0xFFD5E5DE.toInt(), Shader.TileMode.CLAMP)
+    private val body = LinearGradient(98f, 145f, 202f, 278f, 0xFF2B9090.toInt(), 0xFF0A4C58.toInt(), Shader.TileMode.CLAMP)
     private var accent = context.getColor(CompanionPresence.READY.accent)
     private var halo = haloFor(accent)
     private val faceFrame = RectF()
@@ -74,6 +75,15 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
             invalidate()
         }
 
+    internal var showBody = false
+        set(value) {
+            field = value
+            updateFaceFrame()
+            invalidate()
+        }
+
+    private val portraitHeight get() = if (showBody) 294f else FACE_HEIGHT
+
     internal fun setFaceControls(exitLeft: Int, exitTop: Int, exitRight: Int, exitBottom: Int, statusTop: Int) {
         exitArea.set(exitLeft - faceGutter, exitTop - faceGutter, exitRight + faceGutter, exitBottom + faceGutter)
         presenceTop = statusTop.toFloat()
@@ -94,13 +104,13 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
     }
 
     private fun fitFace(top: Float, bottom: Float) {
-        val scale = minOf((width - 2f * faceGutter) / FACE_WIDTH, (bottom - top) / FACE_HEIGHT)
+        val scale = minOf((width - 2f * faceGutter) / FACE_WIDTH, (bottom - top) / portraitHeight)
         if (scale <= 0f) {
             faceFrame.setEmpty()
             return
         }
         val halfWidth = FACE_WIDTH * scale / 2f
-        val halfHeight = FACE_HEIGHT * scale / 2f
+        val halfHeight = portraitHeight * scale / 2f
         val centerY = (top + bottom) / 2f
         faceFrame.set(width / 2f - halfWidth, centerY - halfHeight, width / 2f + halfWidth, centerY + halfHeight)
     }
@@ -155,12 +165,12 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val scale = if (expanded) faceFrame.width() / FACE_WIDTH else minOf(width / 300f, height / 156f)
+        val scale = if (expanded) faceFrame.width() / FACE_WIDTH else minOf(width / 300f, height / if (showBody) 340f else 156f)
         if (scale <= 0f) return
         val centerX = width / 2f
         val centerY = if (expanded) faceFrame.centerY() else height / 2f
         val saved = canvas.save()
-        canvas.translate(centerX - 150f * scale, centerY - 78f * scale)
+        canvas.translate(centerX - 150f * scale, centerY - (if (showBody) 170f else 78f) * scale)
         canvas.scale(scale, scale)
 
         shade(halo)
@@ -176,8 +186,11 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.drawCircle(245f, 116f, 3f, paint)
         canvas.drawCircle(226f, 21f, 1.7f, paint)
 
-        fill(0x60060914)
-        canvas.drawOval(91f, 130f, 209f, 146f, paint)
+        if (showBody) drawBody(canvas)
+        if (!showBody) {
+            fill(0x60060914)
+            canvas.drawOval(91f, 130f, 209f, 146f, paint)
+        }
         shade(shell)
         canvas.drawRoundRect(74f, 55f, 102f, 105f, 11f, 11f, paint)
         canvas.drawRoundRect(198f, 55f, 226f, 105f, 11f, 11f, paint)
@@ -204,16 +217,38 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         drawEye(canvas, 173f, eyeHeight, gazeOffset)
         if (presence == CompanionPresence.SPEAKING) {
             val depth = 3f + 5f * mouthOpening
-            fill(accent)
+            fill(0xFF25545B.toInt())
             canvas.drawOval(140f, 99f - depth, 160f, 99f + depth, paint)
             fill(0xFF14243B.toInt())
             canvas.drawOval(143f, 101f - depth, 157f, 97f + depth, paint)
         } else {
-            stroke(accent, 2.6f)
+            stroke(0xFF25545B.toInt(), 2.6f)
             canvas.drawPath(smile, paint)
         }
 
         canvas.restoreToCount(saved)
+    }
+
+    private fun drawBody(canvas: Canvas) {
+        fill(0x60060914)
+        canvas.drawOval(87f, 304f, 213f, 326f, paint)
+        fill(0xFF0B515D.toInt())
+        canvas.drawRoundRect(133f, 120f, 167f, 154f, 10f, 10f, paint)
+        canvas.drawRoundRect(108f, 266f, 145f, 316f, 14f, 14f, paint)
+        canvas.drawRoundRect(155f, 266f, 192f, 316f, 14f, 14f, paint)
+        shade(body)
+        canvas.drawRoundRect(75f, 150f, 105f, 244f, 15f, 15f, paint)
+        canvas.drawRoundRect(195f, 150f, 225f, 244f, 15f, 15f, paint)
+        canvas.drawRoundRect(98f, 136f, 202f, 290f, 42f, 42f, paint)
+        stroke(0xFF7AB7B8.toInt(), 1f)
+        canvas.drawArc(102f, 139f, 198f, 285f, 205f, 85f, false, paint)
+        fill(0xFF0B515D.toInt())
+        canvas.drawOval(130f, 237f, 170f, 275f, paint)
+        stroke(0xFF468D91.toInt(), 1f)
+        for (x in 0..5) canvas.drawLine(136f + x * 5f, 246f, 136f + x * 5f, 266f, paint)
+        stroke(context.getColor(R.color.home_mint), 2f)
+        canvas.drawLine(140f, 171f, 160f, 171f, paint)
+        canvas.drawLine(150f, 171f, 150f, 178f, paint)
     }
 
     private fun drawEye(canvas: Canvas, x: Float, height: Float, gazeOffset: Float) {
@@ -224,7 +259,7 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         }
         fill(accentWithAlpha(accent, 45))
         canvas.drawRoundRect(x - 13f, 72f - height - 2f, x + 13f, 72f + height + 2f, 10f, 10f, paint)
-        fill(accent)
+        fill(0xFF93DBAC.toInt())
         canvas.drawRoundRect(x - 9.5f, 72f - height, x + 9.5f, 72f + height, 8f, 8f, paint)
         val pupilX = x + gazeOffset
         val pupilRadiusY = height * 0.55f

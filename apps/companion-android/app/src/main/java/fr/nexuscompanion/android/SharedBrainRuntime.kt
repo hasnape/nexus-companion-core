@@ -34,8 +34,11 @@ internal class SharedBrainRuntime(
 
     init { require(source.length in 1..500_000) }
 
+    fun replyJson(request: String): String = call("handleNativeTurnJson", request)
+    fun retrievalJson(message: String): String = call("handleNativeRetrievalJson", message)
+
     @Synchronized
-    fun replyJson(request: String): String {
+    private fun call(functionName: String, request: String): String {
         check(!closed) { "Local brain closed" }
         require(request.length <= MAX_REQUEST_CHARS) { "Local brain request too large" }
         instructions = 0
@@ -48,7 +51,7 @@ internal class SharedBrainRuntime(
                 }
                 val bridge = ScriptableObject.getProperty(global, "NexusNativeBrain") as? Scriptable
                     ?: error("Packaged brain entry point missing")
-                val function = ScriptableObject.getProperty(bridge, "handleNativeTurnJson") as? Function
+                val function = ScriptableObject.getProperty(bridge, functionName) as? Function
                     ?: error("Packaged brain function missing")
                 val result = function.call(context, global, bridge, arrayOf(request))
                 check(result is CharSequence && result.length <= 16_000) { "Invalid local brain response" }

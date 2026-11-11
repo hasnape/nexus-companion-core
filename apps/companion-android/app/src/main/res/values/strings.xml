@@ -4,7 +4,7 @@
     <string name="online_allowed">Web autorisé</string>
     <string name="online_disabled_badge">Web désactivé</string>
     <string name="online_access">Accès en ligne</string>
-    <string name="online_access_hint">Dis ou écris « Cherche sur Internet la tour Eiffel ». Nexus envoie le sujet demandé à Wikipédia. Le micro et les notes restent sur ce téléphone.</string>
+    <string name="online_access_hint">Si une réponse manque, Nexus peut te proposer de chercher sur Wikipédia. Réponds « oui » pour lancer la recherche, puis confirme si tu veux la retenir. Seul le sujet public est envoyé ; le micro et les notes restent sur ce téléphone.</string>
     <string name="online_disabled_reply">L’accès en ligne est désactivé. Tu peux l’activer dans Réglages.</string>
     <string name="online_unavailable">Wikipédia est inaccessible pour le moment. Tu peux continuer à me parler et consulter tes notes hors ligne.</string>
     <string name="online_no_match">Je n’ai pas trouvé d’article précis sur ce sujet. Peux-tu reformuler avec quelques mots-clés ?</string>
@@ -15,6 +15,8 @@
     <string name="home_presence_thinking">Je réfléchis</string>
     <string name="home_presence_speaking">Nexus parle</string>
     <string name="full_face_mode">Mode plein visage</string>
+    <string name="full_robot_mode">Mode robot</string>
+    <string name="back_to_home">Retour à l’accueil</string>
     <string name="leave_face">Quitter</string>
     <string name="leave_full_face_mode">Quitter le mode plein visage</string>
     <string name="home_voice">Voix</string>

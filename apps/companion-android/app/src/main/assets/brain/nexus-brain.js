@@ -91,6 +91,9 @@ var NexusNativeBrain = function () {
     createNativeTurn: function createNativeTurn() {
       return _createNativeTurn;
     },
+    handleNativeRetrievalJson: function handleNativeRetrievalJson() {
+      return _handleNativeRetrievalJson;
+    },
     handleNativeTurnJson: function handleNativeTurnJson() {
       return _handleNativeTurnJson;
     }
@@ -353,6 +356,8 @@ var NexusNativeBrain = function () {
     var raw = stripWakePrefix(userMessage, {
       allowFullNameWake: true
     }).trim();
+    var isQuestion = /\?\s*$/.test(raw) || /^(?:quels?\b|quelles?\b|qu['’]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu]\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi(?! de mani[èe]re\b)\b|d[ée]cris\b)/i.test(raw);
+    if (isQuestion && !MEMORY_WRAPPER_PREFIX.test(raw) && !/^(?:apprends|remember that)\b/i.test(raw)) return [];
     var rawForDetection = stripMemoryCommandWrapper(raw);
     var content = normalizeMemoryCandidateContent(raw);
     if (!content || content.length < 12) return [];
@@ -684,6 +689,94 @@ var NexusNativeBrain = function () {
       voiceState: voiceState,
       createdAt: Date.now()
     });
+  };
+  var normalize = function normalize(text) {
+    return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  };
+  var stop = new Set("a au aux ca ce ces de des du en et est il je la le les ma me mes mon ne nos notre on ou par pas pour que quel quelle quelles quels qui sa se ses son sur ta te tes toi ton tu un une vous votre vos comment pourquoi quand peux peut pourrais dire dis explique expliquer parle parler moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens".split(" "));
+  var families = [["prenom", "nom", "appelle"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["projet", "projets"], ["objectif", "objectifs"]];
+  var words = function words(text) {
+    return normalize(text).split(" ").filter(function (word) {
+      return word.length > 1 && !stop.has(word);
+    });
+  };
+  var canonical = function canonical(word) {
+    var _a, _b;
+    return (_b = (_a = families.find(function (family) {
+      return family.includes(word);
+    })) == null ? void 0 : _a[0]) != null ? _b : word;
+  };
+  var keys = function keys(text) {
+    var result = words(text).map(canonical);
+    if (/^(?:le createur est|je m appelle|mon prenom est|mon nom est)\b/.test(normalize(text))) result.push("prenom");
+    return Array.from(new Set(result));
+  };
+  var nativeRetrievalTerms = function nativeRetrievalTerms(message) {
+    var terms = words(message).slice(0, 12);
+    var expanded = terms.flatMap(function (word) {
+      var _a;
+      return (_a = families.find(function (family) {
+        return family.includes(word);
+      })) != null ? _a : [word];
+    });
+    if (terms.some(function (word) {
+      return families[0].includes(word);
+    })) expanded.push("le createur est");
+    return Array.from(new Set(expanded)).slice(0, 36);
+  };
+  var toSecondPerson = function toSecondPerson(text) {
+    return text.replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
+  };
+  var answerFromNotes = function answerFromNotes(question, notes) {
+    var query = keys(question);
+    if (!query.length) return null;
+    var anchors = query.filter(function (key) {
+      return key !== "preference";
+    });
+    var candidates = notes.flatMap(function (note) {
+      var titleKeys = keys(note.title);
+      var sentences = note.excerpt.replace(/([.!?])\s+/g, "$1\n").split(/\n+/).map(function (text) {
+        return text.trim();
+      }).filter(Boolean);
+      return sentences.map(function (sentence) {
+        var evidence = keys(sentence);
+        var matches = query.filter(function (key) {
+          return evidence.includes(key) || titleKeys.includes(key);
+        });
+        var anchored = !anchors.length || anchors.some(function (key) {
+          return evidence.includes(key) || titleKeys.includes(key);
+        });
+        var score = anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
+          return evidence.includes(key);
+        }).length : 0;
+        return {
+          note: note,
+          sentence: sentence,
+          score: score
+        };
+      });
+    }).filter(function (item) {
+      return item.score > 0;
+    }).sort(function (a, b) {
+      return b.score - a.score || b.note.recordedAt - a.note.recordedAt;
+    });
+    if (!candidates.length) return null;
+    var best = candidates[0];
+    var personal = /\b(?:mon|ma|mes|je|moi)\b/.test(normalize(question));
+    var conflicting = personal && candidates.find(function (item) {
+      return item.score === best.score && item.note.id !== best.note.id && normalize(item.sentence) !== normalize(best.sentence);
+    });
+    if (conflicting) return {
+      text: "J\u2019ai deux informations dans tes notes : \xAB ".concat(best.sentence.slice(0, 200), " \xBB et \xAB ").concat(conflicting.sentence.slice(0, 200), " \xBB. Laquelle est \xE0 jour ?"),
+      evidenceIds: [best.note.id, conflicting.note.id]
+    };
+    var excerpt = best.sentence.length > 480 ? "".concat(best.sentence.slice(0, 477), "\u2026") : best.sentence;
+    var spoken = personal ? toSecondPerson(excerpt) : excerpt;
+    var prefix = best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
+    return {
+      text: "".concat(prefix, " : ").concat(spoken),
+      evidenceIds: [best.note.id]
+    };
   };
   var hasQuestion = function hasQuestion(text) {
     return text.includes("?");
@@ -1438,6 +1531,10 @@ var NexusNativeBrain = function () {
     return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text) || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
   };
   var lookupPrefix = /^(?:(?:peux[- ]tu|tu peux) +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)? +(?:sur (?:internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
+  var isPublicTopic = function isPublicTopic(subject) {
+    var normalized = normalizeWakePhrase(subject);
+    return subject.length <= 180 && Boolean(normalized) && !/[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) && !/\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
+  };
   var publicLookup = function publicLookup(message) {
     var command = stripWakePrefix(message, {
       allowFullNameWake: true
@@ -1448,9 +1545,7 @@ var NexusNativeBrain = function () {
     if (!subject) return {
       text: "Quel sujet veux-tu chercher sur Wikipédia ?"
     };
-    var normalized = normalizeWakePhrase(subject);
-    var privateTopic = /\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
-    if (subject.length > 180 || !normalized || /[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) || privateTopic) {
+    if (!isPublicTopic(subject)) {
       return {
         text: "Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle."
       };
@@ -1521,6 +1616,16 @@ var NexusNativeBrain = function () {
         }).join("\n")).concat(shortened ? "\nLes notes complètes restent accessibles dans « Mes notes »." : "") : "Je ne retrouve pas de note non sensible à rappeler ici. Tu peux consulter toutes tes notes avec le bouton « Mes notes »."
       });
     }
+    var memoryCommand = stripWakePrefix(request.message, {
+      allowFullNameWake: true
+    });
+    if (/^(?:retiens|souviens[- ]toi|m[ée]morise|garde en m[ée]moire)\b/i.test(memoryCommand) && notes.some(function (note) {
+      return normalizeMemoryContentKey(note.excerpt) === normalizeMemoryContentKey(normalizeMemoryCandidateContent(memoryCommand));
+    })) {
+      return __spreadProps(__spreadValues({}, result), {
+        text: "Cette information est déjà dans ta mémoire locale."
+      });
+    }
     var candidate = decision.memoryCandidates.find(function (item) {
       return item.content.length > 0 && item.content.length <= 2e3 && item.source !== "environment_signal";
     });
@@ -1539,6 +1644,11 @@ var NexusNativeBrain = function () {
     });
     var lookup = publicLookup(request.message);
     if (lookup) return __spreadValues(__spreadValues({}, result), lookup);
+    if (plan.responseMode === "supportive") return __spreadProps(__spreadValues({}, result), {
+      text: renderDeterministicNexusReply(plan)
+    });
+    var grounded = answerFromNotes(request.message, notes);
+    if (grounded) return __spreadValues(__spreadValues({}, result), grounded);
     if (plan.responseMode === "normal") {
       var support = renderLocalSupportReply(request.message);
       if (support) return __spreadProps(__spreadValues({}, result), {
@@ -1550,8 +1660,25 @@ var NexusNativeBrain = function () {
         text: renderDeterministicNexusReply(plan)
       });
     }
+    var command = stripWakePrefix(request.message, {
+      allowFullNameWake: true
+    }).trim();
+    var question = /^(?:qu['’ ]est[- ]ce qu|c['’ ]est quoi|quels?\b|quelles?\b|comment\b|pourquoi\b|o[ùu]\b|qui\b|explique\b|parle[- ]moi de\b|d[ée]cris\b)/i.test(command);
+    var subject = command.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
+    if (question && isPublicTopic(command) && isPublicTopic(subject)) return __spreadProps(__spreadValues({}, result), {
+      text: "Je ne sais pas encore r\xE9pondre pr\xE9cis\xE9ment. Tu veux que je cherche \xAB ".concat(subject, " \xBB sur Internet, dans Wikip\xE9dia ?"),
+      publicLookupOffer: subject
+    });
     return __spreadProps(__spreadValues({}, result), {
       text: "Je ne sais pas encore répondre précisément à cette demande. Pour un sujet public, dis-moi « cherche sur Internet » suivi du sujet."
+    });
+  };
+  var _handleNativeRetrievalJson = function _handleNativeRetrievalJson(input) {
+    if (typeof input !== "string" || input.length > 2e3) throw new Error("Invalid retrieval request");
+    return JSON.stringify({
+      terms: nativeRetrievalTerms(stripWakePrefix(input, {
+        allowFullNameWake: true
+      }))
     });
   };
   var _handleNativeTurnJson = function _handleNativeTurnJson(input) {

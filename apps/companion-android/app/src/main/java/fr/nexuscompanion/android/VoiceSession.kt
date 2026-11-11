@@ -84,6 +84,7 @@ internal class VoiceSession(
     private var recognition: VoiceRecognition? = null
     private var speech: VoiceSpeech? = null
     private var pendingReply: String? = null
+    private var replyFollowUp = false
     private var speechSetupTimeout: VoiceTask? = null
     private var restart: VoiceTask? = null
     private var commandTimeout: VoiceTask? = null
@@ -121,6 +122,7 @@ internal class VoiceSession(
                     clearPendingReply()
                     if (!playbackEnabled) return
                     if (!available) {
+                        replyFollowUp = false
                         onSpeechOutput(SpeechOutputState.UNAVAILABLE)
                         if (reply != null) scheduleRestart()
                     } else if (reply != null) {
@@ -364,24 +366,31 @@ internal class VoiceSession(
         }
     }
 
-    fun finishResponse(text: String?) {
+    fun finishResponse(text: String?, expectAnswer: Boolean = false) {
         if (!enabled) return
         processing = false
         responseTimeout?.cancel(); responseTimeout = null
-        if (text == null) scheduleRestart() else playReply(text)
+        if (text == null) scheduleRestart() else playReply(text, expectAnswer)
     }
 
     /** Play an explicit reply or test phrase without activating recognition. */
-    fun playReply(text: String) {
+    fun playReply(text: String, expectAnswer: Boolean = false) {
+        if (utterance != null || pendingReply != null) stopPlayback()
+        replyFollowUp = expectAnswer && enabled
         if (!playbackEnabled || text.isBlank()) {
+            if (replyFollowUp) {
+                awaitingCommand = true
+                commandTimerPending = true
+            }
+            replyFollowUp = false
             scheduleRestart()
             return
         }
-        if (utterance != null || pendingReply != null) stopPlayback()
         prepareSpeech()
         when (speechReady) {
             true -> speak(text)
             false -> {
+                replyFollowUp = false
                 onSpeechOutput(SpeechOutputState.UNAVAILABLE)
                 scheduleRestart()
             }
@@ -394,6 +403,7 @@ internal class VoiceSession(
                 speechSetupTimeout = platform.after(5_000L) {
                     if (generation == session && pendingReply != null) {
                         clearPendingReply()
+                        replyFollowUp = false
                         onSpeechOutput(SpeechOutputState.FAILED)
                         scheduleRestart()
                     }
@@ -425,6 +435,7 @@ internal class VoiceSession(
     }
 
     private fun stopPlayback() {
+        replyFollowUp = false
         clearPendingReply()
         speechTimeout?.cancel(); speechTimeout = null
         utterance = null
@@ -469,6 +480,8 @@ internal class VoiceSession(
         utterance = null
         onSpeechState(false)
         onSpeechOutput(result)
+        if (replyFollowUp && result == SpeechOutputState.COMPLETED && enabled) awaitingCommand = true
+        replyFollowUp = false
         // Wait for the next ready callback: TTS completion does not mean the microphone is ready.
         if (awaitingCommand) commandTimerPending = true
         // After confirmed playback, leave a short margin for residual speaker sound.
@@ -502,6 +515,7 @@ internal class VoiceSession(
         responseTimeout = null
         processing = false
         awaitingCommand = false
+        replyFollowUp = false
         commandTimerPending = false
         capturing = false
         closeRecognition()

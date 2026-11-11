@@ -36,6 +36,7 @@ open class MainActivity : Activity() {
         const val SPOKEN_REPLIES_KEY = "spoken_replies_enabled"
         const val ONLINE_ACCESS_KEY = "online_access_enabled"
         const val FACE_MODE_STATE = "face_mode"
+        const val ROBOT_MODE_STATE = "robot_mode"
     }
 
     private lateinit var controller: NativeVoiceController
@@ -129,7 +130,10 @@ open class MainActivity : Activity() {
                 renderPresence()
             }
         ).also { it.setSpokenRepliesEnabled(spokenRepliesEnabled) }
-        if (savedInstanceState?.getBoolean(FACE_MODE_STATE) == true) setFaceMode(true)
+        if (savedInstanceState?.getBoolean(FACE_MODE_STATE) == true) {
+            faceAvatar.showBody = savedInstanceState.getBoolean(ROBOT_MODE_STATE)
+            setFaceMode(true)
+        }
     }
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
@@ -188,7 +192,8 @@ open class MainActivity : Activity() {
             }
 
         voiceButton = bindButton(R.id.home_microphone, disableWhileBusy = false) { toggleVoice() }
-        bindButton(R.id.home_face_mode) { setFaceMode(true) }
+        bindButton(R.id.home_face_mode) { faceAvatar.showBody = false; setFaceMode(true) }
+        bindButton(R.id.home_robot_mode) { faceAvatar.showBody = true; setFaceMode(true) }
         faceExit.setOnClickListener { setFaceMode(false) }
         directVoiceButton = bindButton(R.id.home_speak_now, disableWhileBusy = false) {
             if (foreground && voiceActive && !busy) controller.listenForCommand()
@@ -285,6 +290,7 @@ open class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putBoolean(FACE_MODE_STATE, faceMode)
+        outState.putBoolean(ROBOT_MODE_STATE, faceAvatar.showBody)
     }
 
     private fun renderPresence() {
@@ -322,6 +328,7 @@ open class MainActivity : Activity() {
         failureMessage: Int,
         task: () -> T,
         voiceReply: (T) -> String? = { null },
+        expectAnswer: (T) -> Boolean = { false },
         success: (T) -> Unit
     ) {
         if (busy || destroyed) return
@@ -336,7 +343,7 @@ open class MainActivity : Activity() {
                         setBusy(false)
                         restoreStatus()
                         success(result)
-                        finishLocalVoice(voiceReply(result))
+                        finishLocalVoice(voiceReply(result), expectAnswer(result))
                     }
                 }
             } catch (failure: Exception) {
@@ -356,9 +363,9 @@ open class MainActivity : Activity() {
         }
     }
 
-    private fun finishLocalVoice(text: String?) {
+    private fun finishLocalVoice(text: String?, expectAnswer: Boolean = false) {
         if (!foreground || dialogDepth > 0) return
-        if (voiceActive) controller.finishResponse(text)
+        if (voiceActive) controller.finishResponse(text, expectAnswer)
         else if (text != null) controller.playReply(text)
     }
 
@@ -366,8 +373,25 @@ open class MainActivity : Activity() {
         if (busy || message.isBlank() || message.length > 2000) return
         pendingCandidate = null
         retainButton.visibility = View.GONE
+        val display = when (VoiceTranscriptPolicy.commandWords(message)) {
+            "mode robot", "passe en mode robot", "affiche ton corps" -> "robot"
+            "mode plein visage", "passe en mode plein visage", "affiche ton visage" -> "face"
+            "quitte le mode robot", "quitte le mode plein visage", "retour a l accueil" -> "home"
+            else -> null
+        }
+        if (display != null) {
+            worker.execute { brain.clearConversation() }
+            faceAvatar.showBody = display == "robot"
+            setFaceMode(display != "home")
+            val text = getString(when (display) { "robot" -> R.string.full_robot_mode; "face" -> R.string.full_face_mode; else -> R.string.back_to_home })
+            showAnswer(text)
+            controller.beginResponse()
+            finishLocalVoice(text, expectAnswer = true)
+            return
+        }
         val onlineEnabled = onlineAccess.isChecked
-        runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled) }, voiceReply = { it.text }) { reply ->
+        runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled) },
+            voiceReply = { it.text }, expectAnswer = { it.expectsAnswer }) { reply ->
             val text = if (reply.notesAvailable) reply.text
                 else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
             showAnswer(text, reply.source)
@@ -389,6 +413,7 @@ open class MainActivity : Activity() {
     }
 
     private fun confirmNote(content: String, sensitive: Boolean = false) {
+        worker.execute { brain.clearConversation() }
         showDialog(AlertDialog.Builder(this).setTitle(R.string.confirm_note_title)
             .setMessage(getString(if (sensitive) R.string.confirm_sensitive_note_message else R.string.confirm_note_message, content))
             .setNegativeButton(R.string.cancel, null)
@@ -435,6 +460,7 @@ open class MainActivity : Activity() {
     /** Notes can contain private text: keep the microphone off while any dialog is visible. */
     private fun showDialog(dialog: AlertDialog) {
         if (dialogDepth == 0) {
+            worker.execute { brain.clearConversation() }
             resumeVoiceAfterDialogs = voiceActive
             controller.stop()
         }
@@ -456,6 +482,7 @@ open class MainActivity : Activity() {
             autoListenEnabled = false
             voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
             controller.stopListening()
+            worker.execute { brain.clearConversation() }
         } else if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             autoListenEnabled = true
             voicePreferences.edit().putBoolean("auto_listen_enabled", true).apply()
@@ -501,6 +528,7 @@ open class MainActivity : Activity() {
     override fun onPause() {
         foreground = false
         if (::controller.isInitialized) controller.stop()
+        if (::brain.isInitialized && !destroyed) worker.execute { brain.clearConversation() }
         super.onPause()
     }
 

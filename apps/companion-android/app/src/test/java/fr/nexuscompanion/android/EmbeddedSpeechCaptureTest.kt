@@ -12,9 +12,28 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class EmbeddedSpeechCaptureTest {
+    @Test fun finalizesAQuietUtteranceEvenWhenNoPartialWasReturned() {
+        val recorder = Recorder()
+        var finalized = false
+        val heard = mutableListOf<String>()
+        val decoder = object : LocalSpeechDecoder {
+            override fun accept(samples: ShortArray, count: Int) = false
+            override fun partial() = ""
+            override fun result() = ""
+            override fun finish(): String { finalized = true; return "Nexus bonjour" }
+            override fun close() = Unit
+        }
+        EmbeddedSpeechCapture(Executor { it.run() }, { it() }, { recorder }, { decoder }, object : RecognitionEvents {
+            override fun ready() = Unit
+            override fun result(text: String) { assertTrue(recorder.closed); heard.add(text) }
+            override fun error(failure: RecognitionFailure) { fail(failure.name) }
+        }).start()
+        assertTrue(finalized)
+        assertEquals(listOf("Nexus bonjour"), heard)
+    }
     @get:Rule val temporary = TemporaryFolder()
 
-    private class Recorder(private val count: Int = 3200) : PcmRecorder {
+    private class Recorder(private val count: Int = EmbeddedSpeechCapture.FRAME_SAMPLES) : PcmRecorder {
         var started = false
         var stopped = false
         var closed = false

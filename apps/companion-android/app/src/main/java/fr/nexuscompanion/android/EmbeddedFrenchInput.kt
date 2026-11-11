@@ -39,11 +39,14 @@ internal class EmbeddedFrenchInput(context: Context) : VoiceInput {
     private fun openDecoder(): LocalSpeechDecoder {
         val loaded = model ?: Model(installModel(app).absolutePath).also { model = it }
         val decoder = Recognizer(loaded, EmbeddedSpeechCapture.SAMPLE_RATE.toFloat())
+        decoder.setWords(true)
+        // Keep Vosk's default consensus decoding; changing it to n-best can change transcripts.
         return object : LocalSpeechDecoder {
             override fun accept(samples: ShortArray, count: Int) = decoder.acceptWaveForm(samples, count)
             override fun partial() = JSONObject(decoder.partialResult).optString("partial")
-            override fun result() = JSONObject(decoder.result).optString("text")
-            override fun finish() = JSONObject(decoder.finalResult).optString("text")
+            override fun result() = hypotheses().firstOrNull()?.text.orEmpty()
+            override fun finish() = hypotheses(final = true).firstOrNull()?.text.orEmpty()
+            override fun hypotheses(final: Boolean) = LocalSpeechResult.hypotheses(if (final) decoder.finalResult else decoder.result)
             override fun close() = decoder.close()
         }
     }

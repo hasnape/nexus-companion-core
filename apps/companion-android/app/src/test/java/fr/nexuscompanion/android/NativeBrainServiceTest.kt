@@ -13,6 +13,35 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun spokenQuestionVariantsDoNotBecomeNotesAndTheMissingSlotIsExplained() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "questions", LocalKnowledgeLibraryTest.JvmCipher("questions"))
+        library.addUserNote("Profil", "Le créateur est Amine.")
+        library.addUserNote("Métier", "Je travaille comme technicien informatique.")
+        NativeBrainService(context, library) { null }.use { brain ->
+            assertTrue(brain.reply("Peux-tu me dire mon prénom").text.contains("Amine"))
+            assertTrue(brain.reply("Où est-ce que je travaille").text.contains("lieu"))
+            assertFalse(brain.reply("Quelle est mon adresse").text.contains("que je retienne"))
+            brain.reply("oui")
+            assertEquals(2, library.list().size)
+        }
+    }
+
+    @Test fun rollingBodyUsesSharedKinematicsWithBothSteeringPositionsAndNoNoteWrites() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "rolling", LocalKnowledgeLibraryTest.JvmCipher("rolling"))
+        NativeBrainService(context, library).use { brain ->
+            val front = brain.reply("tourne à gauche de trente degrés", steeringAxle = "front")
+            val rear = brain.reply("tourne à gauche de trente degrés", steeringAxle = "rear")
+            assertTrue(front.text.contains("Simulation"))
+            assertTrue(front.body!!.steeringRad > 0); assertTrue(rear.body!!.steeringRad < 0)
+            assertEquals(front.body.samples, rear.body.samples)
+            assertTrue(brain.reply("avance de 20 centimètres").body!!.samples.last().xM > 0)
+            assertNull(brain.reply("avance de 200 centimètres").body)
+            assertTrue(brain.reply("État de ta mémoire").text.contains("0 notes"))
+            assertTrue(library.list().isEmpty())
+        }
+    }
     @Test fun spokenSearchLearningAndOfflineReuseKeepTheEvidenceAndNeverSaveBeforeApproval() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "learn", LocalKnowledgeLibraryTest.JvmCipher("learn"))

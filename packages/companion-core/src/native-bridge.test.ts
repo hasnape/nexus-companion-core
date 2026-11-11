@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNativeTurn, handleNativeTurnJson, type NativeNote, type NativeTurnRequest } from './native-bridge';
+import { createNativeTurn, handleNativeBodyJson, handleNativeTurnJson, type NativeNote, type NativeTurnRequest } from './native-bridge';
 
 const now = 1_000_000;
 const note = (excerpt: string, overrides: Partial<NativeNote> = {}): NativeNote => ({
@@ -9,6 +9,11 @@ const note = (excerpt: string, overrides: Partial<NativeNote> = {}): NativeNote 
 const request = (message: string, notes: NativeNote[] = []): NativeTurnRequest => ({ protocolVersion: 1, message, notes, now });
 
 describe('native shared brain protocol', () => {
+  it('keeps valid escaped user text within the body protocol without executing it', () => {
+    const request = JSON.stringify({ message: '"'.repeat(2000), steeringAxle: 'front' });
+    expect(JSON.parse(handleNativeBodyJson(request)).handled).toBe(false);
+    expect(() => handleNativeBodyJson(JSON.stringify({ message: 'x'.repeat(2001), steeringAxle: 'front' }))).toThrow();
+  });
   it.each(['bonjour', 'Nexus, bonjour !', 'salut', 'comment vas tu', 'comment ça va ?', 'Nexus : comment ca va'])('handles natural greeting: %s', (message) => {
     const reply = createNativeTurn(request(message));
     expect(reply.text).toMatch(/Bonjour|Ça va/);

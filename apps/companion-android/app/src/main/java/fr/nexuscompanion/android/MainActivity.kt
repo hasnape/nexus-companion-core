@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
@@ -48,6 +49,23 @@ open class MainActivity : Activity() {
     private lateinit var faceScreen: View
     private lateinit var faceAvatar: NexusAvatarView
     private lateinit var facePresenceLabel: TextView
+    private lateinit var bodyControls: View
+    private lateinit var bodyMotionStatus: TextView
+    private lateinit var steeringButton: Button
+    private val rollingBody = RollingBodyState()
+    private var bodyGeneration = 0L
+    private var steeringAtFront = true
+    private val bodyTick = object : Runnable {
+        override fun run() {
+            if (!foreground || destroyed) return
+            val frame = rollingBody.frame(SystemClock.elapsedRealtime()).copy(steeringAtFront = steeringAtFront)
+            faceAvatar.bodyFrame = frame
+            controller.setBodyMoving(frame.moving)
+            bodyMotionStatus.text = getString(R.string.body_telemetry, frame.pose.travelledM * 100,
+                Math.toDegrees(frame.pose.headingRad) % 360)
+            if (frame.moving) main.postDelayed(this, 50L)
+        }
+    }
     private lateinit var status: TextView
     private lateinit var answer: TextView
     private lateinit var answerSource: TextView
@@ -105,6 +123,7 @@ open class MainActivity : Activity() {
             },
             onSessionState = { active ->
                 voiceActive = active
+                if (!active) stopBody()
                 voiceButton.setText(if (active) R.string.deactivate_microphone else R.string.activate_microphone)
                 directVoiceButton.isEnabled = active && !busy
             },
@@ -130,6 +149,9 @@ open class MainActivity : Activity() {
                 renderPresence()
             }
         ).also { it.setSpokenRepliesEnabled(spokenRepliesEnabled) }
+        if (savedInstanceState != null) rollingBody.restore(RollingBodyState.Pose(
+            savedInstanceState.getDouble("body_x"), savedInstanceState.getDouble("body_y"),
+            savedInstanceState.getDouble("body_heading"), savedInstanceState.getDouble("body_travelled")))
         if (savedInstanceState?.getBoolean(FACE_MODE_STATE) == true) {
             faceAvatar.showBody = savedInstanceState.getBoolean(ROBOT_MODE_STATE)
             setFaceMode(true)
@@ -162,15 +184,16 @@ open class MainActivity : Activity() {
         presenceLabel = findViewById(R.id.home_presence)
         faceAvatar = faceScreen.findViewById<NexusAvatarView>(R.id.face_mode_avatar).apply { expanded = true }
         facePresenceLabel = faceScreen.findViewById(R.id.face_mode_presence)
+        bodyControls = faceScreen.findViewById(R.id.body_controls)
+        bodyMotionStatus = faceScreen.findViewById(R.id.body_motion_status)
+        steeringButton = faceScreen.findViewById(R.id.body_steering)
+        steeringAtFront = voicePreferences.getBoolean("steering_at_front", true)
+        steeringButton.setText(if (steeringAtFront) R.string.body_steering_front else R.string.body_steering_rear)
+        faceScreen.findViewById<Button>(R.id.body_stop).setOnClickListener { respond("stop") }
+        steeringButton.setOnClickListener { configureSteering(!steeringAtFront) }
         val faceExit = faceScreen.findViewById<Button>(R.id.face_mode_exit)
-        val fitFace = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            faceAvatar.setFaceControls(
-                faceExit.left - faceAvatar.left, faceExit.top - faceAvatar.top,
-                faceExit.right - faceAvatar.left, faceExit.bottom - faceAvatar.top,
-                facePresenceLabel.top - faceAvatar.top
-            )
-        }
-        listOf(faceAvatar, faceExit, facePresenceLabel).forEach { it.addOnLayoutChangeListener(fitFace) }
+        val fitFace = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitAvatarToControls() }
+        listOf(faceAvatar, faceExit, facePresenceLabel, bodyControls).forEach { it.addOnLayoutChangeListener(fitFace) }
         status = findViewById(R.id.home_status)
         transcript = findViewById(R.id.home_transcript)
         answer = findViewById(R.id.home_answer)
@@ -245,6 +268,9 @@ open class MainActivity : Activity() {
     }
 
     private fun setFaceMode(enabled: Boolean) {
+        if (!enabled || !faceAvatar.showBody) stopBody()
+        bodyControls.visibility = if (enabled && faceAvatar.showBody) View.VISIBLE else View.GONE
+        faceScreen.post { if (!destroyed) fitAvatarToControls() }
         if (faceMode == enabled) return
         faceMode = enabled
         if (enabled && input.hasFocus()) {
@@ -264,6 +290,13 @@ open class MainActivity : Activity() {
         }
         updateSystemBars()
         window.decorView.requestApplyInsets()
+    }
+
+    private fun fitAvatarToControls() {
+        val exit = faceScreen.findViewById<Button>(R.id.face_mode_exit)
+        faceAvatar.setFaceControls(exit.left - faceAvatar.left, exit.top - faceAvatar.top,
+            exit.right - faceAvatar.left, exit.bottom - faceAvatar.top,
+            (if (bodyControls.visibility == View.VISIBLE) bodyControls.top else facePresenceLabel.top) - faceAvatar.top)
     }
 
     private fun updateSystemBars() {
@@ -291,6 +324,9 @@ open class MainActivity : Activity() {
         super.onSaveInstanceState(outState)
         outState.putBoolean(FACE_MODE_STATE, faceMode)
         outState.putBoolean(ROBOT_MODE_STATE, faceAvatar.showBody)
+        val pose = rollingBody.frame(SystemClock.elapsedRealtime()).pose
+        outState.putDouble("body_x", pose.xM); outState.putDouble("body_y", pose.yM)
+        outState.putDouble("body_heading", pose.headingRad); outState.putDouble("body_travelled", pose.travelledM)
     }
 
     private fun renderPresence() {
@@ -370,7 +406,20 @@ open class MainActivity : Activity() {
     }
 
     private fun respond(message: String) {
-        if (busy || message.isBlank() || message.length > 2000) return
+        if (message.isBlank() || message.length > 2000) return
+        if (VoiceTranscriptPolicy.isStopCommand(message)) {
+            stopBody()
+            worker.execute { brain.clearConversation() }
+            showAnswer(R.string.body_stopped)
+            controller.beginResponse()
+            finishLocalVoice(getString(R.string.body_stopped), expectAnswer = true)
+            return
+        }
+        if (busy) return
+        when (VoiceTranscriptPolicy.commandWords(message)) {
+            "roue directrice a l avant", "direction a l avant" -> { configureSteering(true); return }
+            "roue directrice a l arriere", "direction a l arriere" -> { configureSteering(false); return }
+        }
         pendingCandidate = null
         retainButton.visibility = View.GONE
         val display = when (VoiceTranscriptPolicy.commandWords(message)) {
@@ -380,6 +429,7 @@ open class MainActivity : Activity() {
             else -> null
         }
         if (display != null) {
+            stopBody()
             worker.execute { brain.clearConversation() }
             faceAvatar.showBody = display == "robot"
             setFaceMode(display != "home")
@@ -390,14 +440,46 @@ open class MainActivity : Activity() {
             return
         }
         val onlineEnabled = onlineAccess.isChecked
-        runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled) },
-            voiceReply = { it.text }, expectAnswer = { it.expectsAnswer }) { reply ->
-            val text = if (reply.notesAvailable) reply.text
-                else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
+        val axle = if (steeringAtFront) "front" else "rear"
+        val generation = bodyGeneration
+        fun replyText(reply: NativeBrainService.Reply): String = if (reply.body != null && generation != bodyGeneration) getString(R.string.body_stopped)
+            else if (reply.notesAvailable) reply.text else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
+        runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled, axle) },
+            voiceReply = { replyText(it) }, expectAnswer = { it.expectsAnswer }) { reply ->
+            val text = replyText(reply)
             showAnswer(text, reply.source)
+            if (reply.body != null && foreground && generation == bodyGeneration) {
+                faceAvatar.showBody = true
+                setFaceMode(true)
+                rollingBody.start(reply.body, SystemClock.elapsedRealtime())
+                main.removeCallbacks(bodyTick)
+                bodyTick.run()
+            }
             pendingCandidate = if (reply.notesAvailable) reply.candidate else null
             retainButton.visibility = if (pendingCandidate != null) View.VISIBLE else View.GONE
         }
+    }
+
+    private fun stopBody() {
+        bodyGeneration++
+        main.removeCallbacks(bodyTick)
+        val frame = rollingBody.stop(SystemClock.elapsedRealtime()).copy(steeringAtFront = steeringAtFront)
+        if (::faceAvatar.isInitialized) faceAvatar.bodyFrame = frame
+        if (::controller.isInitialized) controller.setBodyMoving(false)
+        if (::bodyMotionStatus.isInitialized) bodyMotionStatus.setText(R.string.body_stopped)
+    }
+
+    private fun configureSteering(front: Boolean) {
+        stopBody()
+        steeringAtFront = front
+        voicePreferences.edit().putBoolean("steering_at_front", front).apply()
+        steeringButton.setText(if (front) R.string.body_steering_front else R.string.body_steering_rear)
+        faceAvatar.bodyFrame = faceAvatar.bodyFrame.copy(steeringAtFront = front)
+        worker.execute { brain.clearConversation() }
+        val text = getString(if (front) R.string.body_steering_front else R.string.body_steering_rear)
+        showAnswer(text)
+        controller.beginResponse()
+        finishLocalVoice(text, expectAnswer = true)
     }
 
     private fun showAnswer(@StringRes text: Int) = showAnswer(getString(text))
@@ -460,6 +542,7 @@ open class MainActivity : Activity() {
     /** Notes can contain private text: keep the microphone off while any dialog is visible. */
     private fun showDialog(dialog: AlertDialog) {
         if (dialogDepth == 0) {
+            stopBody()
             worker.execute { brain.clearConversation() }
             resumeVoiceAfterDialogs = voiceActive
             controller.stop()
@@ -479,6 +562,7 @@ open class MainActivity : Activity() {
 
     private fun toggleVoice() {
         if (voiceActive) {
+            stopBody()
             autoListenEnabled = false
             voicePreferences.edit().putBoolean("auto_listen_enabled", false).apply()
             controller.stopListening()
@@ -493,6 +577,7 @@ open class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         foreground = true
+        bodyTick.run()
         if (!autoListenEnabled || voiceActive || permissionRequestInFlight || dialogDepth > 0) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) activateVoice()
         else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) requestMicrophonePermission()
@@ -527,6 +612,7 @@ open class MainActivity : Activity() {
 
     override fun onPause() {
         foreground = false
+        stopBody()
         if (::controller.isInitialized) controller.stop()
         if (::brain.isInitialized && !destroyed) worker.execute { brain.clearConversation() }
         super.onPause()
@@ -534,6 +620,7 @@ open class MainActivity : Activity() {
 
     override fun onDestroy() {
         destroyed = true
+        stopBody()
         foreground = false
         unregisterFaceBack?.invoke()
         unregisterFaceBack = null

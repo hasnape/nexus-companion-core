@@ -36,6 +36,7 @@ internal class SharedBrainRuntime(
 
     fun replyJson(request: String): String = call("handleNativeTurnJson", request)
     fun retrievalJson(message: String): String = call("handleNativeRetrievalJson", message)
+    fun bodyJson(request: String): String = call("handleNativeBodyJson", request)
 
     @Synchronized
     private fun call(functionName: String, request: String): String {

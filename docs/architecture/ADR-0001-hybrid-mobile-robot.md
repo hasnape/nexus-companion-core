@@ -7,6 +7,7 @@ Status: proposed. Scope: the whole Nexus Companion family, not a single persona.
 - **Head:** dedicated display renders the face UI; no personal Android notifications are mirrored.
 - **Front torso:** removable, dedicated Android smartphone. Rear cameras face outward through a suitable protective optical window. Phone remains the primary identity and memory host.
 - **Back:** ventilated mini-PC, optional accelerator for compute-intensive local inference. A disconnected or unavailable mini-PC must not prevent the phone from running the companion's core functions.
+- **Locomotion:** three wheels, with two lateral traction wheels and a central steering wheel configurable at the front or rear; no walking legs. The native virtual body implements the planning stage described in [ADR-0003](ADR-0003-wheeled-body-and-native-memory.md).
 - **Robot chassis:** separate real-time microcontroller for motor control, feedback, power management and safety.
 - **Power:** robot battery, protected power rails and charging design are separate from the phone battery; thermal and electrical design must be validated before assembly.
 

@@ -22,6 +22,54 @@ import javax.crypto.spec.SecretKeySpec
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LocalKnowledgeLibraryTest {
+    @Test fun unchangedEncryptedFilesReuseTheParsedSnapshotButExternalChangesAreObserved() {
+        val id = "cached"
+        library(id).addUserNote("Repère", "Une information locale.")
+        var decryptions = 0
+        val delegate = JvmCipher(id)
+        val cipher = object : KnowledgeCipher {
+            override fun isEncrypted(bytes: ByteArray) = delegate.isEncrypted(bytes)
+            override fun encrypt(plaintext: ByteArray) = delegate.encrypt(plaintext)
+            override fun decrypt(blob: ByteArray): ByteArray { decryptions++; return delegate.decrypt(blob) }
+        }
+        val cached = LocalKnowledgeLibrary(context, id, cipher)
+        repeat(10) { assertEquals(1, cached.list().size) }
+        assertEquals(1, decryptions)
+        library(id).addUserNote("Autre", "Une autre information.")
+        assertEquals(2, cached.list().size); assertEquals(2, decryptions)
+        val corrupted = file(id).readBytes().also { it[it.lastIndex] = (it.last().toInt() xor 1).toByte() }
+        file(id).writeBytes(corrupted)
+        assertThrows(Exception::class.java) { cached.list() }
+        assertArrayEquals(corrupted, file(id).readBytes())
+    }
+
+    @Test fun cosmeticDuplicatesKeepTheOriginalIdentityAndSpelling() {
+        val store = library("cosmetic")
+        val original = store.addUserNote("Thé vert", "Je préfère le thé vert.")
+        val duplicate = store.addUserNote("THÉ VERT", "Je  préfère le thé vert!")
+        assertFalse(duplicate.created)
+        assertEquals(original.entry.id, duplicate.entry.id)
+        assertEquals(original.entry.recordedAt, duplicate.entry.recordedAt)
+        assertEquals("Je préfère le thé vert.", store.list().single().excerpt)
+    }
+
+    @Test fun adaptiveCompressionIsLosslessNoLargerThanTheOldCodecAndMeasurable() {
+        val source = legacy(*(0 until 80).map { entry("id-$it", "Repère $it").put("excerpt", "Information locale sur le compagnon et ses projets. ".repeat(24) + it) }.toTypedArray()).toByteArray()
+        val old = ByteArrayOutputStream().also { target -> GZIPOutputStream(target).use { it.write(source) } }.toByteArray()
+        val packed = KnowledgePayload.encode(source)
+        assertTrue(packed.size <= old.size)
+        assertArrayEquals(source, KnowledgePayload.decode(packed))
+        val store = library("stats")
+        repeat(12) { store.addUserNote("Repère $it", "Information locale sur le compagnon. ".repeat(30) + it) }
+        val stats = store.statistics()
+        assertEquals(12, stats.notes)
+        assertEquals(file("stats").length().toInt(), stats.storedBytes)
+        assertTrue(stats.compressionPercent > 70)
+        assertTrue(stats.payloadBytes < stats.jsonBytes)
+        java.io.File("build/reports/memory-compression.json").also { it.parentFile?.mkdirs() }.writeText(
+            JSONObject().put("fixtureNotes", stats.notes).put("jsonBytes", stats.jsonBytes).put("encryptedBytes", stats.storedBytes)
+                .put("compressionPercent", stats.compressionPercent).put("oldGzipBytes", old.size).put("adaptiveGzipBytes", packed.size).toString())
+    }
     /** Real AES-GCM for repository tests; Android Keystore remains the production provider. */
     internal class JvmCipher(private val namespace: String) : KnowledgeCipher {
         private val key = SecretKeySpec(ByteArray(32) { 42 }, "AES")

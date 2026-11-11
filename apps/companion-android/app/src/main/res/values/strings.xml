@@ -16,6 +16,12 @@
     <string name="home_presence_speaking">Nexus parle</string>
     <string name="full_face_mode">Mode plein visage</string>
     <string name="full_robot_mode">Mode robot</string>
+    <string name="body_ready">Corps virtuel · dis « avance de vingt centimètres »</string>
+    <string name="body_stop">Arrêter</string>
+    <string name="body_stopped">Corps virtuel arrêté.</string>
+    <string name="body_steering_front">Direction : avant</string>
+    <string name="body_steering_rear">Direction : arrière</string>
+    <string name="body_telemetry">Simulation · %1$.0f cm parcourus · cap %2$.0f°</string>
     <string name="back_to_home">Retour à l’accueil</string>
     <string name="leave_face">Quitter</string>
     <string name="leave_full_face_mode">Quitter le mode plein visage</string>

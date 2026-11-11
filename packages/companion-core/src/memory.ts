@@ -1,4 +1,5 @@
 import { isIncompleteMemoryCommand, isWakeFragmentNoise, stripWakePrefix } from './wake';
+import { analyzeQuestion, isExplicitMemoryRequest, unwrapPoliteRequest } from './question';
 
 import type {
   CompanionMemoryItem,
@@ -125,8 +126,8 @@ const normalizeMemoryFact = (fact: string): string => {
 };
 
 const stripMemoryCommandWrapper = (input: string): string => {
-  const wakeStripped = stripWakePrefix(input, { allowFullNameWake: true }).trim();
-  return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, '').trim();
+  const wakeStripped = unwrapPoliteRequest(input);
+  return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, '').replace(/^(?:retenir|m[ée]moriser|garder en m[ée]moire|apprends|apprendre)(?:\s+que)?\s+/i, '').trim();
 };
 
 export const normalizeMemoryCandidateContent = (input: string): string => {
@@ -200,14 +201,13 @@ export const extractMemoryCandidates = (
 ): CompanionMemoryItem[] => {
   const raw = stripWakePrefix(userMessage, { allowFullNameWake: true }).trim();
   // An ASR transcript may omit '?'. A question about a fact is not a new fact.
-  const isQuestion = /\?\s*$/.test(raw) || /^(?:quels?\b|quelles?\b|qu['’]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu]\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi(?! de mani[èe]re\b)\b|d[ée]cris\b)/i.test(raw);
-  if (isQuestion && !MEMORY_WRAPPER_PREFIX.test(raw) && !/^(?:apprends|remember that)\b/i.test(raw)) return [];
+  if (analyzeQuestion(raw).question) return [];
   const rawForDetection = stripMemoryCommandWrapper(raw);
   const content = normalizeMemoryCandidateContent(raw);
   if (!content || content.length < 12) return [];
   if (isWakeFragmentNoise(content) || isIncompleteMemoryCommand(content)) return [];
 
-  const looksMemorable = PREFERENCE_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
+  const looksMemorable = isExplicitMemoryRequest(raw) || PREFERENCE_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
     || PROJECT_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
     || RELATIONSHIP_PATTERNS.some((pattern) => pattern.test(rawForDetection) || pattern.test(content))
     || isStableUserProfileStatement(rawForDetection)

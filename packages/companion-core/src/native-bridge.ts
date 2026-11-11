@@ -1,5 +1,7 @@
 import { buildCompanionContext } from './context';
 import { answerFromNotes, nativeRetrievalTerms } from './grounded-memory';
+import { analyzeQuestion } from './question';
+import { resolveBodyCommand } from '../../shared/src/wheeled-body';
 import { decideCompanionResponse } from './decision';
 import { isSensitiveMemoryContent, normalizeMemoryCandidateContent, normalizeMemoryContentKey, shouldRequireLocationConfirmation } from './memory';
 import { createDefaultCompanionProfile } from './profile';
@@ -161,17 +163,22 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   if (plan.responseMode === 'supportive') return { ...result, text: renderDeterministicNexusReply(plan) };
   const grounded = answerFromNotes(request.message, notes);
   if (grounded) return { ...result, ...grounded };
-  if (plan.responseMode === 'normal') {
+  const question = analyzeQuestion(request.message);
+  if (plan.responseMode === 'normal' || question.question) {
     const support = renderLocalSupportReply(request.message);
     if (support) return { ...result, text: support };
   }
-  if (plan.responseMode !== 'normal' || decision.intent === 'ask_clarification') {
+  if (question.question && question.personal) return {
+    ...result,
+    text: question.kind === 'where' ? 'Je ne retrouve pas ce lieu dans tes notes. Tu peux me le préciser ?'
+      : question.kind === 'why' ? 'Tes notes ne précisent pas cette raison. Tu peux me l’expliquer ?'
+        : 'Je ne retrouve pas cette information dans tes notes utilisables ici. Tu peux me la préciser ?'
+  };
+  if (!question.question && (plan.responseMode !== 'normal' || decision.intent === 'ask_clarification')) {
     return { ...result, text: renderDeterministicNexusReply(plan) };
   }
-  const command = stripWakePrefix(request.message, { allowFullNameWake: true }).trim();
-  const question = /^(?:qu['’ ]est[- ]ce qu|c['’ ]est quoi|quels?\b|quelles?\b|comment\b|pourquoi\b|o[ùu]\b|qui\b|explique\b|parle[- ]moi de\b|d[ée]cris\b)/i.test(command);
-  const subject = command.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, '').replace(/[.!?]+$/, '').trim();
-  if (question && isPublicTopic(command) && isPublicTopic(subject)) return {
+  const subject = question.subject;
+  if (question.question && isPublicTopic(question.content) && isPublicTopic(subject)) return {
     ...result,
     text: `Je ne sais pas encore répondre précisément. Tu veux que je cherche « ${subject} » sur Internet, dans Wikipédia ?`,
     publicLookupOffer: subject
@@ -186,6 +193,14 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
 export const handleNativeRetrievalJson = (input: string): string => {
   if (typeof input !== 'string' || input.length > 2000) throw new Error('Invalid retrieval request');
   return JSON.stringify({ terms: nativeRetrievalTerms(stripWakePrefix(input, { allowFullNameWake: true })) });
+};
+
+/** User commands only. No note or external article can request a body action. */
+export const handleNativeBodyJson = (input: string): string => {
+  if (input.length > 16_000) throw new Error('Invalid body request');
+  const value: unknown = JSON.parse(input);
+  if (!record(value) || !boundedText(value.message, 2000) || !['front', 'rear'].includes(value.steeringAxle as string)) throw new Error('Invalid body request');
+  return JSON.stringify(resolveBodyCommand(stripWakePrefix(value.message, { allowFullNameWake: true }), value.steeringAxle as 'front' | 'rear'));
 };
 
 /** Called as a function with a JSON string argument: user text is never executable code. */

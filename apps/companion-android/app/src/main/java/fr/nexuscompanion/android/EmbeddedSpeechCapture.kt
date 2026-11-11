@@ -15,6 +15,7 @@ internal interface LocalSpeechDecoder : AutoCloseable {
     fun partial(): String
     fun result(): String
     fun finish(): String
+    fun hypotheses(final: Boolean = false): List<SpeechHypothesis> = listOf(SpeechHypothesis(if (final) finish() else result())).filter { it.text.isNotBlank() }
 }
 
 /** One finite capture. The worker releases the microphone before delivering a final result. */
@@ -56,10 +57,10 @@ internal class EmbeddedSpeechCapture(
             return
         }
         try {
-            val text = decoder.use { record(it) }
-            if (text != null) emit {
-                if (text.isBlank()) events.error(RecognitionFailure.SILENCE)
-                else events.result(text)
+            val hypotheses = decoder.use { record(it) }
+            if (hypotheses != null) emit {
+                if (hypotheses.isEmpty()) events.error(RecognitionFailure.SILENCE)
+                else events.alternatives(hypotheses)
             }
         } catch (_: SecurityException) {
             emit { events.error(RecognitionFailure.PERMISSION) }
@@ -71,7 +72,7 @@ internal class EmbeddedSpeechCapture(
     }
 
     /** Null means cancelled. An empty result means the decoder heard no usable phrase. */
-    private fun record(decoder: LocalSpeechDecoder): String? {
+    private fun record(decoder: LocalSpeechDecoder): List<SpeechHypothesis>? {
         if (cancelled) return null
         val recorder = openRecorder()
         try {
@@ -94,7 +95,7 @@ internal class EmbeddedSpeechCapture(
         try { recorder.stop() } catch (_: RuntimeException) { /* capture may already have stopped */ }
     }
 
-    private fun decode(recorder: PcmRecorder, decoder: LocalSpeechDecoder): String? {
+    private fun decode(recorder: PcmRecorder, decoder: LocalSpeechDecoder): List<SpeechHypothesis>? {
         val samples = ShortArray(FRAME_SAMPLES)
         var received = 0
         var firstSpeech = -1
@@ -109,7 +110,7 @@ internal class EmbeddedSpeechCapture(
             emit { events.level(level) }
 
             if (decoder.accept(samples, count)) {
-                val final = decoder.result().trim()
+                val final = decoder.hypotheses()
                 if (final.isNotEmpty()) return final
             } else {
                 val partial = decoder.partial().trim()
@@ -119,8 +120,8 @@ internal class EmbeddedSpeechCapture(
                     emit { events.partial(partial) }
                 }
             }
-            if (firstSpeech < 0 && received >= SAMPLE_RATE * 20) return ""
-            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * 58) return decoder.finish().trim()
+            if (firstSpeech < 0 && received >= SAMPLE_RATE * 20) return decoder.hypotheses(final = true)
+            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * 58) return decoder.hypotheses(final = true)
         }
         return null
     }
@@ -137,6 +138,6 @@ internal class EmbeddedSpeechCapture(
 
     companion object {
         const val SAMPLE_RATE = 16_000
-        const val FRAME_SAMPLES = 3_200
+        const val FRAME_SAMPLES = 1_600
     }
 }

@@ -97,7 +97,7 @@ var NexusNativeBrain = function () {
   });
   var WAKE_PREFIX_PATTERNS = [/^(?:hey\b[\s,;:!?.-]*nexus\b)/i, /^(?:ok\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b[\s,;:!?.-]*r[ée]veille(?:[\s'’-]*toi)\b)/i, /^(?:r[ée]veille(?:[\s'’-]*toi)\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b)/i];
   var FULL_NAME_WAKE_PREFIX_PATTERNS = [/^(?:hey\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i, /^(?:ok\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i, /^(?:nexus\b[\s,;:!?.-]*companion\b)/i];
-  var COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux-tu|fais|planifie|active|d[ée]sactive)\b/i;
+  var COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux[- ]tu|fais|cherche|recherche|planifie|active|d[ée]sactive)\b/i;
   var MEMORY_PREFIXES = ["souviens toi", "souviens-toi", "retiens", "retiens ca", "memorise", "garde en memoire"];
   var normalizeWakePhrase = function normalizeWakePhrase(input) {
     return input.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, " ").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
@@ -1344,6 +1344,62 @@ var NexusNativeBrain = function () {
         return renderNormalReply(plan);
     }
   };
+  var topics = [{
+    label: "la connexion Wi-Fi",
+    anchors: ["wifi", "internet", "reseau sans fil"],
+    clues: ["pas internet", "pas d internet", "connecte", "connexion", "coupure", "ne marche plus", "ne fonctionne plus", "panne"],
+    reply: "Vérifie si un autre appareil peut ouvrir un site sur le même Wi-Fi. Si lui aussi échoue, regarde l’état de la box. Si seul ton appareil est touché, désactive puis réactive son Wi-Fi et reconnecte-le. Le problème touche combien d’appareils ?"
+  }, {
+    label: "l’imprimante",
+    anchors: ["imprimante", "impression", "imprimer", "imprime"],
+    clues: ["imprime pas", "imprime plus", "rien ne sort", "hors ligne", "file d attente", "bourrage", "bloquee", "erreur"],
+    reply: "Vérifie que l’imprimante est prête et sélectionnée sur ton appareil. Ouvre sa file d’attente, puis essaie une page de test depuis l’imprimante. Que vois-tu sur son écran ou dans la file d’attente ?"
+  }, {
+    label: "la messagerie Outlook",
+    anchors: ["outlook", "messagerie", "boite mail"],
+    clues: ["synchronise plus", "recois plus", "recoit plus", "envoi", "reception", "hors connexion", "ne fonctionne plus", "erreur"],
+    reply: "Essaie d’ouvrir ta messagerie dans ton navigateur. Si les messages y arrivent, vérifie si Outlook affiche « Travailler hors connexion » et regarde la boîte d’envoi. Le souci concerne l’envoi, la réception ou les deux ?"
+  }, {
+    label: "la lenteur de l’ordinateur",
+    anchors: ["ordinateur", "pc", "windows"],
+    clues: ["lent", "rame", "lenteur", "disque plein", "fige", "espace disque"],
+    reply: "Sous Windows, ouvre le Gestionnaire des tâches avec Ctrl + Maj + Échap. Regarde dans Processus si le processeur, la mémoire ou le disque reste saturé, puis vérifie l’espace libre dans Paramètres, Système, Stockage. Quel indicateur monte le plus ?"
+  }, {
+    label: "le VPN",
+    anchors: ["vpn", "tunnel vpn", "acces distant"],
+    clues: ["connexion", "connecter", "echoue", "erreur", "ne marche plus", "ne fonctionne plus", "bloque"],
+    reply: "Vérifie d’abord que tu peux ouvrir un site avec le VPN déconnecté. Relance ensuite la connexion avec ton client VPN habituel et lis le message affiché. Quel est son code d’erreur ? Évite de partager ton mot de passe ou un code de validation."
+  }];
+  var renderLocalSupportReply = function renderLocalSupportReply(message) {
+    var query = normalizeWakePhrase(stripWakePrefix(message, {
+      allowFullNameWake: true
+    })).replace(/\bwi fi\b/g, "wifi");
+    var phrase = " ".concat(query, " ");
+    var hits = function hits(signals) {
+      return signals.filter(function (signal) {
+        return phrase.includes(" ".concat(signal, " "));
+      }).length;
+    };
+    var troubleshooting = /\b(?:depanne|depannage|probleme|panne|reparer|ne marche pas|ne marche plus|ne fonctionne pas|ne fonctionne plus)\b/.test(query);
+    var ranked = topics.flatMap(function (topic) {
+      var anchors = hits(topic.anchors);
+      var clues = hits(topic.clues);
+      return anchors && (clues || troubleshooting) ? [{
+        topic: topic,
+        score: 3 * anchors + 2 * clues
+      }] : [];
+    }).sort(function (left, right) {
+      return right.score - left.score;
+    });
+    var _ranked = _slicedToArray(ranked, 2),
+      best = _ranked[0],
+      next = _ranked[1];
+    if (!best) return null;
+    if (next && best.score - next.score < 2) {
+      return "Tu veux qu\u2019on regarde d\u2019abord ".concat(best.topic.label, " ou ").concat(next.topic.label, " ?");
+    }
+    return best.topic.reply;
+  };
   var MAX_INPUT_CHARS = 4e4;
   var record = function record(value) {
     return _typeof(value) === "object" && value !== null && !Array.isArray(value);
@@ -1380,6 +1436,29 @@ var NexusNativeBrain = function () {
       allowFullNameWake: true
     }));
     return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text) || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
+  };
+  var lookupPrefix = /^(?:(?:peux[- ]tu|tu peux) +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)? +(?:sur (?:internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
+  var publicLookup = function publicLookup(message) {
+    var command = stripWakePrefix(message, {
+      allowFullNameWake: true
+    });
+    var prefix = command.match(lookupPrefix);
+    if (!prefix) return null;
+    var subject = command.slice(prefix[0].length).replace(/^[\s,.:!?]+/, "").replace(/^(?:sur|au sujet de|[àa] propos de)\s+/i, "").replace(/[.!?]+$/, "").trim();
+    if (!subject) return {
+      text: "Quel sujet veux-tu chercher sur Wikipédia ?"
+    };
+    var normalized = normalizeWakePhrase(subject);
+    var privateTopic = /\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
+    if (subject.length > 180 || !normalized || /[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) || privateTopic) {
+      return {
+        text: "Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle."
+      };
+    }
+    return {
+      text: "Je peux rechercher ce sujet sur Wikipédia.",
+      publicLookupQuery: subject
+    };
   };
   var _createNativeTurn = function _createNativeTurn(input) {
     var _a;
@@ -1458,13 +1537,21 @@ var NexusNativeBrain = function () {
     if (smallTalk) return __spreadProps(__spreadValues({}, result), {
       text: smallTalk
     });
+    var lookup = publicLookup(request.message);
+    if (lookup) return __spreadValues(__spreadValues({}, result), lookup);
+    if (plan.responseMode === "normal") {
+      var support = renderLocalSupportReply(request.message);
+      if (support) return __spreadProps(__spreadValues({}, result), {
+        text: support
+      });
+    }
     if (plan.responseMode !== "normal" || decision.intent === "ask_clarification") {
       return __spreadProps(__spreadValues({}, result), {
         text: renderDeterministicNexusReply(plan)
       });
     }
     return __spreadProps(__spreadValues({}, result), {
-      text: "Je ne sais pas encore répondre précisément à cette demande. Tu peux me demander ce que je retiens ou m’apprendre une information."
+      text: "Je ne sais pas encore répondre précisément à cette demande. Pour un sujet public, dis-moi « cherche sur Internet » suivi du sujet."
     });
   };
   var _handleNativeTurnJson = function _handleNativeTurnJson(input) {

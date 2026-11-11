@@ -3,6 +3,7 @@ import { decideCompanionResponse } from './decision';
 import { isSensitiveMemoryContent, shouldRequireLocationConfirmation } from './memory';
 import { createDefaultCompanionProfile } from './profile';
 import { createResponsePlan, renderDeterministicNexusReply, renderLocalSmallTalk, shouldUseSafetyTone } from './response';
+import { renderLocalSupportReply } from './support-knowledge';
 import { normalizeWakePhrase, stripWakePrefix } from './wake';
 import type { CompanionMemoryItem, ResponseIntent } from './types';
 
@@ -32,6 +33,7 @@ export interface NativeTurnReply {
   text: string;
   intent: ResponseIntent | 'memory_recall';
   candidate: { content: string; sensitive: boolean } | null;
+  publicLookupQuery?: string;
 }
 
 const MAX_INPUT_CHARS = 40_000;
@@ -70,6 +72,24 @@ const isRecallRequest = (message: string): boolean => {
   const text = normalizeWakePhrase(stripWakePrefix(message, { allowFullNameWake: true }));
   return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text)
     || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
+};
+
+const lookupPrefix = /^(?:(?:peux[- ]tu|tu peux) +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)? +(?:sur (?:internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
+
+const publicLookup = (message: string): Pick<NativeTurnReply, 'text' | 'publicLookupQuery'> | null => {
+  const command = stripWakePrefix(message, { allowFullNameWake: true });
+  const prefix = command.match(lookupPrefix);
+  if (!prefix) return null;
+  const subject = command.slice(prefix[0].length).replace(/^[\s,.:!?]+/, '')
+    .replace(/^(?:sur|au sujet de|[àa] propos de)\s+/i, '').replace(/[.!?]+$/, '').trim();
+  if (!subject) return { text: 'Quel sujet veux-tu chercher sur Wikipédia ?' };
+
+  const normalized = normalizeWakePhrase(subject);
+  const privateTopic = /\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
+  if (subject.length > 180 || !normalized || /[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) || privateTopic) {
+    return { text: 'Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle.' };
+  }
+  return { text: 'Je peux rechercher ce sujet sur Wikipédia.', publicLookupQuery: subject };
 };
 
 export const createNativeTurn = (input: unknown): NativeTurnReply => {
@@ -123,12 +143,18 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   }
   const smallTalk = renderLocalSmallTalk(request.message);
   if (smallTalk) return { ...result, text: smallTalk };
+  const lookup = publicLookup(request.message);
+  if (lookup) return { ...result, ...lookup };
+  if (plan.responseMode === 'normal') {
+    const support = renderLocalSupportReply(request.message);
+    if (support) return { ...result, text: support };
+  }
   if (plan.responseMode !== 'normal' || decision.intent === 'ask_clarification') {
     return { ...result, text: renderDeterministicNexusReply(plan) };
   }
   return {
     ...result,
-    text: 'Je ne sais pas encore répondre précisément à cette demande. Tu peux me demander ce que je retiens ou m’apprendre une information.'
+    text: 'Je ne sais pas encore répondre précisément à cette demande. Pour un sujet public, dis-moi « cherche sur Internet » suivi du sujet.'
   };
 };
 

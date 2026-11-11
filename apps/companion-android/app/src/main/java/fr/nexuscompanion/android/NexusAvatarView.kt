@@ -8,6 +8,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
@@ -23,6 +24,12 @@ internal enum class CompanionPresence(@StringRes val label: Int, @ColorRes val a
 
 /** Decorative vector portrait. The adjacent text describes the state for accessibility. */
 class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+    private companion object {
+        // The silhouette includes the ears. The halo and orbits can extend beyond it.
+        const val FACE_WIDTH = 152f
+        const val FACE_HEIGHT = 110f
+    }
+
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val smile = Path().apply {
         moveTo(140f, 98f)
@@ -32,6 +39,10 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
     private val visor = LinearGradient(0f, 37f, 0f, 121f, 0xFF1D3550.toInt(), 0xFF0B1425.toInt(), Shader.TileMode.CLAMP)
     private var accent = context.getColor(CompanionPresence.READY.accent)
     private var halo = haloFor(accent)
+    private val faceFrame = RectF()
+    private val exitArea = RectF()
+    private val faceGutter = 8f * resources.displayMetrics.density
+    private var presenceTop = Float.POSITIVE_INFINITY
     private var visibleForMotion = false
     private var eyesClosed = false
     private var mouthOpening = 0.55f
@@ -62,6 +73,37 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
             field = value
             invalidate()
         }
+
+    internal fun setFaceControls(exitLeft: Int, exitTop: Int, exitRight: Int, exitBottom: Int, statusTop: Int) {
+        exitArea.set(exitLeft - faceGutter, exitTop - faceGutter, exitRight + faceGutter, exitBottom + faceGutter)
+        presenceTop = statusTop.toFloat()
+        updateFaceFrame()
+        invalidate()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        updateFaceFrame()
+    }
+
+    private fun updateFaceFrame() {
+        val bottom = minOf(height.toFloat(), presenceTop) - faceGutter
+        fitFace(faceGutter, bottom)
+        // A wide screen can use the height next to the exit button.
+        if (RectF.intersects(faceFrame, exitArea)) fitFace(exitArea.bottom, bottom)
+    }
+
+    private fun fitFace(top: Float, bottom: Float) {
+        val scale = minOf((width - 2f * faceGutter) / FACE_WIDTH, (bottom - top) / FACE_HEIGHT)
+        if (scale <= 0f) {
+            faceFrame.setEmpty()
+            return
+        }
+        val halfWidth = FACE_WIDTH * scale / 2f
+        val halfHeight = FACE_HEIGHT * scale / 2f
+        val centerY = (top + bottom) / 2f
+        faceFrame.set(width / 2f - halfWidth, centerY - halfHeight, width / 2f + halfWidth, centerY + halfHeight)
+    }
 
     override fun onVisibilityAggregated(isVisible: Boolean) {
         super.onVisibilityAggregated(isVisible)
@@ -113,15 +155,16 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // The immersive view frames the portrait more tightly while keeping the same proportions.
-        val scale = minOf(width / (if (expanded) 188f else 300f), height / 156f)
+        val scale = if (expanded) faceFrame.width() / FACE_WIDTH else minOf(width / 300f, height / 156f)
         if (scale <= 0f) return
+        val centerX = width / 2f
+        val centerY = if (expanded) faceFrame.centerY() else height / 2f
         val saved = canvas.save()
-        canvas.translate((width - 300f * scale) / 2f, (height - 156f * scale) / 2f)
+        canvas.translate(centerX - 150f * scale, centerY - 78f * scale)
         canvas.scale(scale, scale)
 
         shade(halo)
-        canvas.drawRect(0f, 0f, 300f, 156f, paint)
+        if (expanded) canvas.drawPaint(paint) else canvas.drawRect(0f, 0f, 300f, 156f, paint)
         stroke(accentWithAlpha(accent, 40), 1f)
         canvas.drawOval(35f, 13f, 265f, 144f, paint)
         canvas.drawOval(54f, 4f, 246f, 151f, paint)

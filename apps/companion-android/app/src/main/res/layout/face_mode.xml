@@ -1,35 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/face_mode_screen"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:accessibilityPaneTitle="@string/full_face_mode"
-    android:orientation="vertical"
     android:visibility="gone">
+
+    <fr.nexuscompanion.android.NexusAvatarView
+        android:id="@+id/face_mode_avatar"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
 
     <Button
         android:id="@+id/face_mode_exit"
         style="@style/HomeAction"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="end"
+        android:layout_gravity="top|end"
         android:layout_marginHorizontal="14dp"
         android:layout_marginTop="12dp"
         android:contentDescription="@string/leave_full_face_mode"
         android:text="@string/leave_face" />
 
-    <fr.nexuscompanion.android.NexusAvatarView
-        android:id="@+id/face_mode_avatar"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:importantForAccessibility="no" />
-
     <TextView
         android:id="@+id/face_mode_presence"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
+        android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="14dp"
         android:background="@drawable/home_inset"
         android:fontFamily="sans-serif-medium"
@@ -39,4 +37,4 @@
         android:text="@string/home_presence_ready"
         android:textColor="@color/home_muted_text"
         android:textSize="14sp" />
-</LinearLayout>
+</FrameLayout>

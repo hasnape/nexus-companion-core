@@ -14,7 +14,7 @@ Si Android refuse le retour automatique, le résultat reste disponible pour un r
 
 ## Portée et traitement
 
-La détection concerne les Aperçus IA identifiés dans Google Search, sur `google.com` ou `google.fr`, dans Chrome stable. Elle exige une adresse de recherche issue de la barre d’adresse native de Chrome. Pour une recherche lancée par Nexus, le sujet doit correspondre à celui demandé, en conservant ses caractères significatifs : `C++` et `C#` ne sont pas confondus. Un onglet « Mode IA » seul ne constitue pas une réponse. Les résultats Web ordinaires, les autres origines et les zones masquées ne sont pas repris comme un aperçu IA.
+La détection concerne les Aperçus IA identifiés dans Google Search, sur `google.com` ou `google.fr`, dans Chrome stable. Elle vérifie l’adresse de recherche issue de la barre d’adresse native de Chrome avant de collecter le texte du document. Une origine refusée ou un ancien sujet n’entre pas dans la capture. Pour une recherche lancée par Nexus, le sujet doit correspondre à celui demandé, en conservant ses caractères significatifs : `C++` et `C#` ne sont pas confondus. Un onglet « Mode IA » seul ne constitue pas une réponse. Les résultats Web ordinaires, les autres origines et les zones masquées ne sont pas repris comme un aperçu IA.
 
 Le service est lié à Android par `BIND_ACCESSIBILITY_SERVICE` et limité au paquet `com.android.chrome`. La visibilité du paquet Chrome est déclarée pour pouvoir rouvrir son onglet courant. Il ne parcourt aucune fenêtre sans demande active. Les événements d’accessibilité reçus au repos ne lisent rien ; seule la demande explicite lance une boucle finie de 25 secondes. Aucun geste, clic, défilement ou accès au clavier n’est réalisé.
 
@@ -27,7 +27,7 @@ La confirmation vocale garde son échéance de cinq minutes à partir de l’imp
 ## Validation exécutée
 
 - **413 tests TypeScript**, contrôle de types, ESLint, compilation des workspaces et concordance du bundle partagés réussis.
-- **324 tests Android dans chacune des variantes debug et release**, sur 31 suites, sans échec, erreur ni test ignoré.
+- **325 tests Android dans chacune des variantes debug et release**, sur 31 suites, sans échec, erreur ni test ignoré.
 - **Android Lint sans erreur**. Debug ne comporte aucune annotation. Release signale un avertissement `GradleDependency` et une information `KtxExtensionAvailable` concernant `androidx.core:core:1.15.0`, déjà épinglé dans le projet. Cette dépendance et les autres dépendances restent inchangées.
 - Les tests couvrent la sélection FR/EN, l’absence de marqueur IA, les autres domaines, un ancien sujet, les interfaces en cours de génération, les bornes, les doublons et les réponses chiffrées courtes.
 - Les tests de capture utilisent les nœuds Android simulés : adresse native distincte du document, faux identifiant de barre d’adresse dans une page, zones invisibles, champs de saisie et de mot de passe, interruption et expiration.
@@ -39,14 +39,14 @@ Aucun téléphone n’est connecté. Les tests simulent Chrome, ses nœuds et le
 
 ## APK principal
 
-Paquet **`fr.nexuscompanion.android`**, version **`0.4.22-native-alpha`**, code **28**, Android minimum 31, cible 35. Taille : **62 577 211 octets**, sous 64 Mio pour les anciens importeurs. Signature v2 et certificat permanent identiques à 0.4.21 ; ZIP intègre et alignement 16 Kio vérifié. Le manifeste compilé contient la visibilité ciblée de Chrome et la protection système du service ; aucune permission générale supplémentaire n’est demandée à l’installation.
+Paquet **`fr.nexuscompanion.android`**, version **`0.4.22-native-alpha`**, code **28**, Android minimum 31, cible 35. Taille : **62 577 519 octets**, sous 64 Mio pour les anciens importeurs. Signature v2 et certificat permanent identiques à 0.4.21 ; ZIP intègre et alignement 16 Kio vérifié. Le manifeste compilé contient la visibilité ciblée de Chrome et la protection système du service ; aucune permission générale supplémentaire n’est demandée à l’installation.
 
 Les quatre ABI, les huit bibliothèques natives, le modèle français et les **33 305 octets** des notices tierces sont identiques à 0.4.21. Les ressources compilées conservent la propriété du projet par Amine HARBI et l’édition par Rép&Web. Le format de mémoire, ses clés, la compression et les capacités générales ne changent pas. Le bundle du cerveau est inchangé : **118 039 octets**, SHA-256 `cc4b81c69a91a6e5d1113dbca13bd6330c6881e100e44f8bb83dbf32b63ceb2d`, avec 22 empreintes de sources vérifiées.
 
-Arbre source compilé : `d95e89816b682aa8eaadb1cbb4f9bb446dec0169`. Seul ce compte rendu est ajouté après compilation.
+Arbre source compilé : `b9b7b40054e0b78e4763234a1e2f79d5a00d4bcc`. Seul ce compte rendu est ajouté après compilation.
 
 ```text
-aa609f560ad90449303ed396ea1c51a6f559dda0b746514561c1f2a10f9cbbb4  nexus-companion-v0.4.22-native-alpha-release.apk
+556f013255200d5af7117ddd98147a71f4ff5e72dc4ba7a2d32725e478a4bfe2  nexus-companion-v0.4.22-native-alpha-release.apk
 ```
 
 Installer **par-dessus la version principale, sans désinstallation**. Les versions intermédiaires ne sont pas nécessaires. Si un ancien importeur rencontre son ancienne limite de cache, ouvrir l’APK depuis **Mes fichiers → Téléchargements**, puis confirmer **Mettre à jour**.

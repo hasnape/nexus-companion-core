@@ -59,9 +59,7 @@ class ChromeAccessibilityTest {
             web.child(node("www.google.com/search?q=volcan").apply { viewIdResourceName = "com.android.chrome:id/url_bar" })
             web.child(node("Aperçu IA"))
             web.child(node("Un faux texte qui ne prouve pas son origine."))
-            val snapshot = lifecycle.get().snapshot(root, SystemClock.elapsedRealtime() + 5000)!!
-            assertNull(snapshot.address)
-            assertNull(ChromeAiText.extract(snapshot, null))
+            assertNull(lifecycle.get().snapshot(root, SystemClock.elapsedRealtime() + 5000))
             assertNull(lifecycle.get().snapshot(node("Texte d’une autre application", pkg = "other.app"), SystemClock.elapsedRealtime() + 5000))
         } finally { lifecycle.destroy() }
     }
@@ -71,6 +69,22 @@ class ChromeAccessibilityTest {
         try {
             assertNull(lifecycle.get().snapshot(node(), SystemClock.elapsedRealtime()))
             assertNull(lifecycle.get().snapshot(node(), SystemClock.elapsedRealtime() + 5000) { false })
+        } finally { lifecycle.destroy() }
+    }
+
+    @Test fun anUnapprovedOriginOrOldQueryIsRefusedBeforeCollectingPageText() {
+        val lifecycle = Robolectric.buildService(ChromeAiReaderService::class.java).create()
+        try {
+            for ((address, expected) in listOf(
+                "https://accounts.google.com/" to null,
+                "https://bank.example/" to null,
+                "https://www.google.com/search?q=ancienne+question" to "nouvelle question"
+            )) {
+                val root = node()
+                root.child(node(address, "android.widget.EditText").apply { viewIdResourceName = "com.android.chrome:id/url_bar" })
+                root.child(node(type = "android.webkit.WebView")).child(node("Ce document ne doit pas entrer dans la capture."))
+                assertNull(address, lifecycle.get().snapshot(root, SystemClock.elapsedRealtime() + 5000, expected))
+            }
         } finally { lifecycle.destroy() }
     }
 

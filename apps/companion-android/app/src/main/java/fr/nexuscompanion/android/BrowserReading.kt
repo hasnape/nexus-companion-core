@@ -47,21 +47,21 @@ internal object ChromeAiText {
     internal fun words(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
-    fun page(address: String?): Page? {
+    fun page(address: String?, expectedQuery: String? = null): Page? {
         val raw = address?.trim()?.takeIf { it.isNotEmpty() && it.length <= 2048 && it.none(Char::isISOControl) } ?: return null
         val uri = Uri.parse(if (raw.startsWith("https://")) raw else "https://$raw")
         if (uri.scheme != "https" || uri.host !in hosts || uri.userInfo != null || uri.port !in setOf(-1, 443) ||
             uri.path != "/search" || '\\' in raw) return null
         val query = uri.getQueryParameter("q")?.trim()?.takeIf { it.isNotEmpty() && it.length <= 300 && it.none(Char::isISOControl) }
             ?: return null
+        fun queryKey(value: String) = Normalizer.normalize(value, Normalizer.Form.NFC).trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
+        if (expectedQuery != null && queryKey(query) != queryKey(expectedQuery)) return null
         val source = Uri.Builder().scheme("https").authority(uri.host).path("/search").appendQueryParameter("q", query).build().toString()
         return Page(query, if (source.length <= 512) source else "https://${uri.host}/search")
     }
 
     fun extract(snapshot: Snapshot, expectedQuery: String?): BrowserReading? {
-        val page = page(snapshot.address) ?: return null
-        fun queryKey(value: String) = Normalizer.normalize(value, Normalizer.Form.NFC).trim().replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
-        if (expectedQuery != null && queryKey(page.query) != queryKey(expectedQuery)) return null
+        val page = page(snapshot.address, expectedQuery) ?: return null
         if (snapshot.blocks.size > MAX_BLOCKS || snapshot.blocks.sumOf { it.text.length } > MAX_CAPTURE_CHARS) return null
         var started = false
         val lines = mutableListOf<String>()

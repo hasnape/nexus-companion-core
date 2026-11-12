@@ -68,7 +68,7 @@ class ChromeAiReaderService : AccessibilityService() {
                     try {
                         chromeVisible = root.packageName?.toString() == CHROME
                         if (!chromeVisible || SystemClock.elapsedRealtime() >= request.expires) null
-                        else snapshot(root, request.expires) { session.current(request.id) != null }
+                        else snapshot(root, request.expires, request.expectedQuery) { session.current(request.id) != null }
                             ?.let { ChromeAiText.extract(it, request.expectedQuery) }
                     } finally { @Suppress("DEPRECATION") root.recycle() }
                 }
@@ -101,21 +101,24 @@ class ChromeAiReaderService : AccessibilityService() {
     }
 
     /** Chrome toolbar origin first, then only visible non-editable document text. Never perform an action. */
-    internal fun snapshot(root: AccessibilityNodeInfo, deadline: Long, stillRequested: () -> Boolean = { true }): ChromeAiText.Snapshot? {
+    internal fun snapshot(root: AccessibilityNodeInfo, deadline: Long, expectedQuery: String? = null,
+        stillRequested: () -> Boolean = { true }): ChromeAiText.Snapshot? {
         if (root.packageName?.toString() != CHROME) return null
         var address: String? = null
         val blocks = mutableListOf<ChromeAiText.Block>()
         var nodes = 0
         var chars = 0
         var overBudget = false
-        fun visit(node: AccessibilityNodeInfo, inDocument: Boolean, depth: Int) {
+        fun visit(node: AccessibilityNodeInfo, inDocument: Boolean, depth: Int, collect: Boolean) {
             if (!stillRequested() || ++nodes > 800 || depth > 40 || SystemClock.elapsedRealtime() >= deadline) { overBudget = true; return }
             val document = inDocument || node.className?.toString() == "android.webkit.WebView"
+            // The toolbar pass must not enter or read any page before its origin is authorized.
+            if (!collect && document) return
             if (document && (node.isPassword || node.isEditable)) return
-            if (!document && node.viewIdResourceName == "$CHROME:id/url_bar" && !node.isFocused && node.isVisibleToUser) {
+            if (!collect && node.viewIdResourceName == "$CHROME:id/url_bar" && !node.isFocused && node.isVisibleToUser) {
                 address = node.text?.toString()?.takeIf { it.length <= 2048 }
             }
-            if (document && node.isVisibleToUser && !node.isPassword && !node.isEditable) {
+            if (collect && document && node.isVisibleToUser && !node.isPassword && !node.isEditable) {
                 val text = node.text?.toString()?.takeIf { it.isNotBlank() }
                 if (text != null) {
                     chars += text.length
@@ -127,10 +130,12 @@ class ChromeAiReaderService : AccessibilityService() {
             for (index in 0 until minOf(node.childCount, 100)) {
                 if (overBudget) break
                 val child = node.getChild(index) ?: continue
-                try { visit(child, document, depth + 1) } finally { @Suppress("DEPRECATION") child.recycle() }
+                try { visit(child, document, depth + 1, collect) } finally { @Suppress("DEPRECATION") child.recycle() }
             }
         }
-        visit(root, false, 0)
+        visit(root, false, 0, false)
+        if (overBudget || ChromeAiText.page(address, expectedQuery) == null) return null
+        visit(root, false, 0, true)
         return if (overBudget) null else ChromeAiText.Snapshot(address, blocks)
     }
 

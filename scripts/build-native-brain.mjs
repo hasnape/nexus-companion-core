@@ -19,7 +19,7 @@ const generated = {
   'apps/companion-android/app/src/main/java/fr/nexuscompanion/android/NativeCapacity.kt':
     `package fr.nexuscompanion.android\n\n// Generated from ${capacityPath}; run npm run build:native-brain.\ninternal object NativeCapacity {\n${Object.entries(capacity).map(([key, value]) => `    const val ${key} = ${value}`).join('\n')}\n}\n`,
   'apps/companion-android/app/src/main/res/values/native_capacity.xml':
-    `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated from ${capacityPath}. -->\n<resources>\n    <integer name="nexus_message_chars">${capacity.MAX_MESSAGE_CHARS}</integer>\n</resources>\n`
+    `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated from ${capacityPath}. -->\n<resources>\n    <integer name="nexus_message_chars">${capacity.MAX_MESSAGE_CHARS}</integer>\n    <string name="note_invalid">Note vide ou trop longue (${String(capacity.MAX_NOTE_CHARS).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} caractères maximum).</string>\n</resources>\n`
 };
 for (const [filename, content] of Object.entries(generated)) {
   if (check) {

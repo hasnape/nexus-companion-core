@@ -2,7 +2,10 @@ package fr.nexuscompanion.android
 
 import android.os.Bundle
 import android.os.Looper
+import android.media.AudioManager
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,13 +15,34 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowSpeechRecognizer
+import org.robolectric.shadows.ShadowTextToSpeech
 import java.time.Duration
+import java.util.Locale
 
 /** Runs Android listener wiring through Robolectric's API-34 recognizer, not real audio. */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeVoiceControllerTest {
+    @Test fun androidSpeechAdapterReadsEveryPartWithoutActivatingTheMicrophone() {
+        val context=RuntimeEnvironment.getApplication()
+        ShadowTextToSpeech.addVoice(Voice("french-local",Locale.FRANCE,Voice.QUALITY_NORMAL,Voice.LATENCY_NORMAL,false,emptySet()))
+        shadowOf(context.getSystemService(AudioManager::class.java)).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        val output=mutableListOf<SpeechOutputState>()
+        val controller=NativeVoiceController(context,{}, {}, {},onSpeechOutput=output::add,input=input())
+        val text="Une longue réponse locale et complète. ".repeat(145).trim()
+        try {
+            controller.playReply(text)
+            val speech=shadowOf(ShadowTextToSpeech.getLastTextToSpeechInstance())
+            speech.onInitListener.onInit(TextToSpeech.SUCCESS)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(speech.spokenTextList.size>1)
+            assertTrue(speech.spokenTextList.all { it.length<=1000 })
+            assertEquals(text,speech.spokenTextList.joinToString(""))
+            assertEquals(SpeechOutputState.COMPLETED,output.last())
+            assertNull(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+        } finally { controller.close() }
+    }
     private fun input() = AndroidVoiceInput(RuntimeEnvironment.getApplication())
 
     private fun bundle(vararg texts: String, scores: FloatArray? = null) = Bundle().apply {

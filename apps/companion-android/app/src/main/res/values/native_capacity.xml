@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Generated from packages/companion-core/src/native-capacity.json. -->
 <resources>
-    <integer name="nexus_message_chars">8000</integer>
+    <integer name="nexus_message_chars">16000</integer>
+    <string name="note_invalid">Note vide ou trop longue (16 000 caractères maximum).</string>
 </resources>

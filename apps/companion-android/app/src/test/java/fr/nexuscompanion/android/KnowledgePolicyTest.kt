@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KnowledgePolicyTest {
+    @Test fun explicitFullNoteReadingHasItsOwnIntentAndNeverUsesRecentFallbackNotes() {
+        assertEquals(KnowledgePolicy.Recall.Read(listOf("robot")),KnowledgePolicy.recallFor("Nexus, lis ma note sur le robot"))
+        assertEquals(KnowledgePolicy.Recall.Read(listOf("robot")),KnowledgePolicy.recallFor("Lis-moi la note concernant le robot"))
+        assertEquals(KnowledgePolicy.Recall.Read(emptyList()),KnowledgePolicy.recallFor("Lis ma note"))
+    }
     @Test fun extractsFrenchQueryTermsWithoutCommonPunctuation() {
         assertEquals(listOf("nexus", "memoire"), KnowledgePolicy.queryTerms("Nexus, mémoire?").map {
             if (it == "mémoire") "memoire" else it

@@ -74,23 +74,25 @@ internal class NativeBrainService(
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
         val notes = try { library.contextFor(message, now, recall, queryTerms) } catch (_: Exception) { null }
         val array = JSONArray()
-        notes.orEmpty().forEach { note ->
-            array.put(JSONObject().apply {
+        val request = JSONObject().put("protocolVersion", 1).put("message", message)
+            .put("notes", array).put("now", now).put("recallRequested", recall != null)
+            .put("readRequested", recall is KnowledgePolicy.Recall.Read)
+        var requestChars = request.toString().length
+        // Budget each serialized record once; never repeatedly serialize an oversized context.
+        for (note in notes.orEmpty()) {
+            val item = JSONObject().apply {
                 put("id", note.id); put("title", note.title); put("excerpt", note.excerpt)
                 put("source", note.source); put("recordedAt", note.recordedAt)
                 put("expiresAt", note.expiresAt ?: JSONObject.NULL); put("verified", false)
-            })
-        }
-        val request = JSONObject().put("protocolVersion", 1).put("message", message)
-            .put("notes", array).put("now", now).put("recallRequested", recall != null)
-        // JSON escaping can expand valid note text. Bound context without truncating stored notes.
-        while (request.toString().length > SharedBrainRuntime.MAX_REQUEST_CHARS && array.length() > 0) {
-            array.remove(array.length() - 1)
+            }
+            val added = item.toString().length + if (array.length() > 0) 1 else 0
+            if (requestChars + added > SharedBrainRuntime.MAX_REQUEST_CHARS) break
+            array.put(item); requestChars += added
         }
         val result = JSONObject(brain().replyJson(request.toString()))
         check(result.getInt("protocolVersion") == 1 && result.getString("engine") == "nexus-core-rules-v1")
         val text = result.getString("text")
-        check(text.isNotBlank() && text.length <= 12_000)
+        check(text.isNotBlank() && text.length <= NativeCapacity.MAX_REPLY_TEXT_CHARS)
         val candidate = result.optJSONObject("candidate")?.let {
             val content = it.getString("content")
             check(content.isNotBlank() && content.length <= NativeCapacity.MAX_NOTE_CHARS)

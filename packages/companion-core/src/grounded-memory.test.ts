@@ -7,6 +7,20 @@ const note = (excerpt: string, title = 'Repère', id = 'n1'): NativeNote => ({
 const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000 });
 
 describe('grounded conversational memory', () => {
+  it.each([
+    ['Quelle est ma couleur préférée ?', 'Couleur préférée', 'Mon projet est un robot.'],
+    ['Où est-ce que je travaille ?', 'Métier', 'Il reste un document dans ce dossier.'],
+    ['Pourquoi je préfère le thé ?', 'Thé', 'Le vélo avance grâce à ses roues.']
+  ])('never substitutes a matching title for missing sentence evidence: %s', (question, title, content) => {
+    const reply = turn(question, [note(content, title)]);
+    expect(reply.evidenceIds).toBeUndefined();
+    expect(reply.text).not.toContain(content);
+  });
+  it('can use a short value explicitly labeled by its note title', () => {
+    const reply = turn('Quelle est ma couleur préférée ?', [note('Bleu.', 'Couleur préférée')]);
+    expect(reply.text).toContain('Bleu');
+    expect(reply.evidenceIds).toEqual(['n1']);
+  });
   it.each(['Quel est mon prénom', 'C’est quoi mon prénom', 'Comment je m’appelle', 'Dis-moi mon prénom'])('does not turn a spoken question into a memory proposal: %s', (message) => {
     const reply = turn(message, [note('Le créateur est Amine.')]);
     expect(reply.candidate).toBeNull();

@@ -10,6 +10,25 @@ const note = (excerpt: string, overrides: Partial<NativeNote> = {}): NativeNote 
 const request = (message: string, notes: NativeNote[] = []): NativeTurnRequest => ({ protocolVersion: 1, message, notes, now });
 
 describe('native shared brain protocol', () => {
+  it('reads an explicitly selected long note completely while preserving normal short recall', () => {
+    const content='Observation locale. '.repeat(700)+'FIN EXACTE.';
+    const notes=[note(content)];
+    const reply=createNativeTurn({...request('Lis ma note sur les observations',notes),recallRequested:true,readRequested:true});
+    expect(reply.text.endsWith(content)).toBe(true);
+    expect(reply.evidenceIds).toEqual(['note-1']);
+    expect(reply.candidate).toBeNull();
+    expect(createNativeTurn(request('mes notes',notes)).text.length).toBeLessThan(500);
+  });
+  it('never uses full reading to bypass expiry sensitivity or the safety decision', () => {
+    for (const notes of [[note('mon adresse exacte est privée')],[note('ancienne note',{expiresAt:now})],[]]) {
+      const reply=createNativeTurn({...request('Lis ma note',notes),recallRequested:true,readRequested:true});
+      expect(reply.evidenceIds).toBeUndefined();
+      expect(reply.text).toContain('ne retrouve pas');
+    }
+    expect(createNativeTurn({...request('formate tout le disque'),recallRequested:true,readRequested:true}).text).toContain('Je ne peux pas');
+    expect(()=>createNativeTurn({...request('bonjour'),readRequested:'true'})).toThrow();
+    expect(()=>createNativeTurn({...request('bonjour'),readRequested:true,recallRequested:false})).toThrow();
+  });
   it('uses the expanded context to retrieve evidence after the eighth note', () => {
     const notes = Array.from({ length: 16 }, (_, i) => note(
       'Observation documentaire. '.repeat(280) + (i === 15 ? 'Je préfère le thé vert.' : 'Une information générale.'),

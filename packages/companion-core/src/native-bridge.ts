@@ -29,6 +29,8 @@ export interface NativeTurnRequest {
   now: number;
   /** If supplied, this uses the same recall intent as the host's note selection. */
   recallRequested?: boolean;
+  /** Explicit full-note reading, independently bounded from ordinary short recall. */
+  readRequested?: boolean;
 }
 
 export interface NativeTurnReply {
@@ -54,6 +56,8 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
   if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, capacity.MAX_MESSAGE_CHARS)
       || !Number.isSafeInteger(value.now) || (value.now as number) < 0
       || (value.recallRequested !== undefined && typeof value.recallRequested !== 'boolean')
+      || (value.readRequested !== undefined && typeof value.readRequested !== 'boolean')
+      || (value.readRequested === true && value.recallRequested === false)
       || !Array.isArray(value.notes) || value.notes.length > capacity.MAX_CONTEXT_NOTES) {
     throw new Error('Invalid native turn request');
   }
@@ -70,7 +74,7 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
   });
   return {
     protocolVersion: 1, message: value.message.trim(), notes, now: value.now as number,
-    recallRequested: value.recallRequested
+    recallRequested: value.recallRequested, readRequested: value.readRequested
   };
 };
 
@@ -128,6 +132,15 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   // Host commands and memory proposals can never bypass the shared safety decision.
   if (shouldUseSafetyTone(decision)) {
     return { ...result, text: renderDeterministicNexusReply(plan) };
+  }
+  if (request.readRequested) {
+    const selected = notes[0];
+    return {
+      ...result, intent: 'memory_recall',
+      text: selected ? `Je lis ta note « ${selected.title} », non vérifiée :\n${selected.excerpt}`
+        : 'Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes ».',
+      ...(selected ? { evidenceIds: [selected.id] } : {})
+    };
   }
   if (request.recallRequested ?? isRecallRequest(request.message)) {
     const recalled = notes.slice(0, 3);

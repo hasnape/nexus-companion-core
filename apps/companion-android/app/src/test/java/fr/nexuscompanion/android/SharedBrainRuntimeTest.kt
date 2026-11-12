@@ -5,6 +5,19 @@ import org.junit.Test
 import java.io.File
 
 class SharedBrainRuntimeTest {
+    @Test fun findsTheThirtySecondNoteInTheExpandedRealInterpreterContext() {
+        val notes = (0 until 32).joinToString(",", "[", "]") { i ->
+            val excerpt = "Observation documentaire. ".repeat(400) + if (i == 31) "Je préfère le thé vert." else "Une information générale."
+            """{"id":"note-$i","title":"Dossier $i","excerpt":"$excerpt","source":"user:manual","recordedAt":$i,"expiresAt":null,"verified":false}"""
+        }
+        val input = request("Quelle boisson je préfère ?", notes)
+        assertTrue(input.length > 160_000)
+        runtime().use { brain ->
+            val reply = brain.replyJson(input)
+            assertTrue(reply,reply.contains("thé vert"))
+            assertTrue(reply,reply.contains("note-31"))
+        }
+    }
     @Test fun expandedContextExecutesInTheRealInterpreterAndFindsTheSixteenthNote() {
         val notes = (0 until 16).joinToString(",", "[", "]") { i ->
             val excerpt = "Observation documentaire. ".repeat(280) + if (i == 15) "Je préfère le thé vert." else "Une information générale."

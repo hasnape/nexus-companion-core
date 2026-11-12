@@ -13,6 +13,33 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun escapedLargeContextsAreBudgetedWithoutTruncatingTheStoredNotes() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"escaped-expanded",LocalKnowledgeLibraryTest.JvmCipher("escaped-expanded"))
+        val content="\u0001".repeat(15900)
+        repeat(32) { library.addUserNote("Repère $it",content+"note$it") }
+        NativeBrainService(context,library).use { brain -> assertTrue(brain.reply("bonjour").text.contains("Bonjour")) }
+        assertEquals(32,library.list().size)
+        assertTrue(library.list().all { it.excerpt.startsWith(content) })
+    }
+    @Test fun explicitlyReadingALongNoteReturnsItsCompleteTextWithoutNetworkAccess() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"full-read",LocalKnowledgeLibraryTest.JvmCipher("full-read"))
+        val content="Observation du robot. ".repeat(700)+"FIN EXACTE."
+        val note=library.addUserNote("Robot",content).entry
+        var networkCalls=0
+        NativeBrainService(context,library) { networkCalls++;null }.use { brain ->
+            val read=brain.reply("Nexus, lis ma note sur le robot",false)
+            assertTrue(read.text.endsWith(content))
+            assertTrue(read.text.contains("Robot"))
+            assertNull(read.candidate)
+            assertFalse(brain.reply("Lis ma note sur le vélo",false).text.contains(content))
+            assertFalse(brain.reply("Lis ma note",false).text.contains(content))
+            assertEquals(content,library.list().single().excerpt)
+            assertEquals(note.id,library.list().single().id)
+            assertEquals(0,networkCalls)
+        }
+    }
     @Test fun longExplicitMemoryProposalsSurviveIntactAndStillNeedManualApproval() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "long-proposal", LocalKnowledgeLibraryTest.JvmCipher("long-proposal"))

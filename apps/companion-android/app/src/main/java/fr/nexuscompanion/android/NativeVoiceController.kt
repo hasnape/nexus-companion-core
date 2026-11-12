@@ -113,6 +113,7 @@ internal class AndroidVoiceInput(private val context: Context) : VoiceInput {
 }
 
 private class AndroidSpeech(context: Context, private val handler: Handler, private val events: SpeechEvents) : VoiceSpeech {
+    override val maxInputChars: Int get() = TextToSpeech.getMaxSpeechInputLength()
     private val audio = context.getSystemService(AudioManager::class.java)
     private var closed = false
     private var ready = false
@@ -163,12 +164,11 @@ private class AndroidSpeech(context: Context, private val handler: Handler, priv
 
     private fun complete(id: String?, failed: Boolean = false) {
         handler.post {
-            if (!closed && id != null) {
-                if (activeUtterance == id) {
-                    activeUtterance = null
-                    audio.abandonAudioFocusRequest(focus)
-                }
+            if (!closed && id != null && activeUtterance == id) {
+                activeUtterance = null
                 if (failed) events.failed(id) else events.finished(id)
+                // The session may immediately start the next part; keep focus between them.
+                if (activeUtterance == null) audio.abandonAudioFocusRequest(focus)
             }
         }
     }

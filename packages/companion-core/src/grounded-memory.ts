@@ -22,8 +22,9 @@ const families = [
   ['projet', 'projets'],
   ['objectif', 'objectifs']
 ];
+const vocabulary = new Map(families.flatMap((family) => family.map((word) => [word, family[0]] as const)));
 const words = (text: string): string[] => normalize(text).split(' ').filter((word) => word.length > 1 && !stop.has(word));
-const canonical = (word: string): string => families.find((family) => family.includes(word))?.[0] ?? word;
+const canonical = (word: string): string => vocabulary.get(word) ?? word;
 const keys = (text: string): string[] => {
   const result = words(text).map(canonical);
   if (/^(?:le createur est|je m appelle|mon prenom est|mon nom est)\b/.test(normalize(text))) result.push('prenom');
@@ -59,6 +60,10 @@ export const answerFromNotes = (question: string, notes: GroundedNote[]): { text
   const candidates = notes.flatMap((note) => {
     const titleKeys = keys(note.title);
     const sentences = note.excerpt.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).map((text) => text.trim()).filter(Boolean);
+    // A label can qualify a short value ("Couleur préférée: bleu"), but cannot
+    // turn an unrelated complete sentence into an answer about that label.
+    const labeledValue = sentences.length === 1 && note.excerpt.length <= 160
+      && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalize(note.excerpt));
     return sentences.map((sentence) => {
       const normalized = normalize(sentence);
       const slotMatches = request.kind === 'where' ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized)
@@ -67,12 +72,13 @@ export const answerFromNotes = (question: string, notes: GroundedNote[]): { text
       const evidence = keys(sentence);
       const matches = query.filter((key) => evidence.includes(key) || titleKeys.includes(key));
       const anchored = !anchors.length || anchors.some((key) => evidence.includes(key) || titleKeys.includes(key));
+      const sentenceAnchor = (anchors.length ? anchors : query).some((key) => evidence.includes(key)) || labeledValue;
       const relativeMatches = query.filter((key) => ['fille', 'fils', 'enfant', 'fiancee', 'chien', 'chat'].includes(key))
         .every((key) => evidence.includes(key) || titleKeys.includes(key));
       const attributeMatches = query.filter((key) => ['prenom', 'metier', 'couleur', 'age', 'boisson', 'voiture', 'objectif'].includes(key))
-        .every((key) => evidence.includes(key) || titleKeys.includes(key));
-      const score = slotMatches && relativeMatches && attributeMatches && anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter((key) => evidence.includes(key)).length : 0;
-      return { note, sentence, score };
+        .every((key) => evidence.includes(key) || (labeledValue && titleKeys.includes(key)));
+      const score = slotMatches && relativeMatches && attributeMatches && anchored && sentenceAnchor && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter((key) => evidence.includes(key)).length : 0;
+      return { note, sentence: labeledValue && !query.some((key) => evidence.includes(key)) ? `${note.title} : ${sentence}` : sentence, score };
     });
   }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || b.note.recordedAt - a.note.recordedAt);
   if (!candidates.length) return null;

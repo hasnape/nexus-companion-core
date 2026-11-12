@@ -381,8 +381,8 @@ class MainActivityTest {
     }
 
     @Test fun longInputIsBoundedBeforeItCanReachTheWorker() {
-        input().setText("x".repeat(8500))
-        assertEquals(8000, input().length())
+        input().setText("x".repeat(16500))
+        assertEquals(16000, input().length())
     }
 
     @Test fun failedPrivateSaveIsNeverReportedAsSuccessfulOrOverwritten() {

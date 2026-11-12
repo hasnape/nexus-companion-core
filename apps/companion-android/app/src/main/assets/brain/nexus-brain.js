@@ -234,6 +234,23 @@ var NexusNativeBrain = function () {
     "ma couleur preferee": "Quelle est ma couleur préférée ?",
     "ma boisson preferee": "Quelle est ma boisson préférée ?"
   }));
+  var personalQuestionParts = function personalQuestionParts(message) {
+    var text = normalizeWakePhrase(stripWakePrefix(message, {
+      allowFullNameWake: true
+    }));
+    var prefix = /^(?:quel est|quelle est|quels sont|quelles sont|c est quoi|dis moi) /;
+    if (!prefix.test(text)) return null;
+    var labels = text.replace(prefix, "").split(/\s+et\s+/).map(function (part) {
+      return part.replace(prefix, "");
+    });
+    if (labels.length < 2 || labels.length > 4) return null;
+    var questions = labels.map(function (label) {
+      return personalFollowUps.get(label);
+    });
+    return questions.every(function (question) {
+      return Boolean(question);
+    }) ? Array.from(new Set(questions)) : null;
+  };
   var analyzeQuestion = function analyzeQuestion(message) {
     var _a;
     var literal = stripWakePrefix(message, {
@@ -257,7 +274,7 @@ var NexusNativeBrain = function () {
       personal: /\b(?:mon|ma|mes|notre|nos|je|moi|j|m)\b/.test(normalized)
     };
   };
-  var SENSITIVE_PATTERNS = [/santé|maladie|diagnostic|médicament|therapy|health/i, /religion|croyance|foi/i, /politique|parti|vote/i, /adresse|localisation|gps|location/i, /carte bancaire|iban|compte|revenu|salaire|crypto wallet|password/i, /intime|sexual|orientation/i];
+  var SENSITIVE_PATTERNS = [/santé|maladie|diagnostic|médicament|therapy|health/i, /religion|croyance|foi/i, /politique|parti|vote/i, /adresse|localisation|gps|location/i, /carte bancaire|iban|compte|revenu|salaire|crypto wallet|password|mot de passe|code pin|code de validation|cl[ée] api|jeton d['’]acc[èe]s/i, /intime|sexual|orientation/i];
   var PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner|le cr[ée]ateur pr[ée]f[èe]re/i];
   var PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline|le projet actuel est/i];
   var RELATIONSHIP_PATTERNS = [/parle[- ]moi de mani[èe]re (?:plus )?(?:professionnelle?|directe?|claire?|structur[ée]e?)/i, /sois plus (?:professionnel(?:le)?|direct(?:e)?|clair(?:e)?|structur[ée]e?)/i, /garde un style (?:clair|structur[ée]|professionnel|direct)/i, /notre relation doit rester professionnelle/i];
@@ -772,6 +789,31 @@ var NexusNativeBrain = function () {
     return text.replace(/^ma\s+/i, "Ta ").replace(/^mes\s+/i, "Tes ").replace(/^mon\s+(?!pr[ée]nom\b|nom\b|m[ée]tier\b)/i, "Ton ").replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
   };
   var answerFromNotes = function answerFromNotes(question, notes) {
+    var parts = personalQuestionParts(question);
+    if (parts) {
+      var answers = parts.map(function (part) {
+        return {
+          question: part,
+          answer: answerSingleFromNotes(part, notes)
+        };
+      });
+      if (!answers.some(function (item) {
+        return item.answer;
+      })) return null;
+      return {
+        text: answers.map(function (item) {
+          var _a, _b;
+          return (_b = (_a = item.answer) == null ? void 0 : _a.text) != null ? _b : "Je ne retrouve pas de r\xE9ponse \xE0 \xAB ".concat(item.question, " \xBB dans tes notes utilisables ici.");
+        }).join("\n"),
+        evidenceIds: Array.from(new Set(answers.flatMap(function (item) {
+          var _a, _b;
+          return (_b = (_a = item.answer) == null ? void 0 : _a.evidenceIds) != null ? _b : [];
+        })))
+      };
+    }
+    return answerSingleFromNotes(question, notes);
+  };
+  var answerSingleFromNotes = function answerSingleFromNotes(question, notes) {
     var request = analyzeQuestion(question);
     var query = keys(request.content);
     if (!query.length) return null;
@@ -785,7 +827,14 @@ var NexusNativeBrain = function () {
       }).filter(Boolean);
       var labeledValue = sentences.length === 1 && note.excerpt.length <= 160 && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalize(note.excerpt));
       return sentences.map(function (sentence) {
+        var _a, _b, _c;
         var normalized = normalize(sentence);
+        var relative = (_c = (_a = normalized.match(/^(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _a[1]) != null ? _c : !/^(?:je |j |mon (?:prenom|nom|metier) |ma profession |le createur )/.test(normalized) ? (_b = normalize(note.title).match(/\b(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _b[1] : void 0;
+        if (request.personal && relative && !query.includes(relative)) return {
+          note: note,
+          sentence: sentence,
+          score: 0
+        };
         var slotMatches = request.kind === "where" ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized) : request.kind === "why" ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized) : request.kind === "when" ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;
         var evidence = keys(sentence);
         var matches = query.filter(function (key) {

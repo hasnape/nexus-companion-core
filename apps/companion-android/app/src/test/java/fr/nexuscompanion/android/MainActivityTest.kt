@@ -2,6 +2,7 @@ package fr.nexuscompanion.android
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.media.AudioManager
@@ -44,6 +45,42 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun explicitGoogleSearchOpensChromeWithOnlyTheRequestedTextAndStopsTheBody() {
+        send("avance de vingt centimètres")
+        await { hasText("roule en avant") }
+        send("cherche sur Google musée Lyon")
+        await { hasText("J’ouvre Chrome") }
+        val intent=nextExternalIntent()!!
+        assertEquals("com.android.chrome",intent.`package`)
+        assertEquals("musée Lyon",intent.data?.getQueryParameter("q"))
+        assertNull(intent.extras)
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).bodyFrame.moving)
+    }
+    @Test fun aRememberedPlaceIsOnlySentToMapsAfterConfirmationInTheUi() {
+        localLibrary().addUserNote("Adresse domicile","12 rue Exemple, Lyon")
+        send("itinéraire vers chez moi")
+        await { hasText("Tu confirmes l’envoi") }
+        assertNull(nextExternalIntent())
+        send("oui")
+        await { hasText("J’ouvre Google Maps") }
+        val intent=nextExternalIntent()!!
+        assertEquals("com.google.android.apps.maps",intent.`package`)
+        assertEquals("12 rue Exemple, Lyon",intent.data?.getQueryParameter("destination"))
+        assertEquals(setOf("api","destination"),intent.data?.queryParameterNames)
+    }
+    @Test fun backgroundingBeforeTheWorkerReplyPreventsAnOldAppOpeningAfterResume() {
+        send("ouvre Chrome")
+        lifecycle.pause()
+        lifecycle.resume()
+        await { hasText(activity.getString(R.string.external_cancelled)) }
+        assertNull(nextExternalIntent())
+    }
+    @Test fun disablingOnlineAccessPreventsBrowserAndMapsHandoffs() {
+        onlineAccess().performClick()
+        send("ouvre Chrome")
+        await { hasText(activity.getString(R.string.external_online_disabled)) }
+        assertNull(nextExternalIntent())
+    }
     @Test fun voiceMovementOpensTheRollingBodyAndStopAndSteeringRemainAvailable() {
         send("avance de vingt centimètres")
         await { hasText("roule en avant") }
@@ -115,6 +152,12 @@ class MainActivityTest {
         fail("UI did not reach the expected state")
     }
     private fun send(text: String) { input().setText(text); button(R.string.send).performClick() }
+    private fun nextExternalIntent(): Intent? {
+        var intent=shadowOf(activity).nextStartedActivity
+        // The initial microphone permission prompt is an independent Android activity.
+        while (intent?.action=="android.content.pm.action.REQUEST_PERMISSIONS") intent=shadowOf(activity).nextStartedActivity
+        return intent
+    }
     private fun libraryFile() = File(activity.filesDir, "knowledge-nexus-default.json")
     private fun localLibrary()=LocalKnowledgeLibrary(activity.applicationContext,"nexus-default",LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))
     private fun openNoteDetails() : AlertDialog {

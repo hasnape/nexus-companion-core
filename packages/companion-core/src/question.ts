@@ -17,6 +17,17 @@ const personalFollowUps = new Map<string, string>(Object.entries({
   'ma boisson preferee': 'Quelle est ma boisson préférée ?'
 }));
 
+/** Explicit conjunctions of known personal slots; never split arbitrary prose or actions. */
+export const personalQuestionParts = (message: string): string[] | null => {
+  const text = normalizeWakePhrase(stripWakePrefix(message, { allowFullNameWake: true }));
+  const prefix = /^(?:quel est|quelle est|quels sont|quelles sont|c est quoi|dis moi) /;
+  if (!prefix.test(text)) return null;
+  const labels = text.replace(prefix, '').split(/\s+et\s+/).map((part) => part.replace(prefix, ''));
+  if (labels.length < 2 || labels.length > 4) return null;
+  const questions = labels.map((label) => personalFollowUps.get(label));
+  return questions.every((question): question is string => Boolean(question)) ? Array.from(new Set(questions)) : null;
+};
+
 export const analyzeQuestion = (message: string) => {
   const literal = stripWakePrefix(message, { allowFullNameWake: true }).trim();
   const followUp = normalizeWakePhrase(literal).match(/^et(?: pour)? (.+)$/)?.[1];

@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.18 native alpha
+# Nexus Companion Android — 0.4.19 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
 
@@ -36,13 +36,23 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 
 La reconnaissance locale fonctionne par sessions finies et reprises. Le déclenchement attend une transcription finale contenant « Nexus ». La précision et l’autonomie restent à mesurer sur téléphone.
 
-## Relances et correction des notes 0.4.18
+## Compréhension de la mémoire et ouverture des applications 0.4.19
+
+« Quel est mon prénom et mon métier ? » peut réunir des faits enregistrés dans plusieurs notes. Chaque partie garde ses preuves et sa provenance ; Nexus signale une information manquante ou contradictoire. Cette composition est bornée à quatre questions personnelles explicites parmi les attributs pris en charge : prénom, nom, métier/profession, âge, voiture, couleur ou boisson préférée. Elle ne transforme pas une déclaration en question. Un fait explicitement attribué à un proche n’est plus utilisé comme s’il concernait le propriétaire. Les libellés français de secrets tels que « mot de passe » et « code PIN » sont exclus de la lecture conversationnelle automatique.
+
+**Google Maps et Chrome** peuvent être ouverts par commande écrite ou vocale. Exemples : « Ouvre Google Maps à Lyon », « Prépare un itinéraire vers Lyon », « Cherche sur Google musée Lyon », « Ouvre Chrome » ou « Ouvre dans Chrome https://example.com ». Nexus privilégie l’application nommée puis laisse Android proposer une application compatible si elle est indisponible. Une absence d’application est signalée sans arrêter l’application sur une erreur.
+
+« Itinéraire vers chez moi » et « Ouvre Google Maps pour mon travail » peuvent exploiter une note personnelle explicite. Utiliser un titre **Adresse domicile** ou **Adresse travail**, avec une seule adresse dans le contenu, ou un champ complet tel que **Adresse domicile : 12 rue Exemple, Lyon**. Nexus annonce la destination et demande confirmation avant de transmettre ce champ à Maps. Plusieurs adresses différentes demandent une précision ; une adresse supprimée, modifiée ou expirée invalide la proposition. Les articles importés ne définissent pas le domicile ou le travail.
+
+L’interrupteur **Accès en ligne** s’applique à ces ouvertures. La répétition d’une réponse n’ouvre rien de nouveau. Le micro et le mouvement virtuel sont arrêtés lors de la transmission à une autre application ; un résultat devenu périmé après un passage en arrière-plan n’est pas exécuté. Les itinéraires ouvrent une préparation de trajet sans lancer la navigation. Nexus ne demande ni permission GPS ni accès à l’historique ou aux comptes Google. Les pages et résultats ouverts dans Chrome ne sont pas lus ni importés automatiquement dans la mémoire. L’apprentissage par recherche Wikipédia et enregistrement confirmé reste disponible séparément.
+
+## Relances et correction des notes conservées depuis 0.4.18
 
 Après une réponse, « répète ta réponse » relit le texte sans relancer une recherche, une sauvegarde ni un mouvement. Une proposition en attente garde sa date d’expiration initiale. « Et mon prénom ? », « Et pour mon métier ? » et quelques autres questions personnelles courtes utilisent le même interpréteur que les questions complètes ; les déclarations ne sont pas transformées en questions.
 
 Quand la dernière réponse cite une seule note, « lis cette note » en lit le contenu complet et « modifie cette note » ouvre son éditeur. Sans référence unique, Nexus demande le sujet. Le contexte est temporaire : cinq minutes, renouvelées après la fin effective d’une lecture de réponse sans confirmation en attente. Une lecture d’acquittement du micro ne le renouvelle pas. Une note modifiée, supprimée ou expirée ne peut pas être répétée comme une information actuelle. Les dialogues privés et l’arrière-plan effacent ce contexte.
 
-Dans **Mes notes**, ouvrir une note puis **Modifier** permet de relire son titre et tout son contenu avant **Enregistrer**. Une correction crée une nouvelle version et conserve les anciennes dans le même stockage chiffré. Seule la version actuelle alimente les réponses et la recherche. **Anciennes versions** permet de relire un ancien contenu et de le restaurer après une seconde confirmation ; la restauration conserve aussi la version qu’elle remplace. Une modification concurrente empêche d’écraser un contenu devenu plus récent. **Supprimer** annonce puis efface toute la chaîne de versions après confirmation.
+Dans **Mes notes**, ouvrir une note puis **Modifier** permet de relire son titre et tout son contenu avant **Enregistrer**. Une correction crée une nouvelle version et conserve les anciennes dans le même stockage chiffré. Seule la version actuelle alimente les réponses et la recherche. **Versions précédentes** permet de relire un ancien contenu et de le restaurer après une seconde confirmation ; la restauration conserve aussi la version qu’elle remplace. Une modification concurrente empêche d’écraser un contenu devenu plus récent. **Supprimer** annonce puis efface toute la chaîne de versions après confirmation.
 
 La source et l’expiration d’origine sont conservées. Une note corrigée est marquée comme modifiée et non vérifiée, y compris si elle provenait initialement de Wikipédia. Le schéma JSON 1 reste lu ; une correction avec historique utilise le schéma 2. Le format GZIP/AES-GCM, le fichier et la clé Keystore ne changent pas. La bibliothèque accepte au plus **20 000 notes actuelles et 40 000 enregistrements au total**, anciennes versions comprises, toujours dans les **32 Mio avant compression**. Une limite atteinte refuse l’écriture sans supprimer l’original.
 
@@ -111,13 +121,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.18-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.19-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (24 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (25 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.18-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.19-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -135,7 +145,7 @@ Le cache privé ne contient que des copies APK, limitées à 512 Mio par fichier
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 

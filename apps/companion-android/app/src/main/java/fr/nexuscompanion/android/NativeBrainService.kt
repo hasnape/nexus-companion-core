@@ -22,13 +22,15 @@ internal class NativeBrainService(
         val source: WikipediaKnowledgeSearch.Article? = null,
         val expectsAnswer: Boolean = false,
         val body: RollingBodyState.Plan? = null,
-        val editNote: LocalKnowledgeLibrary.Entry? = null
+        val editNote: LocalKnowledgeLibrary.Entry? = null,
+        val external: ExternalAppPolicy.Request? = null
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
         val expires: Long
         data class Lookup(val query: String, override val expires: Long) : Pending
         data class Save(val title: String, val excerpt: String, val source: String, override val expires: Long) : Pending
+        data class OpenApp(val request: ExternalAppPolicy.Request, val evidence: List<LocalKnowledgeLibrary.Entry>, override val expires: Long) : Pending
     }
     private var pending: Pending? = null
     private data class Conversation(val reply: Reply, val notes: List<LocalKnowledgeLibrary.Entry>, val expires: Long)
@@ -80,7 +82,7 @@ internal class NativeBrainService(
                 clearConversation()
                 return Reply("La note a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
             }
-            if (repeat) return last?.reply?.copy(body = null, editNote = null)
+            if (repeat) return last?.reply?.copy(body = null, editNote = null, external = null)
                 ?: Reply("Je n’ai plus de réponse récente à répéter. Pose-moi de nouveau ta question.", null, true, expectsAnswer = true)
             pending = null
             val note = last?.notes?.singleOrNull()?.let { library.get(it.id) }
@@ -99,7 +101,7 @@ internal class NativeBrainService(
 
     private fun rememberReply(reply: Reply) {
         val expires = minOf(elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS, pending?.expires ?: Long.MAX_VALUE)
-        conversation = Conversation(reply.copy(body = null, editNote = null), turnEvidence.toList(), expires)
+        conversation = Conversation(reply.copy(body = null, editNote = null, external = null), turnEvidence.toList(), expires)
     }
 
     private fun answer(message: String, onlineEnabled: Boolean, steeringAxle: String, focusedNote: LocalKnowledgeLibrary.Entry? = null): Reply {
@@ -116,6 +118,16 @@ internal class NativeBrainService(
                     turnEvidence = listOf(saved.entry)
                     return Reply(context.getString(if (saved.created) R.string.note_saved else R.string.note_already_saved), null, true, expectsAnswer = true)
                 }
+                is Pending.OpenApp -> {
+                    if (!onlineEnabled) return Reply(context.getString(R.string.external_online_disabled), null, true)
+                    val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                        return Reply(context.getString(R.string.library_read_failed), null, false)
+                    }
+                    if (previous.evidence.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) })
+                        return Reply("L’adresse a été modifiée, supprimée ou a expiré. Redemande le lieu avant de l’ouvrir.", null, true, expectsAnswer = true)
+                    turnEvidence = previous.evidence
+                    return Reply(previous.request.openingText(), null, true, external = previous.request)
+                }
             }
         }
         if (VoiceTranscriptPolicy.commandWords(message) in setOf("etat de ta memoire", "etat de la memoire", "bilan memoire", "combien de notes as tu")) {
@@ -126,6 +138,28 @@ internal class NativeBrainService(
         val body = JSONObject(brain().bodyJson(JSONObject().put("message", message).put("steeringAxle", steeringAxle).toString()))
         if (body.getBoolean("handled")) return Reply(body.getString("text"), null, true, expectsAnswer = true,
             body = body.optJSONObject("plan")?.let(RollingBodyState.Plan::read))
+        ExternalAppPolicy.parse(message)?.let { command ->
+            if (!onlineEnabled) return Reply(context.getString(R.string.external_online_disabled), null, true)
+            when (command) {
+                is ExternalAppPolicy.Command.Open -> return Reply(command.request.openingText(), null, true, external = command.request)
+                is ExternalAppPolicy.Command.Clarify -> return Reply(command.text, null, true, expectsAnswer = true)
+                is ExternalAppPolicy.Command.SavedPlace -> {
+                    val entries = try { library.list() } catch (_: Exception) {
+                        return Reply(context.getString(R.string.library_read_failed), null, false)
+                    }
+                    val places = SavedPlaceResolver.resolve(command.place, entries, System.currentTimeMillis())
+                    if (places.size != 1) return Reply(if (places.isEmpty())
+                        "Je ne retrouve pas d’adresse explicite pour ce lieu dans tes notes personnelles. Donne-moi la destination, ou ajoute une note « Adresse domicile » ou « Adresse travail »."
+                        else "Plusieurs adresses différentes sont enregistrées pour ce lieu. Précise celle à utiliser ou corrige tes notes.", null, true, expectsAnswer = true)
+                    val place = places.single()
+                    val request = try { ExternalAppPolicy.Request(ExternalAppPolicy.App.MAPS, command.operation, place.target) }
+                        catch (_: IllegalArgumentException) { return Reply("Cette adresse ne peut pas être ouverte. Vérifie la note ou précise le lieu.", null, true, expectsAnswer = true) }
+                    pending = Pending.OpenApp(request, place.evidence, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
+                    turnEvidence = place.evidence
+                    return Reply("J’ai retrouvé « ${place.target} » dans tes notes. Tu confirmes l’envoi de cette adresse à Google Maps pour ${if (command.operation == ExternalAppPolicy.Operation.DIRECTIONS) "préparer l’itinéraire" else "afficher le lieu"} ?", null, true, expectsAnswer = true)
+                }
+            }
+        }
         val now = System.currentTimeMillis()
         val recall = KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")

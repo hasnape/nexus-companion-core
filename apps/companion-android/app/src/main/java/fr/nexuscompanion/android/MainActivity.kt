@@ -462,12 +462,23 @@ open class MainActivity : Activity() {
         val onlineEnabled = onlineAccess.isChecked
         val axle = if (steeringAtFront) "front" else "rear"
         val generation = bodyGeneration
-        fun replyText(reply: NativeBrainService.Reply): String = if (reply.body != null && generation != bodyGeneration) getString(R.string.body_stopped)
+        var externalFeedback: String? = null
+        fun replyText(reply: NativeBrainService.Reply): String = if (reply.external != null && (!foreground || generation != bodyGeneration)) getString(R.string.external_cancelled)
+            else if (reply.body != null && generation != bodyGeneration) getString(R.string.body_stopped)
             else if (reply.notesAvailable) reply.text else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
         runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled, axle) },
-            voiceReply = { replyText(it) }, expectAnswer = { it.expectsAnswer }) { reply ->
+            voiceReply = { if (it.external != null) externalFeedback else replyText(it) }, expectAnswer = { it.expectsAnswer }) { reply ->
             val text = replyText(reply)
             showAnswer(text, reply.source)
+            if (reply.external != null && foreground && generation == bodyGeneration) {
+                stopBody()
+                worker.execute { brain.clearConversation() }
+                if (ExternalAppPolicy.launch(this, reply.external)) controller.stop()
+                else {
+                    externalFeedback = getString(R.string.external_app_unavailable)
+                    showAnswer(externalFeedback!!)
+                }
+            }
             if (reply.editNote != null && foreground) editNote(reply.editNote)
             if (reply.body != null && foreground && generation == bodyGeneration) {
                 faceAvatar.showBody = true

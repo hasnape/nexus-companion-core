@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nexus Companion</string>
+    <string name="external_online_disabled">L’accès en ligne est désactivé dans Nexus. Active-le dans les réglages pour ouvrir Google Maps ou Chrome.</string>
+    <string name="external_app_unavailable">Aucune application compatible ne peut ouvrir cette demande. Vérifie que Google Maps, Chrome ou un autre navigateur est installé et activé.</string>
+    <string name="external_cancelled">L’ouverture a été annulée. Redemande l’application ou le lieu si nécessaire.</string>
     <string name="online_allowed">Web autorisé</string>
     <string name="online_disabled_badge">Web désactivé</string>
     <string name="online_access">Accès en ligne</string>

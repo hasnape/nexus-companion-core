@@ -24,7 +24,8 @@ internal class NativeBrainService(
         val body: RollingBodyState.Plan? = null,
         val editNote: LocalKnowledgeLibrary.Entry? = null,
         val external: ExternalAppPolicy.Request? = null,
-        val publicContextTopic: String? = null
+        val publicContextTopic: String? = null,
+        val browserReading: BrowserReading? = null
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
@@ -104,6 +105,20 @@ internal class NativeBrainService(
     private fun rememberReply(reply: Reply) {
         val expires = minOf(elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS, pending?.expires ?: Long.MAX_VALUE)
         conversation = Conversation(reply.copy(body = null, editNote = null, external = null), turnEvidence.toList(), expires)
+    }
+
+    /** External prose is read as data; it never enters the command, body, or lookup parsers. */
+    fun readBrowserResult(reading: BrowserReading): Reply {
+        clearConversation()
+        val notesAvailable = try { library.list(); true } catch (_: Exception) { false }
+        if (notesAvailable) pending = Pending.Save(reading.title, reading.text, reading.source, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
+        val prefix = if (reading.source == "external:clipboard") "Je lis le texte que tu as copié, non vérifié."
+            else "Je lis la partie accessible de la réponse IA dans Chrome, non vérifiée."
+        val suffix = if (notesAvailable) "Veux-tu que je retienne ce texte dans mes notes locales ?" else context.getString(R.string.library_read_failed)
+        val reply = Reply("$prefix\n${reading.text}\n$suffix",
+            null, notesAvailable, expectsAnswer = true, browserReading = reading)
+        rememberReply(reply)
+        return reply
     }
 
     private fun answer(message: String, onlineEnabled: Boolean, steeringAxle: String, focusedNote: LocalKnowledgeLibrary.Entry? = null): Reply {

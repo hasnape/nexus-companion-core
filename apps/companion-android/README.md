@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.21 native alpha
+# Nexus Companion Android — 0.4.22 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques distinguent le Web ouvert dans le navigateur de Wikipédia consulté dans l’application en HTTPS.
 
@@ -44,7 +44,21 @@ Les déformations observées « cher sur Internet… » et « cher/cherche/reche
 
 « Que répondre à bonjour ? », « Comment répondre à bonsoir ? » et « Que dire à merci ? » reçoivent des exemples pratiques locaux. Une demande explicite de recherche garde son effet. Wikipédia examine jusqu’à cinq résultats, ignore les pages d’homonymie et refuse les extraits insuffisamment liés au sujet, y compris un film partageant seulement le mot « salut ». La réponse sélectionne une ou deux phrases originales, au plus 650 caractères, avec priorité aux phrases chiffrées pour une question « combien ». Ce classement lexical ne garantit pas une réponse à toute question. L’extrait d’origine et son article restent la preuve proposée à l’enregistrement confirmé.
 
-Les recherches Web restent visibles dans le navigateur : Nexus ne lit ni ne mémorise automatiquement ces pages. Il n’y a pas de nouveau modèle génératif ni d’amélioration acoustique mesurée sur un téléphone dans cette livraison. Les fonctions de mémoire, de compression, de voix, de plein visage et de corps roulant restent présentes.
+Sans activation de la lecture Chrome décrite ci-dessous, les recherches Web restent dans le navigateur. Leur texte n’est jamais mémorisé automatiquement. Il n’y a pas de nouveau modèle génératif ni d’amélioration acoustique mesurée sur un téléphone dans cette livraison. Les fonctions de mémoire, de compression, de voix, de plein visage et de corps roulant restent présentes.
+
+## Lire une réponse IA de Chrome — 0.4.22
+
+Dans **Réglages**, active **Lire les réponses IA après une recherche Web**, lis la présentation, puis utilise **Configurer l’accès Chrome**. Android demande d’activer **Nexus — lecture Chrome à la demande**. L’accès reste désactivé par défaut et n’est jamais accordé par l’application. Désactiver l’interrupteur annule la demande en cours. Si le système ne propose pas l’écran dédié, Nexus essaie la liste des réglages d’accessibilité. Si Android bloque cet accès, la lecture d’un texte copié reste disponible.
+
+Avec cet accès actif, « Cherche sur Internet les volcans » ouvre Chrome et attend jusqu’à 25 secondes une réponse pour **ce même sujet**. Si un Aperçu IA est détecté et que son texte reste stable entre deux contrôles, Nexus revient dans l’application pour lire **la partie accessible**, non vérifiée. « Lis la réponse IA de Chrome » ou le bouton **Lire la réponse IA de Chrome** relit le résultat actuellement affiché, sans lancer une nouvelle recherche. Le réglage d’accès en ligne s’applique à ces ouvertures ; les réponses vocales doivent être activées pour entendre la lecture.
+
+La détection concerne les Aperçus IA clairement identifiés sur les résultats Google de `google.com` ou `google.fr` dans Chrome stable. Un simple onglet « Mode IA », des résultats Web ordinaires, une autre adresse ou un ancien sujet ne suffisent pas. Le service ne clique pas, ne déroule pas la page et ne lit pas les zones masquées ou de saisie. Le texte d’un autre navigateur, une réponse sans marqueur reconnaissable ou un document inaccessible appelle la solution par copie. La fonctionnalité ne garantit pas la lecture intégrale d’une réponse longue ni celle de toutes les interfaces d’IA.
+
+Pour cette solution, copie **le texte** de la réponse, reviens dans Nexus, puis appuie sur **Lire un texte copié** et **Lire à voix haute** dans l’aperçu. Le presse-papiers n’est consulté qu’à cette action, pas à l’ouverture de Nexus ; les liens seuls et les éléments non textuels ne sont pas chargés. Cette lecture fonctionne avec l’accès en ligne désactivé. La provenance est indiquée comme **Texte copié · origine non vérifiée**, sans inventer une source Google.
+
+La lecture et la mémorisation sont distinctes. Après lecture, un « oui » explicite ou le bouton de confirmation peut enregistrer le texte dans la bibliothèque chiffrée et compressée, avec sa provenance et `verified=false`. Il redevient consultable hors ligne après redémarrage. Refuser, changer de sujet, passer en arrière-plan ou laisser expirer la proposition annule l’approbation. Un texte importé contenant « ouvre Chrome » ou « avance » est lu comme du texte ; il ne devient pas une commande d’application ou de mouvement.
+
+Le service ne consulte aucune fenêtre sans demande active. Les demandes et leurs résultats restent seulement en mémoire, expirent et ne traversent pas une relance du processus. Un retour anticipé dans Nexus annule la capture ; un résultat tardif ou remplacé ne déclenche pas de lecture. Les fenêtres des autres applications ne sont pas parcourues. Aucun historique Chrome, compte, cookie, audio ou capture d’écran n’est récupéré. Il n’y a ni nouvelle dépendance ni nouveau modèle génératif.
 
 ## Propriété du projet et corrections 0.4.20
 
@@ -62,7 +76,7 @@ Lorsque Chrome ou Maps ne peut pas être ouvert et qu’Android accepte une autr
 
 « Itinéraire vers chez moi » et « Ouvre Google Maps pour mon travail » peuvent exploiter une note personnelle explicite. Utiliser un titre **Adresse domicile** ou **Adresse travail**, avec une seule adresse dans le contenu, ou un champ complet tel que **Adresse domicile : 12 rue Exemple, Lyon**. Nexus annonce la destination et demande confirmation avant de transmettre ce champ à Maps. Plusieurs adresses différentes demandent une précision ; une adresse supprimée, modifiée ou expirée invalide la proposition. Les articles importés ne définissent pas le domicile ou le travail.
 
-L’interrupteur **Accès en ligne** s’applique à ces ouvertures. La répétition d’une réponse n’ouvre rien de nouveau. Le micro et le mouvement virtuel sont arrêtés lors de la transmission à une autre application ; un résultat devenu périmé après un passage en arrière-plan n’est pas exécuté. Les itinéraires ouvrent une préparation de trajet sans lancer la navigation. Nexus ne demande ni permission GPS ni accès à l’historique ou aux comptes Google. Les pages et résultats ouverts dans Chrome ne sont pas lus ni importés automatiquement dans la mémoire. L’apprentissage par recherche Wikipédia et enregistrement confirmé reste disponible séparément.
+L’interrupteur **Accès en ligne** s’applique à ces ouvertures. La répétition d’une réponse n’ouvre rien de nouveau. Le micro et le mouvement virtuel sont arrêtés lors de la transmission à une autre application ; un résultat devenu périmé après un passage en arrière-plan n’est pas exécuté. Les itinéraires ouvrent une préparation de trajet sans lancer la navigation. Nexus ne demande ni permission GPS ni accès à l’historique ou aux comptes Google. La lecture optionnelle des Aperçus IA dans Chrome est décrite ci-dessous ; aucune page n’est importée automatiquement dans la mémoire. L’apprentissage par recherche Wikipédia et enregistrement confirmé reste disponible séparément.
 
 ## Relances et correction des notes conservées depuis 0.4.18
 
@@ -139,13 +153,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.21-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.22-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (27 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (28 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.21-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.22-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -163,7 +177,7 @@ Le cache privé ne contient que des copies APK, limitées à 512 Mio par fichier
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.21](../../docs/releases/ANDROID-0.4.21-2026-11-12.md), [0.4.20](../../docs/releases/ANDROID-0.4.20-2026-11-12.md), [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.22](../../docs/releases/ANDROID-0.4.22-2026-11-12.md), [0.4.21](../../docs/releases/ANDROID-0.4.21-2026-11-12.md), [0.4.20](../../docs/releases/ANDROID-0.4.20-2026-11-12.md), [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 

@@ -22,8 +22,8 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 27
-  versionName = "0.4.21-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 28
+  versionName = "0.4.22-native-alpha" + if (nexusPreview) "-preview" else ""
   ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) }
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
   buildConfigField("String", "FRENCH_MODEL_ID", "\"$frenchModelId\"")

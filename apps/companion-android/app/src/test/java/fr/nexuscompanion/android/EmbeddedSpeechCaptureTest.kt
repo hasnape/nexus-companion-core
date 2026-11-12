@@ -12,6 +12,108 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class EmbeddedSpeechCaptureTest {
+    @Test fun anIncompleteSearchCanContinueAfterAnEndpoint() {
+        val recorder=Recorder();var frames=0;val heard=mutableListOf<String>()
+        val decoder=object:LocalSpeechDecoder {
+            override fun accept(samples:ShortArray,count:Int):Boolean { frames++;return frames==1 || frames==5 }
+            override fun partial()=if(frames>1) "les volcans" else ""
+            override fun result()=if(frames==1) "Nexus cherche sur Internet" else "les volcans"
+            override fun finish()=""
+            override fun close()=Unit
+        }
+        EmbeddedSpeechCapture(Executor { it.run() },{it()},{recorder},{decoder},object:RecognitionEvents {
+            override fun ready()=Unit
+            override fun result(text:String) { assertTrue(recorder.closed);heard.add(text) }
+            override fun error(failure:RecognitionFailure) { fail(failure.name) }
+        }).start()
+        assertEquals(listOf("Nexus cherche sur Internet les volcans"),heard)
+        assertEquals(5,frames)
+    }
+    @Test fun anIncompletePrefixWaitsOnlyBrieflyWhenNoContinuationArrives() {
+        val recorder=Recorder();var frames=0;val heard=mutableListOf<String>()
+        val decoder=object:LocalSpeechDecoder {
+            override fun accept(samples:ShortArray,count:Int):Boolean { frames++;return frames==1 }
+            override fun partial()=""
+            override fun result()="Nexus cherche sur Internet"
+            override fun finish()=""
+            override fun close()=Unit
+        }
+        EmbeddedSpeechCapture(Executor { it.run() },{it()},{recorder},{decoder},object:RecognitionEvents {
+            override fun ready()=Unit
+            override fun result(text:String) { heard.add(text) }
+            override fun error(failure:RecognitionFailure) { fail(failure.name) }
+        }).start()
+        assertEquals(listOf("Nexus cherche sur Internet"),heard)
+        assertTrue(frames in 2..20)
+    }
+
+    @Test fun anUnusableContinuationDoesNotSearchAnEarlierTopic() {
+        val recorder = Recorder()
+        var frames = 0
+        val failures = mutableListOf<RecognitionFailure>()
+        val decoder = object : LocalSpeechDecoder {
+            override fun accept(samples: ShortArray, count: Int): Boolean {
+                frames++
+                return frames == 1 || frames == 3
+            }
+            override fun partial() = "mots incertains"
+            override fun result() = if (frames == 1) "Nexus cherche sur Internet" else ""
+            override fun finish() = ""
+            override fun close() = Unit
+        }
+        EmbeddedSpeechCapture(Executor { it.run() }, { it() }, { recorder }, { decoder }, object : RecognitionEvents {
+            override fun ready() = Unit
+            override fun result(text: String) { fail("Unusable speech must not reuse a topic: $text") }
+            override fun error(failure: RecognitionFailure) {
+                assertTrue(recorder.closed)
+                failures.add(failure)
+            }
+        }).start()
+        assertEquals(listOf(RecognitionFailure.SILENCE), failures)
+    }
+
+    @Test fun cancellingAHeldSearchReleasesTheMicrophoneWithoutSendingACommand() {
+        val recorder = Recorder()
+        var frames = 0
+        lateinit var capture: EmbeddedSpeechCapture
+        val decoder = object : LocalSpeechDecoder {
+            override fun accept(samples: ShortArray, count: Int): Boolean {
+                frames++
+                if (frames == 2) capture.close()
+                return frames == 1
+            }
+            override fun partial() = ""
+            override fun result() = "Nexus cherche sur Internet"
+            override fun finish() = ""
+            override fun close() = Unit
+        }
+        capture = EmbeddedSpeechCapture(Executor { it.run() }, { it() }, { recorder }, { decoder }, object : RecognitionEvents {
+            override fun ready() = Unit
+            override fun result(text: String) { fail("Cancelled speech must not send a command") }
+            override fun error(failure: RecognitionFailure) { fail(failure.name) }
+        })
+        capture.start()
+        assertTrue(recorder.stopped && recorder.closed)
+        assertEquals(2, frames)
+    }
+    @Test fun aHeldPrefixNeverTurnsTheNextSegmentIntoAnApprovalAndNewWakeCommandsRemainSeparate() {
+        for((next,expected) in listOf("oui" to "Nexus cherche sur Internet", "Nexus bonjour" to "Nexus bonjour", "stop" to "stop")) {
+            val recorder=Recorder();var frames=0;val heard=mutableListOf<String>()
+            val decoder=object:LocalSpeechDecoder {
+                override fun accept(samples:ShortArray,count:Int):Boolean { frames++;return true }
+                override fun partial()=""
+                override fun result()=if(frames==1) "Nexus cherche sur Internet" else next
+                override fun finish()=""
+                override fun close()=Unit
+            }
+            EmbeddedSpeechCapture(Executor { it.run() },{it()},{recorder},{decoder},object:RecognitionEvents {
+                override fun ready()=Unit
+                override fun result(text:String) { heard.add(text) }
+                override fun error(failure:RecognitionFailure) { fail(failure.name) }
+            }).start()
+            assertEquals(next,listOf(expected),heard)
+        }
+    }
     @Test fun sustainedDictationCanContinueBeyondOneMinuteAndFinalizesBeforeTheWatchdog() {
         val recorder = Recorder(); var samples = 0L
         val decoder = object : LocalSpeechDecoder {

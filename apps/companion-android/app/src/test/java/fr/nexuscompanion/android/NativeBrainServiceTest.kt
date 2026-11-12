@@ -119,7 +119,7 @@ class NativeBrainServiceTest {
         val library=LocalKnowledgeLibrary(context,"repeat-source",LocalKnowledgeLibraryTest.JvmCipher("repeat-source"))
         var calls=0
         NativeBrainService(context,library) { calls++;WikipediaKnowledgeSearch.Article(42,"Volcan","Un volcan émet de la lave.") }.use { brain ->
-            val first=brain.reply("cherche en ligne volcan")
+            val first=brain.reply("cherche sur Wikipédia volcan")
             assertEquals(first.text,brain.reply("répète",false).text)
             assertEquals(1,calls)
             assertTrue(library.list().isEmpty())
@@ -275,7 +275,7 @@ class NativeBrainServiceTest {
             brain.reply("Qu’est-ce qu’un volcan ?"); brain.reply("bonjour"); brain.reply("oui")
             brain.reply("Qu’est-ce qu’un volcan ?"); brain.clearConversation(); brain.reply("oui")
             assertEquals(0, calls)
-            brain.reply("Cherche en ligne volcan"); assertEquals(1, calls)
+            brain.reply("Cherche sur Wikipédia volcan"); assertEquals(1, calls)
             brain.reply("non merci"); brain.reply("oui")
             assertTrue(library.list().isEmpty())
         }
@@ -320,7 +320,7 @@ class NativeBrainServiceTest {
                 else -> article
             }
         }.use { brain ->
-            val command = "Nexus, cherche sur Internet la tour Eiffel"
+            val command = "Nexus, cherche sur Wikipédia la tour Eiffel"
             assertEquals(context.getString(R.string.online_disabled_reply), brain.reply(command, onlineEnabled = false).text)
             assertTrue(brain.reply("mes notes").text.contains("thé vert"))
             assertTrue(brain.reply("Mon PC est lent").text.contains("Gestionnaire des tâches"))
@@ -332,8 +332,8 @@ class NativeBrainServiceTest {
             assertTrue(online.text.contains("Une tour à Paris."))
             assertNull(online.candidate)
             assertEquals(listOf("la tour Eiffel"), queries)
-            assertEquals(context.getString(R.string.online_no_match), brain.reply("Cherche en ligne un sujet sans article").text)
-            assertEquals(context.getString(R.string.online_unavailable), brain.reply("Cherche en ligne volcan").text)
+            assertEquals(context.getString(R.string.online_no_match), brain.reply("Cherche sur Wikipédia un sujet sans article").text)
+            assertEquals(context.getString(R.string.online_unavailable), brain.reply("Cherche sur Wikipédia volcan").text)
             assertTrue(brain.reply("bonjour").text.contains("Bonjour"))
         }
     }
@@ -350,7 +350,7 @@ class NativeBrainServiceTest {
         assertEquals("https://fr.wikipedia.org/?curid=12", article?.url)
         response.getJSONObject("query").getJSONArray("pages").getJSONObject(1)
             .put("pageprops", JSONObject().put("disambiguation", ""))
-        assertNull(WikipediaKnowledgeSearch.readArticle(response))
+        assertEquals("Un résultat secondaire",WikipediaKnowledgeSearch.readArticle(response)?.title)
     }
 
     @Test fun sharedBrainUsesEncryptedNotesButNeverPersistsAProposalByItself() {

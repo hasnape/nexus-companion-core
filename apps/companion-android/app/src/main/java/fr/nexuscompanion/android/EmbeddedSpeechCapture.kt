@@ -100,6 +100,21 @@ internal class EmbeddedSpeechCapture(
         var received = 0
         var firstSpeech = -1
         var previousPartial = ""
+        var heldPrefix: SpeechHypothesis? = null
+        var prefixEnded = 0
+        var continuationStarted = false
+        fun completed(next: List<SpeechHypothesis>): List<SpeechHypothesis> {
+            val prefix = heldPrefix ?: return next
+            val current = next.firstOrNull() ?: return if (continuationStarted) emptyList() else listOf(prefix)
+            // An endpoint join must never turn an unrelated "yes" into approval.
+            if (VoiceTranscriptPolicy.confirmation(current.text) == true) return listOf(prefix)
+            if (VoiceTranscriptPolicy.parse(current.text).hasWake || VoiceTranscriptPolicy.isStopCommand(current.text) ||
+                VoiceTranscriptPolicy.confirmation(current.text) == false) return next
+            val text = "${prefix.text} ${current.text}".trim()
+            if (text.length > NativeCapacity.MAX_MESSAGE_CHARS) return emptyList()
+            val scores = listOfNotNull(prefix.confidence, current.confidence).filter { it.isFinite() && it in 0f..1f }
+            return listOf(SpeechHypothesis(text, scores.minOrNull()))
+        }
         while (!cancelled) {
             val count = recorder.read(samples)
             if (cancelled) return null
@@ -111,17 +126,33 @@ internal class EmbeddedSpeechCapture(
 
             if (decoder.accept(samples, count)) {
                 val final = decoder.hypotheses()
-                if (final.isNotEmpty()) return final
+                if (final.isNotEmpty()) {
+                    if (heldPrefix != null) return completed(final)
+                    val best = final.first()
+                    if (VoiceTranscriptPolicy.isIncompleteSearch(best.text)) {
+                        heldPrefix = best
+                        prefixEnded = received
+                        if (firstSpeech < 0) firstSpeech = received
+                        previousPartial = ""
+                        emit { events.partial(best.text) }
+                    } else return final
+                } else if (heldPrefix != null && continuationStarted) return completed(emptyList())
             } else {
                 val partial = decoder.partial().trim()
-                if (partial.isNotEmpty() && partial != previousPartial) {
+                val stalePrefix = heldPrefix?.let {
+                    VoiceTranscriptPolicy.commandWords(it.text) == VoiceTranscriptPolicy.commandWords(partial)
+                } == true
+                if (partial.isNotEmpty() && partial != previousPartial && !stalePrefix) {
                     if (firstSpeech < 0) firstSpeech = received
                     previousPartial = partial
-                    emit { events.partial(partial) }
+                    continuationStarted = heldPrefix != null
+                    val displayed = heldPrefix?.let { "${it.text} $partial" } ?: partial
+                    emit { events.partial(displayed) }
                 }
             }
+            if (heldPrefix != null && !continuationStarted && received - prefixEnded >= SAMPLE_RATE * 3 / 2) return listOfNotNull(heldPrefix)
             if (firstSpeech < 0 && received >= SAMPLE_RATE * 20) return decoder.hypotheses(final = true)
-            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * NativeCapacity.SPEECH_SECONDS) return decoder.hypotheses(final = true)
+            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * NativeCapacity.SPEECH_SECONDS) return completed(decoder.hypotheses(final = true))
         }
         return null
     }

@@ -11,7 +11,7 @@
     <string name="online_access_hint">Si une réponse manque, Nexus peut te proposer de chercher sur Wikipédia. Réponds « oui » pour lancer la recherche, puis confirme si tu veux la retenir. Seul le sujet public est envoyé ; le micro et les notes restent sur ce téléphone.</string>
     <string name="online_disabled_reply">L’accès en ligne est désactivé. Tu peux l’activer dans Réglages.</string>
     <string name="online_unavailable">Wikipédia est inaccessible pour le moment. Tu peux continuer à me parler et consulter tes notes hors ligne.</string>
-    <string name="online_no_match">Je n’ai pas trouvé d’article précis sur ce sujet. Peux-tu reformuler avec quelques mots-clés ?</string>
+    <string name="online_no_match">Je n’ai pas trouvé d’extrait Wikipédia suffisamment pertinent. Peux-tu préciser le sujet ? Pour élargir la recherche, dis « cherche sur Internet » suivi du sujet.</string>
     <string name="online_answer">D’après Wikipédia. %1$s</string>
     <string name="online_source">Wikipédia · %1$s</string>
     <string name="home_presence_ready">Disponible</string>

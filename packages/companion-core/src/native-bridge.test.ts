@@ -159,10 +159,10 @@ describe('native shared brain protocol', () => {
     expect(reply.publicLookupQuery).toBeUndefined();
   });
 
-  it('authorizes a bounded public lookup after evaluating the local intent', () => {
+  it('authorizes a bounded explicit Wikipedia lookup after evaluating the local intent', () => {
     for (const command of [
-      'Nexus Companion, recherche en ligne la tour Eiffel !',
-      'Nexus Companion, peux tu chercher en ligne la tour Eiffel ?'
+      'Nexus Companion, recherche sur Wikipédia la tour Eiffel !',
+      'Nexus Companion, peux tu chercher sur Wikipédia la tour Eiffel ?'
     ]) {
       expect(createNativeTurn(request(command)).publicLookupQuery).toBe('la tour Eiffel');
     }

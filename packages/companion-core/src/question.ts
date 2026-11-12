@@ -38,6 +38,7 @@ export const analyzeQuestion = (message: string) => {
   const normalized = normalizeWakePhrase(content);
   const style = /^(?:parle[- ]moi de mani[èe]re|sois plus|garde un style)\b/i.test(raw);
   const question = !isExplicitMemoryRequest(raw) && !style && (raw.includes('?') || content !== raw
+    || /^(?:que|quoi)\s+(?:faire|dire|r[ée]pondre|choisir|utiliser)\b/i.test(raw)
     || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|dans quelle\b)/i.test(raw));
   const kind = /^(?:ou\b|dans quelle (?:ville|entreprise|region)|a quel endroit)/.test(normalized) ? 'where'
     : /^pourquoi\b/.test(normalized) ? 'why' : /^quand\b|^a quelle (?:date|heure)\b/.test(normalized) ? 'when' : 'general';

@@ -1,6 +1,6 @@
-# Nexus Companion Android — 0.4.20 native alpha
+# Nexus Companion Android — 0.4.21 native alpha
 
-Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
+Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques distinguent le Web ouvert dans le navigateur de Wikipédia consulté dans l’application en HTTPS.
 
 ## Fonctions actuelles
 
@@ -13,7 +13,7 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 - Les questions polies sans ponctuation, les demandes de lieu ou de raison et les pronoms personnels utilisent un analyseur commun. Les connaissances générales peuvent aussi être proposées avec « Retiens que le Soleil est une étoile ». Une information absente entraîne une précision.
 - Les questions ordinaires exploitent les notes pertinentes : « Quel est mon prénom ? », « Quel est mon métier ? » ou « Quelle boisson je préfère ? ». Le même vocabulaire partagé guide la sélection native et les extraits de réponse. Les informations contradictoires provoquent une question ; les notes sans rapport ne deviennent pas une réponse.
 - Une question publique sans réponse locale peut déclencher une **proposition** de recherche. Un « oui » explicite envoie seulement le sujet à Wikipédia. Après lecture, un autre « oui » peut enregistrer le résultat avec sa source dans la mémoire locale chiffrée et compressée. La réponse est ensuite retrouvable hors ligne. Refus, changement de sujet, arrière-plan ou expiration annulent la proposition.
-- **Accès en ligne** dans **Réglages**, activé au départ. Dire ou écrire « Cherche sur Internet la tour Eiffel » lance la recherche du sujet sur Wikipédia en français. Le réglage mémorise le choix. La réponse affiche l’extrait et son article source. Les notes et l’audio restent locaux. L’API renvoie des extraits attribués à leurs auteurs via le lien de l’article. [Conditions de réutilisation](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
+- **Accès en ligne** dans **Réglages**, activé au départ. « Cherche sur Internet la tour Eiffel », « recherche sur le Web… » ou « cherche en ligne… » ouvrent une recherche Web dans Chrome ou un navigateur compatible. « Cherche sur Wikipédia la tour Eiffel » interroge Wikipédia dans l’application et affiche un extrait attribué avec son lien source. Le réglage mémorise le choix. Les notes et l’audio restent locaux. [Conditions de réutilisation des extraits](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
 - Écoute automatique à l'ouverture si l'autorisation micro a été accordée et si l'utilisateur ne l'a pas désactivée. Bouton d'arrêt visible, préférence conservée. Le micro et la synthèse sont arrêtés dès `onPause`.
 - Reconnaissance française sur le téléphone via le modèle Vosk inclus dans l’APK. Dire « Nexus, bonjour » ou « Nexus », puis la commande après « Je t'écoute ». Les silences ordinaires relancent l'écoute sans épuiser le budget de reprise des pannes.
 - Après une réponse, la conversation peut continuer sans répéter « Nexus » pendant 30 secondes à partir du micro prêt. La fenêtre suit la fin effective de la lecture. Une lecture échouée ne l’ouvre pas. Après le délai, le mot d’activation redevient nécessaire.
@@ -35,6 +35,16 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 - Le témoin du signal micro mesure le niveau des échantillons reçus et revient à zéro pendant les pauses.
 
 La reconnaissance locale fonctionne par sessions finies et reprises. Le déclenchement attend une transcription finale contenant « Nexus ». La précision et l’autonomie restent à mesurer sur téléphone.
+
+## Compréhension et recherches 0.4.21
+
+Une commande de recherche incomplète telle que « Nexus, cherche sur Internet » peut attendre jusqu’à 1,5 seconde que le sujet commence après une coupure acoustique. Les segments sont réunis sans modifier les mots reconnus. Une nouvelle activation, un arrêt ou un refus restent séparés ; un « oui » ne devient jamais une approbation autonome par cette réunion. Une continuation sans texte exploitable ne réutilise pas un ancien sujet. Le modèle Vosk et son décodage principal restent identiques.
+
+Les déformations observées « cher sur Internet… » et « cher/cherche/recherche sur interdit… » provoquent une demande de confirmation avant toute recherche Web. Une recherche sans sujet peut reprendre la dernière question publique de la session, ou demander le sujet à l’échange suivant. Ce contexte est transitoire, expire et disparaît en arrière-plan. Il ne provient pas du contenu des notes ; les sujets contenant coordonnées, secrets ou formulations personnelles sont refusés à cette étape.
+
+« Que répondre à bonjour ? », « Comment répondre à bonsoir ? » et « Que dire à merci ? » reçoivent des exemples pratiques locaux. Une demande explicite de recherche garde son effet. Wikipédia examine jusqu’à cinq résultats, ignore les pages d’homonymie et refuse les extraits insuffisamment liés au sujet, y compris un film partageant seulement le mot « salut ». La réponse sélectionne une ou deux phrases originales, au plus 650 caractères, avec priorité aux phrases chiffrées pour une question « combien ». Ce classement lexical ne garantit pas une réponse à toute question. L’extrait d’origine et son article restent la preuve proposée à l’enregistrement confirmé.
+
+Les recherches Web restent visibles dans le navigateur : Nexus ne lit ni ne mémorise automatiquement ces pages. Il n’y a pas de nouveau modèle génératif ni d’amélioration acoustique mesurée sur un téléphone dans cette livraison. Les fonctions de mémoire, de compression, de voix, de plein visage et de corps roulant restent présentes.
 
 ## Propriété du projet et corrections 0.4.20
 
@@ -129,13 +139,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.20-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.21-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (26 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (27 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.20-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.21-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -153,7 +163,7 @@ Le cache privé ne contient que des copies APK, limitées à 512 Mio par fichier
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.20](../../docs/releases/ANDROID-0.4.20-2026-11-12.md), [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.21](../../docs/releases/ANDROID-0.4.21-2026-11-12.md), [0.4.20](../../docs/releases/ANDROID-0.4.20-2026-11-12.md), [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 

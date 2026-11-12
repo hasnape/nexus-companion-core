@@ -23,6 +23,7 @@ internal interface VoiceRecognition {
 }
 
 internal interface VoiceSpeech {
+    val maxInputChars: Int get() = 4000
     fun speak(text: String, id: String): Boolean
     fun stop()
     fun close()
@@ -86,6 +87,9 @@ internal class VoiceSession(
     private var recognition: VoiceRecognition? = null
     private var speech: VoiceSpeech? = null
     private var pendingReply: String? = null
+    private val speechParts = java.util.ArrayDeque<String>()
+    private var playbackTimeout: VoiceTask? = null
+    private var playbackSequence = 0L
     private var replyFollowUp = false
     private var speechSetupTimeout: VoiceTask? = null
     private var restart: VoiceTask? = null
@@ -384,6 +388,12 @@ internal class VoiceSession(
     fun playReply(text: String, expectAnswer: Boolean = false) {
         if (utterance != null || pendingReply != null) stopPlayback()
         replyFollowUp = expectAnswer && enabled
+        if (text.length > NativeCapacity.MAX_SPOKEN_CHARS) {
+            replyFollowUp = false
+            onSpeechOutput(SpeechOutputState.FAILED)
+            scheduleRestart()
+            return
+        }
         if (!playbackEnabled || text.isBlank()) {
             if (replyFollowUp) {
                 awaitingCommand = true
@@ -442,6 +452,9 @@ internal class VoiceSession(
     }
 
     private fun stopPlayback() {
+        ++playbackSequence
+        playbackTimeout?.cancel(); playbackTimeout = null
+        speechParts.clear()
         replyFollowUp = false
         clearPendingReply()
         speechTimeout?.cancel(); speechTimeout = null
@@ -454,6 +467,20 @@ internal class VoiceSession(
     /** Returns false when the local voice is absent or still initializing. */
     fun speak(text: String): Boolean {
         if (!playbackEnabled || text.isBlank() || speechReady != true || speech == null) return false
+        if (text.length > NativeCapacity.MAX_SPOKEN_CHARS) {
+            replyFollowUp = false
+            onSpeechOutput(SpeechOutputState.FAILED)
+            scheduleRestart()
+            return false
+        }
+        val parts = try { SpeechText.split(text, minOf(NativeCapacity.MAX_SPEECH_CHUNK_CHARS, speech!!.maxInputChars)) }
+            catch (_: IllegalArgumentException) { emptyList() }
+        if (parts.isEmpty()) {
+            replyFollowUp = false
+            onSpeechOutput(SpeechOutputState.FAILED)
+            scheduleRestart()
+            return false
+        }
         restart?.cancel()
         restart = null
         commandTimeout?.cancel()
@@ -461,6 +488,21 @@ internal class VoiceSession(
         closeRecognition()
         speechTimeout?.cancel()
         responseTimeout?.cancel()
+        playbackTimeout?.cancel()
+        speechParts.clear(); speechParts.addAll(parts)
+        val playback = ++playbackSequence
+        playbackTimeout = platform.after(NativeCapacity.MAX_PLAYBACK_MS.toLong()) {
+            val id = utterance
+            if (playbackSequence == playback && id != null) {
+                speechFinished(id, SpeechOutputState.INTERRUPTED)
+                try { speech?.stop() } catch (_: RuntimeException) { /* already stopped */ }
+            }
+        }
+        return speakNextPart()
+    }
+
+    private fun speakNextPart(): Boolean {
+        val text = speechParts.pollFirst() ?: return false
         val id = "nexus-${generation}-${++utteranceSequence}"
         utterance = id
         onSpeechState(false)
@@ -471,7 +513,7 @@ internal class VoiceSession(
             speechFinished(id, SpeechOutputState.FAILED)
             return false
         }
-        speechTimeout = platform.after((15_000L + text.length * 100L).coerceAtMost(90_000L)) {
+        speechTimeout = platform.after((15_000L + text.length * 100L).coerceAtMost(NativeCapacity.MAX_SPEECH_PART_MS.toLong())) {
             if (utterance == id) {
                 speechFinished(id, SpeechOutputState.INTERRUPTED)
                 try { speech?.stop() } catch (_: RuntimeException) { /* engine already gone */ }
@@ -486,6 +528,12 @@ internal class VoiceSession(
         speechTimeout = null
         utterance = null
         onSpeechState(false)
+        if (result == SpeechOutputState.COMPLETED && speechParts.isNotEmpty()) {
+            speakNextPart()
+            return
+        }
+        speechParts.clear()
+        playbackTimeout?.cancel(); playbackTimeout = null
         onSpeechOutput(result)
         if (replyFollowUp && result == SpeechOutputState.COMPLETED && enabled) awaitingCommand = true
         replyFollowUp = false
@@ -533,6 +581,9 @@ internal class VoiceSession(
 
     fun stop() {
         ++generation
+        ++playbackSequence
+        playbackTimeout?.cancel(); playbackTimeout = null
+        speechParts.clear()
         clearPendingReply()
         speechTimeout?.cancel(); speechTimeout = null
         utterance = null

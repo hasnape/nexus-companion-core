@@ -4,6 +4,90 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceSessionTest {
+    @Test fun respectsASmallerEngineLimitWithoutLosingText() {
+        val f=Fixture();f.start();f.platform.speechLimit=40
+        val text="Une réponse avec ses espaces et sa ponctuation. ".repeat(4)
+        f.session.playReply(text)
+        val read=mutableListOf<String>()
+        repeat(30) {
+            if (f.output.last()!=SpeechOutputState.COMPLETED) {
+                val (part,id)=f.platform.speaker.utterances.last()
+                assertTrue(part.length<=40);read.add(part);f.platform.speaker.events.finished(id)
+            }
+        }
+        assertEquals(text,read.joinToString(""))
+    }
+    @Test fun failingAReadingPartCancelsTheRemainderAndCannotOpenAConfirmationWindow() {
+        val f=Fixture();f.start()
+        f.session.beginResponse();f.session.finishResponse("Une longue lecture. ".repeat(250),expectAnswer=true)
+        val first=f.platform.speaker.utterances.last().second
+        f.platform.speaker.events.finished(first)
+        val second=f.platform.speaker.utterances.last().second
+        assertNotEquals(first,second)
+        f.platform.speaker.events.finished(first)
+        assertEquals(2,f.platform.speaker.utterances.size)
+        f.platform.speaker.events.failed(second)
+        f.platform.speaker.events.finished(second)
+        f.platform.advance(700)
+        assertEquals(2,f.platform.speaker.utterances.size)
+        assertEquals(SpeechOutputState.FAILED,f.output.last())
+        f.platform.recognition.events.result("oui")
+        assertTrue(f.commands.isEmpty())
+    }
+    @Test fun stoppingOrDisablingSpeechDiscardsAllUnreadParts() {
+        for (disable in listOf(false,true)) {
+            val f=Fixture();f.start()
+            f.session.playReply("Une longue lecture. ".repeat(250))
+            val old=f.platform.speaker.utterances.last().second
+            if (disable) f.session.setSpokenRepliesEnabled(false) else f.session.stop()
+            f.platform.speaker.events.finished(old)
+            f.platform.advance(200_000)
+            assertEquals(1,f.platform.speaker.utterances.size)
+        }
+    }
+    @Test fun longReadingCanContinuePastTheOldNinetySecondDeadline() {
+        val f=Fixture();f.start()
+        f.session.playReply("Une longue lecture. ".repeat(250))
+        val first=f.platform.speaker.utterances.last().second
+        f.platform.advance(80_000)
+        f.platform.speaker.events.finished(first)
+        val second=f.platform.speaker.utterances.last().second
+        f.platform.advance(80_000)
+        assertEquals(second,f.platform.speaker.utterances.last().second)
+        assertFalse(f.output.last()==SpeechOutputState.COMPLETED || f.output.last()==SpeechOutputState.INTERRUPTED)
+        assertEquals(1,f.platform.totalStarts)
+    }
+    @Test fun overlongReplyFailsWithoutSilentlyReadingAPrefix() {
+        val f=Fixture();f.start()
+        f.session.beginResponse();f.session.finishResponse("x".repeat(NativeCapacity.MAX_SPOKEN_CHARS+1),expectAnswer=true)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        assertEquals(SpeechOutputState.FAILED,f.output.last())
+        f.platform.advance(500)
+        f.platform.recognition.events.result("oui")
+        assertTrue(f.commands.isEmpty())
+    }
+    @Test fun longRepliesRespectTheEngineLimitAndKeepTheMicrophoneClosedUntilTheLastPart() {
+        val f = Fixture(); f.start()
+        val text = "Une réponse locale à lire entièrement. ".repeat(145).trim()
+        f.session.beginResponse(); f.session.finishResponse(text, expectAnswer = true)
+        val collected = mutableListOf<String>()
+        repeat(20) {
+            if (f.output.last() != SpeechOutputState.COMPLETED) {
+                val (part, id) = f.platform.speaker.utterances.last()
+                assertTrue(part.length <= 1000)
+                collected.add(part)
+                assertEquals(1, f.platform.totalStarts)
+                f.platform.speaker.events.started(id)
+                f.platform.speaker.events.finished(id)
+            }
+        }
+        assertEquals(text, collected.joinToString(""))
+        assertEquals(SpeechOutputState.COMPLETED, f.output.last())
+        f.platform.advance(199); assertEquals(1, f.platform.totalStarts)
+        f.platform.advance(1); assertEquals(2, f.platform.totalStarts)
+        f.platform.recognition.events.result("oui")
+        assertEquals(listOf("oui"), f.commands)
+    }
     @Test fun aWokenUncertainConfirmationAsksAgainWithoutExecutingOrReactingToAmbientApprovals() {
         val f = Fixture(); f.start()
         f.platform.recognition.events.alternatives(listOf(SpeechHypothesis("oui", .2f)))
@@ -104,17 +188,19 @@ class VoiceSessionTest {
             }
         }
         inner class Speech(val events: SpeechEvents) : VoiceSpeech {
+            override val maxInputChars: Int get() = speechLimit
             var closed = false
             var stops = 0
             val utterances = mutableListOf<Pair<String, String>>()
             override fun speak(text: String, id: String): Boolean {
                 utterances.add(text to id)
-                return acceptsSpeech
+                return acceptsSpeech && text.length <= speechLimit
             }
             override fun stop() { stops++ }
             override fun close() { closed = true }
         }
         var supported = true
+        var speechLimit = 4000
         var acceptsSpeech = true
         var creationFails = false
         var autoReady = true

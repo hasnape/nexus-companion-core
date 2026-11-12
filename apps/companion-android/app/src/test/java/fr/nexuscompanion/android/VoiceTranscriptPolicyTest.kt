@@ -59,10 +59,10 @@ class VoiceTranscriptPolicyTest {
     }
 
     @Test fun malformedOrOversizedTopTranscriptIsRejectedRatherThanTruncated() {
-        for (text in listOf("", "  ", "x".repeat(8001))) {
+        for (text in listOf("", "  ", "x".repeat(16001))) {
             assertNull(VoiceTranscriptPolicy.select(listOf(SpeechHypothesis(text, .9f), SpeechHypothesis("Nexus bonjour", .9f)), false))
         }
         assertNull(VoiceTranscriptPolicy.select(emptyList(), true))
-        assertEquals(8000, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis("x".repeat(8000))), true)?.length)
+        assertEquals(16000, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis("x".repeat(16000))), true)?.length)
     }
 }

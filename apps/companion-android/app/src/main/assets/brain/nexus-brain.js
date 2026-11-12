@@ -723,16 +723,19 @@ var NexusNativeBrain = function () {
   };
   var stop = new Set("a au aux ca ce ces de des du en et est il je la le les ma me mes mon ne nos notre on ou par pas pour que quel quelle quelles quels qui sa se ses son sur ta te tes toi ton tu un une vous votre vos comment pourquoi quand peux peut pourrais dire dis explique expliquer parle parler moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens".split(" "));
   var families = [["prenom", "nom", "appelle"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "preferes", "preferee", "preferees", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["age", "ans"], ["projet", "projets"], ["objectif", "objectifs"]];
+  var vocabulary = new Map(families.flatMap(function (family) {
+    return family.map(function (word) {
+      return [word, family[0]];
+    });
+  }));
   var words = function words(text) {
     return normalize(text).split(" ").filter(function (word) {
       return word.length > 1 && !stop.has(word);
     });
   };
   var canonical = function canonical(word) {
-    var _a, _b;
-    return (_b = (_a = families.find(function (family) {
-      return family.includes(word);
-    })) == null ? void 0 : _a[0]) != null ? _b : word;
+    var _a;
+    return (_a = vocabulary.get(word)) != null ? _a : word;
   };
   var keys = function keys(text) {
     var result = words(text).map(canonical);
@@ -767,6 +770,7 @@ var NexusNativeBrain = function () {
       var sentences = note.excerpt.replace(/([.!?])\s+/g, "$1\n").split(/\n+/).map(function (text) {
         return text.trim();
       }).filter(Boolean);
+      var labeledValue = sentences.length === 1 && note.excerpt.length <= 160 && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalize(note.excerpt));
       return sentences.map(function (sentence) {
         var normalized = normalize(sentence);
         var slotMatches = request.kind === "where" ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized) : request.kind === "why" ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized) : request.kind === "when" ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;
@@ -777,6 +781,9 @@ var NexusNativeBrain = function () {
         var anchored = !anchors.length || anchors.some(function (key) {
           return evidence.includes(key) || titleKeys.includes(key);
         });
+        var sentenceAnchor = (anchors.length ? anchors : query).some(function (key) {
+          return evidence.includes(key);
+        }) || labeledValue;
         var relativeMatches = query.filter(function (key) {
           return ["fille", "fils", "enfant", "fiancee", "chien", "chat"].includes(key);
         }).every(function (key) {
@@ -785,14 +792,16 @@ var NexusNativeBrain = function () {
         var attributeMatches = query.filter(function (key) {
           return ["prenom", "metier", "couleur", "age", "boisson", "voiture", "objectif"].includes(key);
         }).every(function (key) {
-          return evidence.includes(key) || titleKeys.includes(key);
+          return evidence.includes(key) || labeledValue && titleKeys.includes(key);
         });
-        var score = slotMatches && relativeMatches && attributeMatches && anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
+        var score = slotMatches && relativeMatches && attributeMatches && anchored && sentenceAnchor && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
           return evidence.includes(key);
         }).length : 0;
         return {
           note: note,
-          sentence: sentence,
+          sentence: labeledValue && !query.some(function (key) {
+            return evidence.includes(key);
+          }) ? "".concat(note.title, " : ").concat(sentence) : sentence,
           score: score
         };
       });
@@ -1658,25 +1667,30 @@ var NexusNativeBrain = function () {
     return best.topic.reply;
   };
   var native_capacity_default = {
-    MAX_MESSAGE_CHARS: 8e3,
-    MAX_NOTE_CHARS: 8e3,
-    MAX_LIBRARY_ENTRIES: 5e3,
+    MAX_MESSAGE_CHARS: 16e3,
+    MAX_NOTE_CHARS: 16e3,
+    MAX_LIBRARY_ENTRIES: 2e4,
     MAX_LIBRARY_JSON_BYTES: 33554432,
-    MAX_CONTEXT_NOTES: 16,
-    MAX_SEARCH_RESULTS: 20,
-    MAX_REQUEST_CHARS: 16e4,
-    MAX_RESPONSE_CHARS: 64e3,
-    MAX_BODY_REQUEST_CHARS: 5e4,
-    MAX_SPEECH_JSON_CHARS: 512e3,
-    COMMAND_WAIT_MS: 2e4,
-    SPEECH_SECONDS: 118,
-    RECOGNITION_TIMEOUT_MS: 12e4,
+    MAX_CONTEXT_NOTES: 32,
+    MAX_SEARCH_RESULTS: 100,
+    MAX_REQUEST_CHARS: 384e3,
+    MAX_RESPONSE_CHARS: 128e3,
+    MAX_BODY_REQUEST_CHARS: 1e5,
+    MAX_SPEECH_JSON_CHARS: 1024e3,
+    COMMAND_WAIT_MS: 3e4,
+    SPEECH_SECONDS: 178,
+    RECOGNITION_TIMEOUT_MS: 18e4,
     RESPONSE_TIMEOUT_MS: 15e3,
-    PENDING_CONFIRMATION_MS: 18e4,
-    BRAIN_INSTRUCTIONS: 12e7,
+    PENDING_CONFIRMATION_MS: 3e5,
+    BRAIN_INSTRUCTIONS: 48e7,
     BRAIN_TIME_MS: 5e3,
     MAX_UPDATE_BYTES: 536870912,
-    MAX_UPDATE_CACHE_BYTES: 1073741824
+    MAX_UPDATE_CACHE_BYTES: 1073741824,
+    MAX_SPOKEN_CHARS: 2e4,
+    MAX_SPEECH_CHUNK_CHARS: 1e3,
+    MAX_SPEECH_PART_MS: 18e4,
+    MAX_PLAYBACK_MS: 12e5,
+    MAX_REPLY_TEXT_CHARS: 2e4
   };
   var MAX_INPUT_CHARS = native_capacity_default.MAX_REQUEST_CHARS;
   var record = function record(value) {
@@ -1686,7 +1700,7 @@ var NexusNativeBrain = function () {
     return typeof value === "string" && value.trim().length > 0 && value.length <= max;
   };
   var validateRequest = function validateRequest(value) {
-    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
+    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || value.readRequested !== void 0 && typeof value.readRequested !== "boolean" || value.readRequested === true && value.recallRequested === false || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
       throw new Error("Invalid native turn request");
     }
     var notes = value.notes.map(function (item) {
@@ -1706,7 +1720,8 @@ var NexusNativeBrain = function () {
       message: value.message.trim(),
       notes: notes,
       now: value.now,
-      recallRequested: value.recallRequested
+      recallRequested: value.recallRequested,
+      readRequested: value.readRequested
     };
   };
   var isRecallRequest = function isRecallRequest(message) {
@@ -1788,6 +1803,15 @@ var NexusNativeBrain = function () {
       return __spreadProps(__spreadValues({}, result), {
         text: renderDeterministicNexusReply(plan)
       });
+    }
+    if (request.readRequested) {
+      var selected = notes[0];
+      return __spreadValues(__spreadProps(__spreadValues({}, result), {
+        intent: "memory_recall",
+        text: selected ? "Je lis ta note \xAB ".concat(selected.title, " \xBB, non v\xE9rifi\xE9e :\n").concat(selected.excerpt) : "Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes »."
+      }), selected ? {
+        evidenceIds: [selected.id]
+      } : {});
     }
     if ((_a = request.recallRequested) != null ? _a : isRecallRequest(request.message)) {
       var recalled = notes.slice(0, 3);

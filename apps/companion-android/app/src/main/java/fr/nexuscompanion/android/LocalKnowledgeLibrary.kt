@@ -30,7 +30,8 @@ internal class LocalKnowledgeLibrary(
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
     private val maxEntries = NativeCapacity.MAX_LIBRARY_ENTRIES
-    private data class Snapshot(val encrypted: ByteArray, val entries: List<Entry>, val jsonBytes: Int, val payloadBytes: Int)
+    private data class Snapshot(val encrypted: ByteArray, val entries: List<Entry>, val jsonBytes: Int, val payloadBytes: Int,
+        var searchIndex: KnowledgeSearchIndex? = null)
     private var snapshot: Snapshot? = null
 
     data class Entry(
@@ -146,9 +147,10 @@ internal class LocalKnowledgeLibrary(
         true
     }
 
-    fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
+    fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> = synchronized(storeLock) {
+        readEntries()
         val terms = KnowledgePolicy.recallTopic(query) ?: KnowledgePolicy.queryTerms(query)
-        return matchingEntries(list(), terms, now).take(NativeCapacity.MAX_SEARCH_RESULTS)
+        matchingEntries(terms, now).take(NativeCapacity.MAX_SEARCH_RESULTS)
     }
 
     /** One atomic read per conversation turn; expired notes never enter the brain context. */
@@ -157,30 +159,27 @@ internal class LocalKnowledgeLibrary(
         now: Long = System.currentTimeMillis(),
         recall: KnowledgePolicy.Recall? = KnowledgePolicy.recallFor(query),
         queryTerms: List<String> = KnowledgePolicy.queryTerms(query)
-    ): List<Entry> {
-        val entries = list().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
+    ): List<Entry> = synchronized(storeLock) {
+        val entries = readEntries().filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
         val terms = when (recall) {
             is KnowledgePolicy.Recall.Topic -> recall.terms
+            is KnowledgePolicy.Recall.Read -> recall.terms
             KnowledgePolicy.Recall.Overview -> emptyList()
             null -> queryTerms
         }
-        val matches = matchingEntries(entries, terms, now)
-        val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic) {
+        val matches = matchingEntries(terms, now)
+        val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic && recall !is KnowledgePolicy.Recall.Read) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
-        return ranked.distinctBy { it.title to it.excerpt }.take(NativeCapacity.MAX_CONTEXT_NOTES)
+        ranked.distinctBy { it.title to it.excerpt }.take(NativeCapacity.MAX_CONTEXT_NOTES)
     }
 
-    private fun matchingEntries(entries: List<Entry>, tokens: List<String>, now: Long): List<Entry> {
+    private fun matchingEntries(tokens: List<String>, now: Long): List<Entry> {
         if (tokens.isEmpty()) return emptyList()
-        return entries.filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
-            .map { entry ->
-                entry to KnowledgePolicy.score(tokens, entry.title, entry.excerpt)
-            }
-            .filter { it.second > 0 }
-            .sortedWith(compareByDescending<Pair<Entry, Int>> { it.second }
-                .thenByDescending { it.first.recordedAt })
-            .map { it.first }
+        val current = snapshot ?: return emptyList()
+        val index = current.searchIndex ?: KnowledgeSearchIndex(current.entries).also { current.searchIndex = it }
+        // Expiry is evaluated on every call, including cached rankings.
+        return index.rank(tokens).filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
     }
 
     private fun save(entries: List<Entry>) {

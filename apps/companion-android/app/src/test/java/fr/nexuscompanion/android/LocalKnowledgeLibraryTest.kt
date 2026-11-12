@@ -22,6 +22,33 @@ import javax.crypto.spec.SecretKeySpec
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LocalKnowledgeLibraryTest {
+    @Test fun aLargeEncryptedLibraryRemainsSearchableAfterRestartAndDeletion() {
+        val id = "twenty-thousand"
+        val entries = (0 until 20000).map { entry("id-$it", "Dossier $it").put("excerpt", "Repère confidentiel repere$it.") }
+        val bytes = legacy(*entries.toTypedArray()).toByteArray()
+        val encrypted = JvmCipher(id).encrypt(KnowledgePayload.encode(bytes))
+        file(id).writeBytes(encrypted)
+        val store = library(id)
+        assertEquals(20000,store.list().size)
+        assertEquals("id-19999",store.search("repere19999").single().id)
+        assertTrue(store.remove("id-19999"))
+        assertTrue(store.search("repere19999").isEmpty())
+        assertEquals(19999,library(id).list().size)
+        assertEquals("id-12345",library(id).search("repere12345").single().id)
+    }
+    @Test fun cachedRankingsObserveExpirationExternalWritesAndCiphertextTampering() {
+        val id = "index-freshness"
+        file(id).writeText(legacy(entry("expiring","robot bientôt expiré",100),entry("kept","robot permanent")))
+        val store = library(id)
+        assertEquals(2,store.search("robot",99).size)
+        assertEquals(listOf("kept"),store.search("robot",100).map { it.id })
+        library(id).addUserNote("Robot récent","robot nouveau")
+        assertEquals(2,store.search("robot",101).size)
+        val corrupted=file(id).readBytes().also { it[it.lastIndex]=(it.last().toInt() xor 1).toByte() }
+        file(id).writeBytes(corrupted)
+        assertThrows(Exception::class.java) { store.search("robot",101) }
+        assertArrayEquals(corrupted,file(id).readBytes())
+    }
     @Test fun growsPastTheOldCapacityAndPreservesLongNotesAcrossRestart() {
         val entries = (0 until 510).map { entry("id-$it", "note $it") }
         val id = "expanded"
@@ -35,10 +62,10 @@ class LocalKnowledgeLibraryTest {
     }
     @Test fun enlargedConversationalSelectionAndSearchKeepOlderMatchingEvidence() {
         val store = library("context-growth")
-        repeat(22) { store.addUserNote("Robot $it", "Le robot contient le module numéro $it.") }
-        assertEquals(16, store.contextFor("robot").size)
-        assertEquals(20, store.search("robot").size)
-        assertEquals(22, store.list().size)
+        repeat(110) { store.addUserNote("Robot $it", "Le robot contient le module numéro $it.") }
+        assertEquals(32, store.contextFor("robot").size)
+        assertEquals(100, store.search("robot").size)
+        assertEquals(110, store.list().size)
     }
     @Test fun unchangedEncryptedFilesReuseTheParsedSnapshotButExternalChangesAreObserved() {
         val id = "cached"
@@ -222,7 +249,7 @@ class LocalKnowledgeLibraryTest {
 
     @Test fun fullLibraryReturnsTheSpecificCapacityFailureWithoutLosingNotes() {
         val entries = (0 until NativeCapacity.MAX_LIBRARY_ENTRIES).map { entry("id-$it", "note $it") }
-        file().writeText(legacy(*entries.toTypedArray()))
+        file().writeBytes(JvmCipher("test").encrypt(KnowledgePayload.encode(legacy(*entries.toTypedArray()).toByteArray())))
         assertEquals(NativeCapacity.MAX_LIBRARY_ENTRIES, library().list().size)
         val before = file().readBytes()
         assertFalse(library().addUserNote("note 0", "note 0").created)

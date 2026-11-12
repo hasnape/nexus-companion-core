@@ -15,7 +15,7 @@ class LocalSpeechResultTest {
         val decoded = LocalSpeechResult.hypotheses(payload)
         assertEquals(text, decoded.single().text)
         assertEquals(text, VoiceTranscriptPolicy.select(decoded, false))
-        assertTrue(LocalSpeechResult.hypotheses("""{"text":"${"x".repeat(8001)}"}""").isEmpty())
+        assertTrue(LocalSpeechResult.hypotheses("""{"text":"${"x".repeat(16001)}"}""").isEmpty())
     }
     @Test fun keepsVoskLikelihoodSeparateFromWordConfidence() {
         val result = LocalSpeechResult.hypotheses("""{"alternatives":[{"text":"nexusbonjour","confidence":120.5},{"text":"nexus bonjour","confidence":120.1}]}""")

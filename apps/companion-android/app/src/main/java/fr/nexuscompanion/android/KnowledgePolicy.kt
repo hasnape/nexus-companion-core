@@ -32,10 +32,15 @@ internal object KnowledgePolicy {
     sealed interface Recall {
         object Overview : Recall
         data class Topic(val terms: List<String>) : Recall
+        data class Read(val terms: List<String>) : Recall
     }
 
     private fun normalize(value: String): String =
         accents.replace(Normalizer.normalize(value, Normalizer.Form.NFD), "").lowercase(Locale.ROOT)
+
+    /** Compact prefilter; collisions must be verified by score(), never used as evidence. */
+    fun searchHashes(value: String): IntArray = normalize(value).split(separators)
+        .asSequence().filter { it.isNotEmpty() }.map { it.hashCode() }.distinct().sorted().toList().toIntArray()
 
     fun queryTerms(query: String): List<String> =
         normalize(query).split(separators)
@@ -45,6 +50,9 @@ internal object KnowledgePolicy {
     fun recallFor(query: String): Recall? {
         val command = VoiceTranscriptPolicy.parse(query).command
         val words = normalize(command).split(separators).filter { it.isNotEmpty() }.joinToString(" ")
+        Regex("^(?:lis|lire|lis moi) (?:ma|la|une) note(?: (.*))?$").matchEntire(words)?.let {
+            return Recall.Read(queryTerms(it.groupValues[1].replaceFirst(subjectPrefix, "")))
+        }
         if (words in overviewRequests) return Recall.Overview
         if (words == "mes preferences") return Recall.Topic(listOf("preference", "preferences", "prefere"))
         val subject = recallRequest.matchEntire(words)?.groupValues?.get(1) ?: return null

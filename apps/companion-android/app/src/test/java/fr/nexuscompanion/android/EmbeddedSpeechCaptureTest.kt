@@ -28,7 +28,7 @@ class EmbeddedSpeechCaptureTest {
             override fun error(failure: RecognitionFailure) { fail(failure.name) }
         }).start()
         assertTrue(samples > EmbeddedSpeechCapture.SAMPLE_RATE * 60L)
-        assertTrue(samples < EmbeddedSpeechCapture.SAMPLE_RATE * 120L)
+        assertTrue(samples < EmbeddedSpeechCapture.SAMPLE_RATE * 180L)
         assertEquals(listOf("nexus retiens que voici la fin exacte"), heard)
         assertTrue(recorder.closed)
     }

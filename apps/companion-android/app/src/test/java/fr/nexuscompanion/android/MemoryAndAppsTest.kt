@@ -13,6 +13,22 @@ class MemoryAndAppsTest {
     private val context get()=RuntimeEnvironment.getApplication()
     private fun library(id:String)=LocalKnowledgeLibrary(context,id,LocalKnowledgeLibraryTest.JvmCipher(id))
 
+    @Test fun thePackagedBrainRecognizesEquivalentFactsAndKeepsASingleConflictingNoteEditable() {
+        val library=library("consistent-facts")
+        library.addUserNote("Prénom","Mon prénom est Amine.")
+        library.addUserNote("Prénom bis","Je m’appelle Amine.")
+        val conflicting=library.addUserNote("Métier","Mon métier est technicien. Mon métier est électricien.").entry
+        val before=library.list()
+        NativeBrainService(context,library).use { brain ->
+            val name=brain.reply("Quel est mon prénom ?")
+            assertTrue(name.text.contains("Amine"));assertFalse(name.text.contains("Laquelle est à jour"))
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("Laquelle est à jour"))
+            assertEquals(conflicting,brain.reply("modifie cette note").editNote)
+        }
+        assertEquals(before,library.list())
+        assertEquals(0,library.statistics().archivedNotes)
+    }
+
     @Test fun thePackagedBrainCombinesSeparateNotesAndDoesNotConfuseAChildWithTheOwner() {
         val library=library("composed")
         library.addUserNote("Nom","Je m’appelle Amine.")

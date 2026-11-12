@@ -11,6 +11,7 @@ internal object ExternalAppPolicy {
         MAPS("Google Maps", "com.google.android.apps.maps"), CHROME("Chrome", "com.android.chrome")
     }
     enum class Operation { HOME, SEARCH, DIRECTIONS, URL }
+    enum class LaunchResult { PREFERRED, FALLBACK, UNAVAILABLE }
     enum class Place { HOME, WORK }
     data class Request(val app: App, val operation: Operation, val target: String = "") {
         init {
@@ -90,13 +91,13 @@ internal object ExternalAppPolicy {
     }
 
     /** Prefer the named app, then let Android choose a compatible app. No package inventory. */
-    fun launch(activity: Activity, request: Request): Boolean {
+    fun launch(activity: Activity, request: Request): LaunchResult {
         fun start(preferred: Boolean): Boolean = try {
             activity.startActivity(Intent(Intent.ACTION_VIEW, request.uri()).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
                 if (preferred) setPackage(request.app.packageName)
             }); true
         } catch (_: ActivityNotFoundException) { false } catch (_: SecurityException) { false }
-        return start(true) || start(false)
+        return if (start(true)) LaunchResult.PREFERRED else if (start(false)) LaunchResult.FALLBACK else LaunchResult.UNAVAILABLE
     }
 }

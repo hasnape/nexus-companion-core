@@ -54,6 +54,22 @@ const toSecondPerson = (text: string): string => text
 
 type GroundedAnswer = { text: string; evidenceIds: string[] };
 
+const explicitFactPrefixes: [string, RegExp][] = [
+  ['prenom', /^(?:mon prenom est|mon nom est|je m appelle|le createur est) (.+)$/],
+  ['metier', /^(?:mon metier est|ma profession est|je travaille comme|je travaille en tant que) (.+)$/],
+  ['boisson', /^(?:ma boisson preferee est|je prefere) (.+)$/],
+  ['couleur', /^(?:ma couleur preferee est|je prefere) (.+)$/]
+];
+/** Compare only explicit equivalent predicates. Negation and all value qualifiers remain intact. */
+const factKey = (sentence: string, query: string[]): string => {
+  const literal = normalize(sentence);
+  for (const [attribute, prefix] of explicitFactPrefixes) {
+    const value = query.includes(attribute) ? literal.match(prefix)?.[1] : undefined;
+    if (value) return `${attribute}:${value}`;
+  }
+  return `literal:${literal}`;
+};
+
 export const answerFromNotes = (question: string, notes: GroundedNote[]): GroundedAnswer | null => {
   const parts = personalQuestionParts(question);
   if (parts) {
@@ -105,11 +121,19 @@ const answerSingleFromNotes = (question: string, notes: GroundedNote[]): Grounde
   if (!candidates.length) return null;
   const best = candidates[0];
   const personal = request.personal;
-  const conflicting = personal && candidates.find((item) => item.score === best.score && item.note.id !== best.note.id
-    && normalize(item.sentence) !== normalize(best.sentence));
+  const bestFact = factKey(best.sentence, query);
+  const conflicting = personal && candidates.find((item) => {
+    if (item.score !== best.score) return false;
+    const otherFact = factKey(item.sentence, query);
+    if (otherFact === bestFact) return false;
+    // Within one note, only two explicit values of the same singular attribute
+    // conflict. Complementary reasons or project goals are not contradictions.
+    return item.note.id !== best.note.id || (request.kind === 'general' && !bestFact.startsWith('literal:')
+      && otherFact.startsWith(bestFact.slice(0, bestFact.indexOf(':') + 1)));
+  });
   if (conflicting) return {
     text: `J’ai deux informations dans tes notes : « ${best.sentence.slice(0, 200)} » et « ${conflicting.sentence.slice(0, 200)} ». Laquelle est à jour ?`,
-    evidenceIds: [best.note.id, conflicting.note.id]
+    evidenceIds: Array.from(new Set([best.note.id, conflicting.note.id]))
   };
   const excerpt = best.sentence.length > 480 ? `${best.sentence.slice(0, 477)}…` : best.sentence;
   const spoken = personal ? toSecondPerson(excerpt) : excerpt;

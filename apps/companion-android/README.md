@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.19 native alpha
+# Nexus Companion Android — 0.4.20 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
 
@@ -36,7 +36,15 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 
 La reconnaissance locale fonctionne par sessions finies et reprises. Le déclenchement attend une transcription finale contenant « Nexus ». La précision et l’autonomie restent à mesurer sur téléphone.
 
-## Compréhension de la mémoire et ouverture des applications 0.4.19
+## Propriété du projet et corrections 0.4.20
+
+L’écran **À propos** identifie **Amine HARBI** comme propriétaire du projet et **Rép&Web** comme éditeur. La mention de droits est limitée aux éléments originaux propres au projet, sous réserve des droits des tiers. Une rubrique distincte **Composants tiers et licences** conserve les auteurs, licences et références de source des dépendances. Le corps de ces notices reste inchangé. Voir [OWNERSHIP.md](../../OWNERSHIP.md).
+
+Les formulations personnelles explicites équivalentes, par exemple « Mon prénom est Amine » et « Je m’appelle Amine », ne déclenchent plus une fausse contradiction. La comparaison couvre quelques prédicats de prénom, métier et préférences ; elle conserve les négations et les qualificatifs. Deux valeurs différentes d’un même attribut explicite peuvent aussi être signalées dans une seule note. Les explications complémentaires et les objectifs d’une note ne deviennent pas des contradictions. Ces règles ne fusionnent ni ne modifient les notes.
+
+Lorsque Chrome ou Maps ne peut pas être ouvert et qu’Android accepte une autre application compatible, Nexus indique le repli au lieu d’affirmer que l’application demandée s’est ouverte. L’indisponibilité complète reste une erreur récupérable et la conversation peut continuer. Une répétition ne provoque pas une nouvelle ouverture.
+
+## Compréhension de la mémoire et ouverture des applications conservées depuis 0.4.19
 
 « Quel est mon prénom et mon métier ? » peut réunir des faits enregistrés dans plusieurs notes. Chaque partie garde ses preuves et sa provenance ; Nexus signale une information manquante ou contradictoire. Cette composition est bornée à quatre questions personnelles explicites parmi les attributs pris en charge : prénom, nom, métier/profession, âge, voiture, couleur ou boisson préférée. Elle ne transforme pas une déclaration en question. Un fait explicitement attribué à un proche n’est plus utilisé comme s’il concernait le propriétaire. Les libellés français de secrets tels que « mot de passe » et « code PIN » sont exclus de la lecture conversationnelle automatique.
 
@@ -121,13 +129,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.19-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.20-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (25 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (26 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.19-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.20-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -145,7 +153,7 @@ Le cache privé ne contient que des copies APK, limitées à 512 Mio par fichier
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.20](../../docs/releases/ANDROID-0.4.20-2026-11-12.md), [0.4.19](../../docs/releases/ANDROID-0.4.19-2026-11-12.md), [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 

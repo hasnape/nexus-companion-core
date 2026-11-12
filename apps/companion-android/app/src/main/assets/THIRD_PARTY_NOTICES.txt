@@ -1,4 +1,4 @@
-Nexus Companion — logiciels libres
+Nexus Companion — composants tiers et licences
 
 Mozilla Rhino 1.9.1 — moteur JavaScript local, non modifié
 Source : https://github.com/mozilla/rhino/archive/refs/tags/Rhino1_9_1_Release.zip

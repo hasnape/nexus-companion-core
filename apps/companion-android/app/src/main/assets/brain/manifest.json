@@ -1,8 +1,10 @@
 {
   "protocolVersion": 1,
   "engine": "nexus-core-rules-v1",
-  "sha256": "7e7e23df959fe6cf9834a1cef72edd1471fdcfc297b7f3d013f91b9f8d19f200",
+  "sha256": "6cd94b98dd037cc7ee71d06c7231195c8a5c88af49a09570cfa9041b796292cb",
   "sources": {
+    "apps/companion-android/app/src/main/java/fr/nexuscompanion/android/NativeCapacity.kt": "d23350e5227f9da067cc749ea0e60f2bee9b475f4aaca24ed15f667b3ab7971f",
+    "apps/companion-android/app/src/main/res/values/native_capacity.xml": "db64f2152803edb910e9407bd387a60f312d0a04a0aa80bae91432e597380d4f",
     "package-lock.json": "98aa4e51b4413754680e93d4aa3427649f4c784bee1073e6f76a375b9a8acd16",
     "package.json": "1ed6a85a7c173bf94ecf164e0931541b2af067dc683b637e40e9d743ffee3828",
     "packages/companion-core/src/cognitive.ts": "64409784fbdded8a35dbd11477d23bceb5dc636bc7e07643c9ccd6f9b5a82e17",
@@ -10,7 +12,8 @@
     "packages/companion-core/src/decision.ts": "9a40574f97ca500ba8482cf8fa945f92af3f30b6a7e273a353862a8e6f4b24f3",
     "packages/companion-core/src/grounded-memory.ts": "81d0cc4034ee172e52504c1e4498a7febea77f82676f4030bae6ac1f3805a834",
     "packages/companion-core/src/memory.ts": "437d482690f0086ffc2f4e6387f19e0f6c7e145257cf417ac2b007d5a685ac2b",
-    "packages/companion-core/src/native-bridge.ts": "80dddd8e4cd54922876861960bec89d3716d1e6db14cd0edf52cfefe125c0ae6",
+    "packages/companion-core/src/native-bridge.ts": "27149bae32414d906a2ea1c9f9ce04a3527b0524d12b23ede23ab01488dc594b",
+    "packages/companion-core/src/native-capacity.json": "948a11e73a512ece3343d8d26c5278c612b40b6d0570851a2bd5a2c8e01b57c5",
     "packages/companion-core/src/personality.ts": "090b0071042430e7baa3e1cf33d8862bc1404d3440003cd8e8f313ec6f46dfd2",
     "packages/companion-core/src/profile.ts": "cca2fd991d1032b3e8ffe6c8c37c1c197b6547bba70462eb7539c9cea1f9db22",
     "packages/companion-core/src/question.ts": "fcc84744bf8fd66034d23b92f72a8e84243d23da2e840bd5b0309e902497165e",
@@ -19,6 +22,6 @@
     "packages/companion-core/src/wake.ts": "65f01dca410445c8999b5a954a1499ae060cda3ed859f02dc230298c42a450c0",
     "packages/shared/src/robot-capabilities.ts": "fe7ce27ae9e3cec1e7ff190ee43a6e178da5de1ca99f8cf46490b8491f0afbeb",
     "packages/shared/src/wheeled-body.ts": "69f7b17bc8bd2b7e42bd1283717a1000afef26f82a007932056cbf21215e8f9c",
-    "scripts/build-native-brain.mjs": "74ccf62266653ea3c62687a351544e53fd696e7b46b17dcb2a5a79f665b2d78c"
+    "scripts/build-native-brain.mjs": "a6b49f7a64b9250bf272711454069e7f8592e27715e7a0b65a81b461e514b45c"
   }
 }

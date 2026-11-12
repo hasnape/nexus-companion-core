@@ -36,6 +36,8 @@ import java.util.Locale
 
 class MainActivityWithAndroidVoice : MainActivity() {
     override fun createVoiceInput(): VoiceInput = AndroidVoiceInput(applicationContext)
+    override fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext,
+        "nexus-default", LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -350,6 +352,25 @@ class MainActivityTest {
         await { hasText(activity.getString(R.string.library_no_results)) }
         assertFalse(libraryFile().exists())
     }
+    @Test fun everyNoteRemainsReachableBeyondTheFirstFifty() {
+        val library = LocalKnowledgeLibrary(activity.applicationContext, "nexus-default", LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))
+        repeat(61) { library.addUserNote("Note $it", "Information locale $it.") }
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog()?.isShowing == true }
+        val first = ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(50, first.listView.adapter.count)
+        val reachable = (0 until 50).map { first.listView.adapter.getItem(it).toString() }.toMutableSet()
+        first.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== first }
+        val second = ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(11, second.listView.adapter.count)
+        reachable.addAll((0 until 11).map { second.listView.adapter.getItem(it).toString() })
+        assertEquals((0 until 61).map { "Note $it" }.toSet(), reachable)
+        second.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== second }
+        assertEquals(50, ShadowAlertDialog.getLatestAlertDialog().listView.adapter.count)
+        assertEquals(61, library.list().size)
+    }
 
     @Test fun damagedLibraryDoesNotBlockGreetingOrEraseTheOriginalFile() {
         val original = "unreadable library bytes".toByteArray()
@@ -360,8 +381,8 @@ class MainActivityTest {
     }
 
     @Test fun longInputIsBoundedBeforeItCanReachTheWorker() {
-        input().setText("x".repeat(2500))
-        assertEquals(2000, input().length())
+        input().setText("x".repeat(8500))
+        assertEquals(8000, input().length())
     }
 
     @Test fun failedPrivateSaveIsNeverReportedAsSuccessfulOrOverwritten() {

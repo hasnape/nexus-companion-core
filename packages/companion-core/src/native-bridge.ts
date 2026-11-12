@@ -9,6 +9,7 @@ import { createResponsePlan, renderDeterministicNexusReply, renderLocalSmallTalk
 import { renderLocalSupportReply } from './support-knowledge';
 import { normalizeWakePhrase, stripWakePrefix } from './wake';
 import type { CompanionMemoryItem, ResponseIntent } from './types';
+import capacity from './native-capacity.json';
 
 /** Versioned, data-only bridge for native hosts. It never reads or writes storage. */
 export interface NativeNote {
@@ -41,7 +42,7 @@ export interface NativeTurnReply {
   evidenceIds?: string[];
 }
 
-const MAX_INPUT_CHARS = 40_000;
+const MAX_INPUT_CHARS = capacity.MAX_REQUEST_CHARS;
 const record = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
 );
@@ -50,15 +51,15 @@ const boundedText = (value: unknown, max: number): value is string => (
 );
 
 const validateRequest = (value: unknown): NativeTurnRequest => {
-  if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, 2000)
+  if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, capacity.MAX_MESSAGE_CHARS)
       || !Number.isSafeInteger(value.now) || (value.now as number) < 0
       || (value.recallRequested !== undefined && typeof value.recallRequested !== 'boolean')
-      || !Array.isArray(value.notes) || value.notes.length > 8) {
+      || !Array.isArray(value.notes) || value.notes.length > capacity.MAX_CONTEXT_NOTES) {
     throw new Error('Invalid native turn request');
   }
   const notes = value.notes.map((item: unknown): NativeNote => {
     if (!record(item) || !boundedText(item.id, 64) || !boundedText(item.title, 160)
-        || !boundedText(item.excerpt, 2000) || !boundedText(item.source, 512)
+        || !boundedText(item.excerpt, capacity.MAX_NOTE_CHARS) || !boundedText(item.source, 512)
         || !Number.isSafeInteger(item.recordedAt) || (item.recordedAt as number) < 0
         || !(item.expiresAt === null || (Number.isSafeInteger(item.expiresAt) && (item.expiresAt as number) >= 0))
         || item.verified !== false) throw new Error('Invalid native note');
@@ -144,7 +145,7 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
     return { ...result, text: 'Cette information est déjà dans ta mémoire locale.' };
   }
   const candidate = decision.memoryCandidates.find((item) => (
-    item.content.length > 0 && item.content.length <= 2000 && item.source !== 'environment_signal'
+    item.content.length > 0 && item.content.length <= capacity.MAX_NOTE_CHARS && item.source !== 'environment_signal'
   ));
   if (candidate && decision.intent === 'remember_candidate') {
     return {
@@ -191,15 +192,15 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
 
 /** Called separately before the host selects its bounded note context. */
 export const handleNativeRetrievalJson = (input: string): string => {
-  if (typeof input !== 'string' || input.length > 2000) throw new Error('Invalid retrieval request');
+  if (typeof input !== 'string' || input.length > capacity.MAX_MESSAGE_CHARS) throw new Error('Invalid retrieval request');
   return JSON.stringify({ terms: nativeRetrievalTerms(stripWakePrefix(input, { allowFullNameWake: true })) });
 };
 
 /** User commands only. No note or external article can request a body action. */
 export const handleNativeBodyJson = (input: string): string => {
-  if (input.length > 16_000) throw new Error('Invalid body request');
+  if (typeof input !== 'string' || input.length > capacity.MAX_BODY_REQUEST_CHARS) throw new Error('Invalid body request');
   const value: unknown = JSON.parse(input);
-  if (!record(value) || !boundedText(value.message, 2000) || !['front', 'rear'].includes(value.steeringAxle as string)) throw new Error('Invalid body request');
+  if (!record(value) || !boundedText(value.message, capacity.MAX_MESSAGE_CHARS) || !['front', 'rear'].includes(value.steeringAxle as string)) throw new Error('Invalid body request');
   return JSON.stringify(resolveBodyCommand(stripWakePrefix(value.message, { allowFullNameWake: true }), value.steeringAxle as 'front' | 'rear'));
 };
 

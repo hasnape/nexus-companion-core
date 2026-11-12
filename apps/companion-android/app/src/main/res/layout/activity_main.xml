@@ -242,7 +242,7 @@
                 android:hint="@string/input_hint"
                 android:importantForAutofill="no"
                 android:inputType="textCapSentences"
-                android:maxLength="2000"
+                android:maxLength="@integer/nexus_message_chars"
                 android:minHeight="52dp"
                 android:paddingHorizontal="14dp"
                 android:paddingVertical="10dp"

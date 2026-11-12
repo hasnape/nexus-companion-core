@@ -26,6 +26,7 @@ class UpdateActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var version: TextView
     private lateinit var choose: Button
+    private lateinit var clearCache: Button
     private lateinit var install: Button
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -74,6 +75,10 @@ class UpdateActivity : Activity() {
         version = label("", 18f)
         choose = button(R.string.choose_apk) { chooseApk() }
         install = button(R.string.install_update) { checkAndInstall() }.apply { isEnabled = false }
+        clearCache = button(R.string.update_clear_cache) {
+            val keep = candidate?.token
+            runWorker({ repository.clearCache(keep) }) { _ -> status.setText(R.string.update_cache_cleared) }
+        }
         button(R.string.close) { finish() }
         setContentView(ScrollView(this).apply {
             isFillViewport = true; setBackgroundColor(Color.rgb(10, 22, 43)); addView(root)
@@ -100,14 +105,13 @@ class UpdateActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == PICK_APK && resultCode == RESULT_OK) {
             val uri = data?.data
-            discardUnsharedCandidate()
             candidate = null; version.text = ""; handedToInstaller = false
             setBusy(false)
             if (uri?.scheme != "content") { showProblem(UpdateProblem.INVALID); return }
             runWorker({
                 val stream = contentResolver.openInputStream(uri) ?: throw UpdateRejected(UpdateProblem.READ_FAILED)
                 repository.prepare(stream)
-            }, discardOnDrop = true) { prepared ->
+            }) { prepared ->
                 candidate = prepared
                 showCandidate()
             }
@@ -120,6 +124,7 @@ class UpdateActivity : Activity() {
     private fun setBusy(active: Boolean) {
         busy = active
         choose.isEnabled = !active
+        clearCache.isEnabled = !active
         install.isEnabled = !active && candidate != null
     }
 
@@ -129,16 +134,14 @@ class UpdateActivity : Activity() {
         setBusy(false)
     }
 
-    private fun runWorker(task: () -> PreparedUpdate, discardOnDrop: Boolean = false, success: (PreparedUpdate) -> Unit) {
+    private fun <T> runWorker(task: () -> T, success: (T) -> Unit) {
         if (busy || destroyed) return
         setBusy(true); status.setText(R.string.update_checking)
         worker.execute {
             try {
                 val result = task()
                 main.post {
-                    if (destroyed) {
-                        if (discardOnDrop) repository.discard(result.token)
-                    } else {
+                    if (!destroyed) {
                         setBusy(false)
                         success(result)
                     }
@@ -146,7 +149,6 @@ class UpdateActivity : Activity() {
             } catch (failure: Exception) {
                 main.post {
                     if (!destroyed) {
-                        discardUnsharedCandidate()
                         candidate = null; version.text = ""; handedToInstaller = false
                         setBusy(false)
                         showProblem((failure as? UpdateRejected)?.problem ?: UpdateProblem.READ_FAILED)
@@ -193,6 +195,8 @@ class UpdateActivity : Activity() {
             UpdateProblem.SIGNATURE -> R.string.update_wrong_signature
             UpdateProblem.ANDROID_VERSION -> R.string.update_android_version
             UpdateProblem.TOO_LARGE -> R.string.update_too_large
+            UpdateProblem.CACHE_FULL -> R.string.update_cache_full
+            UpdateProblem.NO_SPACE -> R.string.update_no_space
             UpdateProblem.CHANGED -> R.string.update_changed
             UpdateProblem.INVALID -> R.string.update_invalid
             UpdateProblem.READ_FAILED -> R.string.update_read_failed
@@ -208,17 +212,15 @@ class UpdateActivity : Activity() {
         super.onSaveInstanceState(outState)
     }
 
-    private fun discardUnsharedCandidate() {
-        if (!handedToInstaller) candidate?.let { repository.discard(it.token) }
-    }
-
     override fun onResume() { super.onResume(); foreground = true }
     override fun onPause() { foreground = false; super.onPause() }
 
     override fun onDestroy() {
         destroyed = true
         worker.shutdownNow()
-        if (!isChangingConfigurations) discardUnsharedCandidate()
+        // Valid snapshots belong to the deduplicated cache, not this activity. Another
+        // screen or the Android installer can still be reading the same immutable file.
+        // Failed imports are removed by the repository; explicit cleanup/expiry owns the rest.
         super.onDestroy()
     }
 

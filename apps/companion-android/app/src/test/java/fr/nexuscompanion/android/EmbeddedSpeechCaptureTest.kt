@@ -12,6 +12,26 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class EmbeddedSpeechCaptureTest {
+    @Test fun sustainedDictationCanContinueBeyondOneMinuteAndFinalizesBeforeTheWatchdog() {
+        val recorder = Recorder(); var samples = 0L
+        val decoder = object : LocalSpeechDecoder {
+            override fun accept(input: ShortArray, count: Int): Boolean { samples += count; return false }
+            override fun partial() = "nexus retiens que cette observation continue"
+            override fun result() = ""
+            override fun finish() = "nexus retiens que voici la fin exacte"
+            override fun close() = Unit
+        }
+        val heard = mutableListOf<String>()
+        EmbeddedSpeechCapture(Executor { it.run() }, { it() }, { recorder }, { decoder }, object : RecognitionEvents {
+            override fun ready() = Unit
+            override fun result(text: String) { heard.add(text) }
+            override fun error(failure: RecognitionFailure) { fail(failure.name) }
+        }).start()
+        assertTrue(samples > EmbeddedSpeechCapture.SAMPLE_RATE * 60L)
+        assertTrue(samples < EmbeddedSpeechCapture.SAMPLE_RATE * 120L)
+        assertEquals(listOf("nexus retiens que voici la fin exacte"), heard)
+        assertTrue(recorder.closed)
+    }
     @Test fun finalizesAQuietUtteranceEvenWhenNoPartialWasReturned() {
         val recorder = Recorder()
         var finalized = false

@@ -13,6 +13,18 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun longExplicitMemoryProposalsSurviveIntactAndStillNeedManualApproval() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "long-proposal", LocalKnowledgeLibraryTest.JvmCipher("long-proposal"))
+        val content = "Une observation locale. ".repeat(290) + "Dernière information exacte."
+        NativeBrainService(context, library).use { brain ->
+            val reply = brain.reply("retiens que $content")
+            assertEquals(content, reply.candidate?.content)
+            assertTrue(reply.text.contains("confirmer"))
+            brain.reply("oui")
+            assertTrue(library.list().isEmpty())
+        }
+    }
     @Test fun spokenQuestionVariantsDoNotBecomeNotesAndTheMissingSlotIsExplained() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "questions", LocalKnowledgeLibraryTest.JvmCipher("questions"))
@@ -104,7 +116,7 @@ class NativeBrainServiceTest {
         var calls = 0
         NativeBrainService(context, library, { elapsed }) { calls++; WikipediaKnowledgeSearch.Article(42, "Volcan", "La lave.") }.use { brain ->
             brain.reply("Qu’est-ce qu’un volcan ?"); brain.reply("non"); brain.reply("oui")
-            brain.reply("Qu’est-ce qu’un volcan ?"); elapsed += 90_000L; brain.reply("oui")
+            brain.reply("Qu’est-ce qu’un volcan ?"); elapsed += NativeCapacity.PENDING_CONFIRMATION_MS; brain.reply("oui")
             brain.reply("Qu’est-ce qu’un volcan ?"); brain.reply("bonjour"); brain.reply("oui")
             brain.reply("Qu’est-ce qu’un volcan ?"); brain.clearConversation(); brain.reply("oui")
             assertEquals(0, calls)

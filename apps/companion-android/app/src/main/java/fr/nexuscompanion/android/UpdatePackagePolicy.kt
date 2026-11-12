@@ -8,7 +8,7 @@ internal data class UpdatePackage(
     val minSdk: Int
 )
 
-internal enum class UpdateProblem { INVALID, WRONG_APP, NOT_NEWER, SIGNATURE, ANDROID_VERSION, TOO_LARGE, CHANGED, READ_FAILED }
+internal enum class UpdateProblem { INVALID, WRONG_APP, NOT_NEWER, SIGNATURE, ANDROID_VERSION, TOO_LARGE, CACHE_FULL, NO_SPACE, CHANGED, READ_FAILED }
 internal class UpdateRejected(val problem: UpdateProblem) : Exception(problem.name)
 
 /** Conservative self-update policy. Key rotation needs a separate, reviewed migration. */

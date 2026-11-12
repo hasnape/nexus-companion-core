@@ -22,8 +22,8 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 21
-  versionName = "0.4.15-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 22
+  versionName = "0.4.16-native-alpha" + if (nexusPreview) "-preview" else ""
   ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) }
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
   buildConfigField("String", "FRENCH_MODEL_ID", "\"$frenchModelId\"")
@@ -37,7 +37,7 @@ android {
  kotlinOptions { jvmTarget = "17" }
  buildFeatures { buildConfig = true }
  sourceSets.getByName("main").assets.srcDir(frenchModelAssets)
- // Keep the universal APK small enough for the installed app's 64 MiB update limit.
+ // Retain universal APK compatibility with older installed updaters (64 MiB).
  packaging.jniLibs.useLegacyPackaging = true
  testOptions { unitTests.isIncludeAndroidResources = true }
  val releaseKeystore = providers.environmentVariable("NEXUS_ANDROID_KEYSTORE_PATH").orNull
@@ -143,7 +143,9 @@ val verifyNativeBrain by tasks.registering {
  val repo = rootProject.projectDir.resolve("../..").canonicalFile
  val asset = layout.projectDirectory.file("src/main/assets/brain/nexus-brain.js").asFile
  val manifest = layout.projectDirectory.file("src/main/assets/brain/manifest.json").asFile
- inputs.files(asset, manifest)
+ inputs.files(asset, manifest,
+  layout.projectDirectory.file("src/main/java/fr/nexuscompanion/android/NativeCapacity.kt"),
+  layout.projectDirectory.file("src/main/res/values/native_capacity.xml"))
  inputs.dir(repo.resolve("packages/companion-core/src"))
  inputs.files(repo.resolve("scripts/build-native-brain.mjs"), repo.resolve("package.json"), repo.resolve("package-lock.json"))
  doLast {

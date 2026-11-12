@@ -41,8 +41,60 @@ class LocalUpdateRepositoryTest {
     @Test fun totalStagingQuotaIsEnforced() {
         val dir = temporary.newFolder(); val repository = repo(dir, max = 10, quota = 12)
         val first = repository.prepare(Stream(ByteArray(8)))
-        rejects(UpdateProblem.TOO_LARGE) { repository.prepare(Stream(ByteArray(8))) }
+        rejects(UpdateProblem.CACHE_FULL) { repository.prepare(Stream(ByteArray(8) { 1 })) }
         assertEquals(listOf(first.token), dir.listFiles().orEmpty().map { it.name })
+    }
+    @Test fun repeatedlyChoosingTheSameApkReusesOneCheckedSnapshot() {
+        val dir = temporary.newFolder(); val repository = repo(dir, max = 10, quota = 20)
+        val first = repository.prepare(Stream(ByteArray(8)))
+        repeat(8) { assertEquals(first, repository.prepare(Stream(ByteArray(8)))) }
+        assertEquals(8L, dir.listFiles().orEmpty().sumOf { it.length() })
+        assertEquals(first, repository.restore(first.token, first.sha256))
+    }
+    @Test fun installingAnUpdateRemovesItsOldSnapshotBeforeTheNextImport() {
+        val dir = temporary.newFolder(); var current = installed
+        val repository = LocalUpdateRepository(dir, { current }, { file ->
+            candidate.copy(versionCode = file.inputStream().use { it.read() }.toLong())
+        }, 35, 10, 12)
+        val first = repository.prepare(Stream(ByteArray(8) { 7 }))
+        current = candidate
+        val next = repository.prepare(Stream(ByteArray(8) { 8 }))
+        assertFalse(repository.file(first.token).exists())
+        assertEquals(8L, next.metadata.versionCode)
+        assertEquals(listOf(next.token), dir.listFiles().orEmpty().map { it.name })
+    }
+    @Test fun cleanupKeepsTheSelectedInstallerSnapshotAndNeverTouchesPrivateNotes() {
+        val dir = temporary.newFolder(); val repository = repo(dir)
+        val first = repository.prepare(Stream(byteArrayOf(1)))
+        val selected = repository.prepare(Stream(byteArrayOf(2)))
+        val notes = temporary.newFile("knowledge.json").apply { writeText("private notes") }
+        assertEquals(1, repository.clearCache(selected.token))
+        assertFalse(repository.file(first.token).exists())
+        assertEquals(selected, repository.restore(selected.token, selected.sha256))
+        assertEquals("private notes", notes.readText())
+    }
+    @Test fun lowDiskSpaceIsDistinctFromAnOversizedFileAndLeavesNoPartialSnapshot() {
+        val dir = temporary.newFolder(); val stream = Stream(byteArrayOf(1))
+        val repository = LocalUpdateRepository(dir, { installed }, { candidate }, 35, usableBytes = { 0 })
+        rejects(UpdateProblem.NO_SPACE) { repository.prepare(stream) }
+        assertTrue(stream.closed); assertTrue(dir.listFiles().orEmpty().isEmpty())
+    }
+    @Test fun defaultCapacityAcceptsAnApkLargerThanTheOld64MiBLimit() {
+        val dir = temporary.newFolder()
+        val repository = LocalUpdateRepository(dir, { installed }, { candidate }, 35)
+        val size = 64 * 1024 * 1024 + 1
+        val source = object : java.io.InputStream() {
+            var remaining = size
+            override fun read(): Int = if (remaining-- > 0) 0 else -1
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                if (remaining <= 0) return -1
+                val count = minOf(remaining, length); bytes.fill(0, offset, offset + count)
+                remaining -= count; return count
+            }
+        }
+        val prepared = repository.prepare(source)
+        assertEquals(size.toLong(), repository.file(prepared.token).length())
+        assertEquals(prepared, repository.restore(prepared.token, prepared.sha256))
     }
     @Test fun emptyAndInvalidPackagesAreRemoved() {
         val dir = temporary.newFolder()

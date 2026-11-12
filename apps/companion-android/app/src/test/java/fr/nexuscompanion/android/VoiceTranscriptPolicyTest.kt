@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceTranscriptPolicyTest {
+    @Test fun allConversationalApprovalsRequireReliableConfidenceEvenWithAWakePrefix() {
+        for (text in listOf("Nexus oui", "Nexus oui cherche", "Nexus retiens le", "Nexus non merci")) {
+            assertNull(text, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis(text, .2f)), false))
+            assertEquals(text, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis(text, .9f)), false))
+        }
+        assertNull(VoiceTranscriptPolicy.confirmation("je dis oui parfois mais pas maintenant"))
+        assertEquals("oui", VoiceTranscriptPolicy.select(listOf(SpeechHypothesis("oui", .2f)), false))
+    }
     @Test fun frenchWakeVariantsPreserveTheFullCommand() {
         for (wake in listOf("Nexus", "Néxus", "nexusse", "nexuce", "Nex us", "Nex-us", "Nex’us", "Hey Nexus", "Hé Nexus", "OK Nexus", "Nexus Companion", "Nexus compagnon")) {
             val parsed = VoiceTranscriptPolicy.parse("$wake, Retiens que je préfère le français !")
@@ -51,10 +59,10 @@ class VoiceTranscriptPolicyTest {
     }
 
     @Test fun malformedOrOversizedTopTranscriptIsRejectedRatherThanTruncated() {
-        for (text in listOf("", "  ", "x".repeat(2001))) {
+        for (text in listOf("", "  ", "x".repeat(8001))) {
             assertNull(VoiceTranscriptPolicy.select(listOf(SpeechHypothesis(text, .9f), SpeechHypothesis("Nexus bonjour", .9f)), false))
         }
         assertNull(VoiceTranscriptPolicy.select(emptyList(), true))
-        assertEquals(2000, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis("x".repeat(2000))), true)?.length)
+        assertEquals(8000, VoiceTranscriptPolicy.select(listOf(SpeechHypothesis("x".repeat(8000))), true)?.length)
     }
 }

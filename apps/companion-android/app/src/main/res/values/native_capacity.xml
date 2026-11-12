@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from packages/companion-core/src/native-capacity.json. -->
+<resources>
+    <integer name="nexus_message_chars">8000</integer>
+</resources>

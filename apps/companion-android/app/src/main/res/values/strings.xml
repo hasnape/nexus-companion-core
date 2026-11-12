@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="chrome_reader_title">Nexus — lecture Chrome à la demande</string>
+    <string name="chrome_reader_description">Lit la partie accessible d’un Aperçu IA de Google dans Chrome après ta demande. Aucun clic ni défilement automatique. Aucun texte conservé sans confirmation. Les autres applications ne sont pas lues.</string>
+    <string name="chrome_auto_read">Lire les réponses IA après une recherche Web</string>
+    <string name="chrome_read">Lire la réponse IA de Chrome</string>
+    <string name="chrome_read_copied">Lire un texte copié</string>
+    <string name="chrome_reader_setup">Nexus peut revenir lire la partie visible d’un Aperçu IA après une recherche Web, ou quand tu dis « lis la réponse IA de Chrome ».\n\nPour l’activer, ouvre les réglages Android et active « Nexus — lecture Chrome à la demande ». Cette fonction consulte uniquement Chrome pendant ta demande. Tu peux la désactiver ici à tout moment.\n\nSi Android bloque ce réglage, utilise « Lire un texte copié ». Une page masquée, un aperçu absent ou un texte inaccessible ne peut pas être lu automatiquement.</string>
+    <string name="chrome_reader_configure">Configurer l’accès Chrome</string>
+    <string name="chrome_read_waiting">Je vais lire la réponse IA accessible dans Chrome. Je reviens dès qu’elle est disponible.</string>
+    <string name="chrome_no_response">Je n’ai pas trouvé de réponse IA accessible dans Chrome. Affiche l’Aperçu IA de Google, puis réessaie. Tu peux aussi copier le texte et utiliser « Lire un texte copié ».</string>
+    <string name="chrome_read_cancelled">Lecture Chrome annulée. Tu peux relancer la lecture quand le résultat est affiché.</string>
+    <string name="chrome_clipboard_empty">Copie d’abord le texte de la réponse dans Chrome. Le presse-papiers doit contenir du texte, pas seulement un lien.</string>
+    <string name="chrome_copy_review">Lire ce texte copié ? Son origine n’est pas vérifiée. Il ne sera retenu qu’après une confirmation distincte.\n\n%1$s</string>
+    <string name="chrome_read_confirm">Lire à voix haute</string>
+    <string name="chrome_read_source">Google · réponse IA affichée dans Chrome</string>
+    <string name="chrome_copied_source">Texte copié · origine non vérifiée</string>
     <string name="app_name">Nexus Companion</string>
     <string name="external_online_disabled">L’accès en ligne est désactivé dans Nexus. Active-le dans les réglages pour ouvrir Google Maps ou Chrome.</string>
     <string name="external_app_unavailable">Aucune application compatible ne peut ouvrir cette demande. Vérifie que Google Maps, Chrome ou un autre navigateur est installé et activé.</string>

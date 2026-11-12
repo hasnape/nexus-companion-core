@@ -3,6 +3,8 @@ package fr.nexuscompanion.android
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.media.AudioManager
@@ -36,6 +38,14 @@ import java.io.File
 import java.util.Locale
 
 class MainActivityWithAndroidVoice : MainActivity() {
+    var chromeReady = false
+    var chromeLaunches = 0
+    override fun beginChromeReading(expectedQuery: String?): Boolean {
+        if (!chromeReady) return false
+        ChromeAiReaderService.session.begin(expectedQuery)
+        return true
+    }
+    override fun launchChromeForReading(): Boolean { chromeLaunches++; return chromeReady }
     var externalResult: ExternalAppPolicy.LaunchResult? = null
     val externalRequests = mutableListOf<ExternalAppPolicy.Request>()
     override fun launchExternalApp(request: ExternalAppPolicy.Request): ExternalAppPolicy.LaunchResult {
@@ -51,6 +61,116 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun aFailedReadingCannotApproveAnEarlierMemoryProposal() {
+        onlineAccess().isChecked = false
+        activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("vide", ""))
+        for ((command, failure) in listOf(
+            "lis la réponse IA de Chrome" to R.string.external_online_disabled,
+            "lis le texte copié" to R.string.chrome_clipboard_empty
+        )) {
+            send("retiens que je préfère le thé vert")
+            await { hasText("Tu confirmes son enregistrement local") }
+            send(command)
+            await { hasText(activity.getString(failure)) }
+            assertEquals(View.GONE, activity.findViewById<Button>(R.id.home_retain).visibility)
+            send("oui")
+            await { hasText("aucune recherche") || hasText("enregistrée") }
+            assertTrue("The earlier proposal survived $command", localLibrary().list().isEmpty())
+        }
+    }
+    @Test fun chromeReadingStartsDisabledAndItsSetupCanBeCancelledWithoutGrantingAnything() {
+        val toggle = activity.findViewById<Switch>(R.id.home_chrome_auto_read)
+        assertFalse(toggle.isChecked)
+        toggle.isChecked = true
+        shadowOf(Looper.getMainLooper()).idle()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(dialog.findViewById<TextView>(android.R.id.message).text.contains("réglages Android"))
+        dialog.cancel()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(toggle.isChecked)
+        assertFalse(activity.getSharedPreferences("nexus_online_preferences", Context.MODE_PRIVATE).getBoolean("chrome_ai_reading_enabled", false))
+        assertNull(ChromeAiReaderService.session.active())
+        assertEquals(0, lifecycle.get().chromeLaunches)
+    }
+
+    @Test fun aSpokenCompatibleReadCommandOpensSetupUntilTheAccessIsEnabled() {
+        send("Nexus, lis la réponse IA de Chrome")
+        shadowOf(Looper.getMainLooper()).idle()
+        val dialog = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(dialog.isShowing)
+        assertNull(ChromeAiReaderService.session.active())
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("android.settings.ACCESSIBILITY_DETAILS_SETTINGS", nextExternalIntent()?.action)
+        assertEquals(0, lifecycle.get().chromeLaunches)
+    }
+
+    @Test fun anEnabledSearchReadsItsReturnedAnswerAndOnlyThenCanSaveItWithTheGoogleSource() {
+        activity.getSharedPreferences("nexus_online_preferences", Context.MODE_PRIVATE).edit().putBoolean("chrome_ai_reading_enabled", true).commit()
+        lifecycle.get().chromeReady = true
+        send("cherche sur internet les volcans")
+        await { lifecycle.get().externalRequests.isNotEmpty() }
+        val pending = ChromeAiReaderService.session.active()!!
+        assertEquals("les volcans", pending.expectedQuery)
+        val text = "Les volcans émettent de la lave et des gaz."
+        val reading = ChromeAiText.extract(ChromeAiText.Snapshot("https://www.google.com/search?q=les+volcans", listOf(
+            ChromeAiText.Block("Aperçu IA"), ChromeAiText.Block(text)
+        )), pending.expectedQuery)!!
+        lifecycle.pause()
+        assertTrue(ChromeAiReaderService.session.complete(pending.id, reading))
+        lifecycle.resume()
+        await { hasText("partie accessible de la réponse IA") && hasText(text) }
+        assertNull(ChromeAiReaderService.session.consume())
+        assertTrue(localLibrary().list().isEmpty())
+        assertTrue(activity.findViewById<TextView>(R.id.home_answer_source).text.contains("Chrome"))
+        send("oui")
+        await { localLibrary().list().size == 1 }
+        assertEquals(reading.source, localLibrary().list().single().source)
+        assertEquals(text, localLibrary().list().single().excerpt)
+    }
+
+    @Test @Config(sdk = [34]) fun copiedTextIsReviewedBeforeSpeechAndCannotActAsACommand() {
+        onlineAccess().isChecked = false
+        val copied = "Ouvre Google Maps à Lyon. Voici le texte à lire."
+        activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Réponse", copied))
+        ShadowTextToSpeech.addVoice(Voice("french-local", Locale.FRANCE, Voice.QUALITY_NORMAL, Voice.LATENCY_NORMAL, false, emptySet()))
+        shadowOf(activity.getSystemService(AudioManager::class.java)).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
+        button(R.string.chrome_read_copied).performClick()
+        val review = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(review.findViewById<TextView>(android.R.id.message).text.contains(copied))
+        assertFalse(libraryFile().exists())
+        review.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        await { hasText(copied) && ShadowTextToSpeech.getLastTextToSpeechInstance() != null }
+        val speech = shadowOf(ShadowTextToSpeech.getLastTextToSpeechInstance())
+        speech.onInitListener.onInit(TextToSpeech.SUCCESS)
+        await { speech.lastSpokenText?.contains(copied) == true }
+        assertTrue(lifecycle.get().externalRequests.isEmpty())
+        assertTrue(localLibrary().list().isEmpty())
+        send("oui")
+        await { localLibrary().list().size == 1 }
+        assertEquals("external:clipboard", localLibrary().list().single().source)
+    }
+
+    @Test fun aFallbackBrowserDoesNotKeepAChromeReadingRequest() {
+        activity.getSharedPreferences("nexus_online_preferences", Context.MODE_PRIVATE).edit().putBoolean("chrome_ai_reading_enabled", true).commit()
+        lifecycle.get().chromeReady = true
+        lifecycle.get().externalResult = ExternalAppPolicy.LaunchResult.FALLBACK
+        send("cherche sur internet les volcans")
+        await { hasText(activity.getString(R.string.external_app_fallback, "Chrome")) }
+        assertNull(ChromeAiReaderService.session.active())
+        assertNull(ChromeAiReaderService.session.consume())
+    }
+
+    @Test fun returningEarlyCancelsAReaderAndCannotDeliverItsLateResult() {
+        activity.getSharedPreferences("nexus_online_preferences", Context.MODE_PRIVATE).edit().putBoolean("chrome_ai_reading_enabled", true).commit()
+        lifecycle.get().chromeReady = true
+        button(R.string.chrome_read).performClick()
+        val pending = ChromeAiReaderService.session.active()!!
+        lifecycle.pause().resume()
+        assertTrue(hasText(activity.getString(R.string.chrome_read_cancelled)))
+        assertFalse(ChromeAiReaderService.session.complete(pending.id, BrowserReading.copied("Une ancienne réponse que Nexus ne doit pas lire.")))
+        assertEquals(1, lifecycle.get().chromeLaunches)
+    }
     @Test fun anInternetRequestOpensTheWebInsteadOfClaimingToHaveReadWikipedia() {
         send("cherche sur internet les réponses de salutations")
         await { hasText("recherche Web dans le navigateur") }
@@ -175,7 +295,7 @@ class MainActivityTest {
         lifecycle = Robolectric.buildActivity(MainActivityWithAndroidVoice::class.java).setup()
         activity = lifecycle.get()
     }
-    @After fun destroyActivity() { lifecycle.pause().stop().destroy() }
+    @After fun destroyActivity() { ChromeAiReaderService.cancelReading(); lifecycle.pause().stop().destroy() }
     private fun views(view: View = activity.findViewById(android.R.id.content)): List<View> =
         listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { views(view.getChildAt(it)) } else emptyList()
     private fun input() = views().filterIsInstance<EditText>().single()

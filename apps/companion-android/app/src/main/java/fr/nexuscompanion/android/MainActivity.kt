@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.os.Build
@@ -42,6 +43,7 @@ open class MainActivity : Activity() {
         const val SPOKEN_REPLIES_KEY = "spoken_replies_enabled"
         const val ONLINE_ACCESS_KEY = "online_access_enabled"
         const val FACE_MODE_STATE = "face_mode"
+        const val CHROME_READING_KEY = "chrome_ai_reading_enabled"
         const val ROBOT_MODE_STATE = "robot_mode"
     }
 
@@ -86,6 +88,7 @@ open class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private var pendingCandidate: NativeBrainService.Candidate? = null
+    private var pendingBrowserReading: BrowserReading? = null
     private var voiceActive = false
     private var microphoneReady = false
     private var speaking = false
@@ -268,10 +271,22 @@ open class MainActivity : Activity() {
             if (content.isNotEmpty()) confirmNote(content)
         }
         retainButton = bindButton(R.id.home_retain) {
-            pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
+            val browser = pendingBrowserReading
+            if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
         bindButton(R.id.home_notes) { showNotes() }
         bindButton(R.id.home_voice_settings) { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
+        findViewById<Switch>(R.id.home_chrome_auto_read).apply {
+            isChecked = onlinePreferences.getBoolean(CHROME_READING_KEY, false)
+            setOnCheckedChangeListener { _, enabled ->
+                if (enabled) showChromeReaderSetup() else {
+                    onlinePreferences.edit().putBoolean(CHROME_READING_KEY, false).apply()
+                    ChromeAiReaderService.cancelReading()
+                }
+            }
+        }
+        bindButton(R.id.home_chrome_read) { readChrome() }
+        bindButton(R.id.home_chrome_paste) { readCopiedText() }
         bindButton(R.id.home_updates) { startActivity(Intent(this, UpdateActivity::class.java)) }
         bindButton(R.id.home_about) {
             runTask(R.string.working, R.string.operation_failed, {
@@ -437,11 +452,16 @@ open class MainActivity : Activity() {
             return
         }
         if (busy) return
+        if (ChromeAiText.isReadCommand(message)) { readChrome(); return }
+        if (VoiceTranscriptPolicy.commandWords(message) in setOf("lis le texte copie", "lis le texte que j ai copie")) {
+            readCopiedText(); return
+        }
         when (VoiceTranscriptPolicy.commandWords(message)) {
             "roue directrice a l avant", "direction a l avant" -> { configureSteering(true); return }
             "roue directrice a l arriere", "direction a l arriere" -> { configureSteering(false); return }
         }
         pendingCandidate = null
+        pendingBrowserReading = null
         retainButton.visibility = View.GONE
         val display = when (VoiceTranscriptPolicy.commandWords(message)) {
             "mode robot", "passe en mode robot", "affiche ton corps" -> "robot"
@@ -474,13 +494,18 @@ open class MainActivity : Activity() {
             if (reply.external != null && foreground && generation == bodyGeneration) {
                 stopBody()
                 worker.execute { brain.clearConversation() }
+                val readingRequested = reply.external.app == ExternalAppPolicy.App.CHROME &&
+                    reply.external.operation == ExternalAppPolicy.Operation.SEARCH &&
+                    onlinePreferences.getBoolean(CHROME_READING_KEY, false) && beginChromeReading(reply.external.target)
                 when (launchExternalApp(reply.external)) {
                     ExternalAppPolicy.LaunchResult.PREFERRED -> controller.stop()
                     ExternalAppPolicy.LaunchResult.FALLBACK -> {
+                        if (readingRequested) ChromeAiReaderService.cancelReading()
                         showAnswer(getString(R.string.external_app_fallback, reply.external.app.label))
                         controller.stop()
                     }
                     ExternalAppPolicy.LaunchResult.UNAVAILABLE -> {
+                        if (readingRequested) ChromeAiReaderService.cancelReading()
                         externalFeedback = getString(R.string.external_app_unavailable)
                         showAnswer(externalFeedback!!)
                     }
@@ -494,9 +519,129 @@ open class MainActivity : Activity() {
                 main.removeCallbacks(bodyTick)
                 bodyTick.run()
             }
+            showBrowserSource(reply.browserReading)
             pendingCandidate = if (reply.notesAvailable) reply.candidate else null
-            retainButton.visibility = if (pendingCandidate != null) View.VISIBLE else View.GONE
+            pendingBrowserReading = reply.browserReading
+            retainButton.visibility = if (pendingCandidate != null || pendingBrowserReading != null) View.VISIBLE else View.GONE
         }
+    }
+
+    internal open fun beginChromeReading(expectedQuery: String?): Boolean = ChromeAiReaderService.begin(expectedQuery)
+
+    internal open fun launchChromeForReading(): Boolean = try {
+        val intent = packageManager.getLaunchIntentForPackage(ChromeAiReaderService.CHROME)
+        if (intent == null) false else { startActivity(intent); true }
+    } catch (_: RuntimeException) { false }
+
+    private fun showChromeReaderSetup() {
+        val toggle = findViewById<Switch>(R.id.home_chrome_auto_read)
+        val wasEnabled = onlinePreferences.getBoolean(CHROME_READING_KEY, false)
+        showDialog(AlertDialog.Builder(this).setTitle(R.string.chrome_reader_title).setMessage(R.string.chrome_reader_setup)
+            .setNegativeButton(R.string.cancel) { _, _ -> toggle.isChecked = wasEnabled }
+            .setOnCancelListener { toggle.isChecked = wasEnabled }
+            .setPositiveButton(R.string.chrome_reader_configure) { _, _ ->
+                onlinePreferences.edit().putBoolean(CHROME_READING_KEY, true).apply()
+                // Avoid a second setup dialog when synchronizing the visual switch.
+                toggle.setOnCheckedChangeListener(null)
+                toggle.isChecked = true
+                toggle.setOnCheckedChangeListener { _, enabled ->
+                    if (enabled) showChromeReaderSetup() else {
+                        onlinePreferences.edit().putBoolean(CHROME_READING_KEY, false).apply()
+                        ChromeAiReaderService.cancelReading()
+                    }
+                }
+                try { startActivity(ChromeAiReaderService.settingsIntent(this)) }
+                catch (_: RuntimeException) {
+                    try { startActivity(ChromeAiReaderService.fallbackSettingsIntent()) }
+                    catch (_: RuntimeException) { showAnswer(R.string.chrome_no_response) }
+                }
+            }.create())
+    }
+
+    private fun readChrome() {
+        if (busy || !foreground) return
+        if (!onlineAccess.isChecked) { sayBrowserStatus(R.string.external_online_disabled); return }
+        if (!onlinePreferences.getBoolean(CHROME_READING_KEY, false) || !beginChromeReading(null)) {
+            showChromeReaderSetup()
+            return
+        }
+        stopBody()
+        pendingBrowserReading = null
+        pendingCandidate = null
+        retainButton.visibility = View.GONE
+        worker.execute { brain.clearConversation() }
+        controller.stop()
+        showAnswer(R.string.chrome_read_waiting)
+        if (!launchChromeForReading()) {
+            ChromeAiReaderService.cancelReading()
+            if (autoListenEnabled) activateVoice()
+            sayBrowserStatus(R.string.external_app_unavailable)
+        }
+    }
+
+    private fun sayBrowserStatus(@StringRes message: Int) {
+        pendingCandidate = null
+        pendingBrowserReading = null
+        retainButton.visibility = View.GONE
+        worker.execute { brain.clearConversation() }
+        showAnswer(message)
+        controller.beginResponse()
+        finishLocalVoice(getString(message), expectAnswer = true)
+    }
+
+    private fun readCopiedText() {
+        if (busy || !foreground) return
+        val text = try {
+            val clipboard = getSystemService(ClipboardManager::class.java)
+            val clip = clipboard.primaryClip
+            if (clip == null || clip.itemCount != 1) null else clip.getItemAt(0).text?.toString()
+        } catch (_: RuntimeException) { null }
+        val reading = text?.let(BrowserReading::copied)
+        if (reading == null) { sayBrowserStatus(R.string.chrome_clipboard_empty); return }
+        showDialog(AlertDialog.Builder(this).setTitle(R.string.chrome_read_copied)
+            .setMessage(getString(R.string.chrome_copy_review, reading.text)).setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.chrome_read_confirm) { _, _ ->
+                // Dialog dismissal restores the normal voice lifecycle before the worker completes.
+                main.post { if (foreground && !destroyed) readBrowserResult(reading) }
+            }.create())
+    }
+
+    private fun readBrowserResult(reading: BrowserReading) {
+        pendingCandidate = null
+        pendingBrowserReading = null
+        retainButton.visibility = View.GONE
+        val generation = bodyGeneration
+        runTask(R.string.working, R.string.brain_failed, { brain.readBrowserResult(reading) },
+            voiceReply = { if (foreground && generation == bodyGeneration) it.text else null }, expectAnswer = { true }) { reply ->
+            if (foreground && generation == bodyGeneration) {
+                showAnswer(reply.text)
+                showBrowserSource(reading)
+                pendingBrowserReading = reading.takeIf { reply.notesAvailable }
+                retainButton.visibility = if (reply.notesAvailable) View.VISIBLE else View.GONE
+            }
+        }
+    }
+
+    private fun showBrowserSource(reading: BrowserReading?) {
+        if (reading == null) return
+        answerSource.text = if (reading.source == "external:clipboard") getString(R.string.chrome_copied_source)
+            else SpannableString(getString(R.string.chrome_read_source)).apply {
+                setSpan(URLSpan(reading.source), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        answerSource.visibility = View.VISIBLE
+    }
+
+    private fun confirmBrowserNote(reading: BrowserReading) {
+        showDialog(AlertDialog.Builder(this).setTitle(R.string.confirm_note_title)
+            .setMessage(getString(R.string.confirm_note_message, reading.text)).setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save_note) { _, _ ->
+                runTask(R.string.working, R.string.library_write_failed,
+                    { library.addApprovedSource(reading.title, reading.text, reading.source) }) { saved ->
+                    pendingBrowserReading = null
+                    retainButton.visibility = View.GONE
+                    showAnswer(if (saved.created) R.string.note_saved else R.string.note_already_saved)
+                }
+            }.create())
     }
 
     private fun stopBody() {
@@ -692,10 +837,19 @@ open class MainActivity : Activity() {
         super.onResume()
         foreground = true
         bodyTick.run()
-        if (!autoListenEnabled || voiceActive || permissionRequestInFlight || dialogDepth > 0) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) activateVoice()
-        else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) requestMicrophonePermission()
-        else status.setText(R.string.microphone_permission_needed)
+        val wasReading = ChromeAiReaderService.session.pending() != null
+        val chromeResult = ChromeAiReaderService.session.consume()
+        var chromeStatus: Int? = null
+        if (chromeResult?.reading != null && onlinePreferences.getBoolean(CHROME_READING_KEY, false) && onlineAccess.isChecked) {
+            readBrowserResult(chromeResult.reading)
+        } else if (chromeResult != null) chromeStatus = R.string.chrome_no_response
+        else if (wasReading) chromeStatus = R.string.chrome_read_cancelled
+        if (autoListenEnabled && !voiceActive && !permissionRequestInFlight && dialogDepth == 0) {
+            if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) activateVoice()
+            else if (!voicePreferences.getBoolean("microphone_permission_prompted", false)) requestMicrophonePermission()
+            else status.setText(R.string.microphone_permission_needed)
+        }
+        chromeStatus?.let(::sayBrowserStatus)
     }
 
     private fun activateVoice() {
@@ -726,6 +880,7 @@ open class MainActivity : Activity() {
 
     override fun onPause() {
         foreground = false
+        pendingBrowserReading = null
         stopBody()
         if (::controller.isInitialized) controller.stop()
         if (::brain.isInitialized && !destroyed) worker.execute { brain.clearConversation() }
@@ -733,6 +888,7 @@ open class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing) ChromeAiReaderService.cancelReading()
         destroyed = true
         stopBody()
         foreground = false

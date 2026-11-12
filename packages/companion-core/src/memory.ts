@@ -15,7 +15,7 @@ const SENSITIVE_PATTERNS = [
   /religion|croyance|foi/i,
   /politique|parti|vote/i,
   /adresse|localisation|gps|location/i,
-  /carte bancaire|iban|compte|revenu|salaire|crypto wallet|password/i,
+  /carte bancaire|iban|compte|revenu|salaire|crypto wallet|password|mot de passe|code pin|code de validation|cl[ée] api|jeton d['’]acc[èe]s/i,
   /intime|sexual|orientation/i
 ];
 

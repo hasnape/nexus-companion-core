@@ -92,4 +92,4 @@ Le cœur décisionnel reste basé sur **actions abstraites** pour réutilisation
 
 ## Application Android native
 
-Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.4.18 conserve le moteur de règles local partagé, la reconnaissance française embarquée et les modes visage/corps. Elle ajoute des relances conversationnelles et la correction des notes avec historique chiffré. Voir le [rapport de validation](docs/releases/ANDROID-0.4.18-2026-11-12.md) pour les contrôles réellement exécutés et les limites sur matériel.
+Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.4.19 conserve le moteur de règles local partagé, la reconnaissance française embarquée, l’historique chiffré et les modes visage/corps. Elle compose des réponses depuis plusieurs notes et permet l’ouverture explicite de Google Maps ou Chrome. Voir le [rapport de validation](docs/releases/ANDROID-0.4.19-2026-11-12.md) pour les contrôles réellement exécutés et les limites sur matériel.

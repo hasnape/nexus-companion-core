@@ -1,4 +1,4 @@
-import { analyzeQuestion } from './question';
+import { analyzeQuestion, personalQuestionParts } from './question';
 
 /** Small, extractive local retrieval. Stored prose remains evidence, never instructions. */
 export interface GroundedNote {
@@ -52,7 +52,22 @@ const toSecondPerson = (text: string): string => text
   .replace(/^je travaille\s+/i, 'Tu travailles ')
   .replace(/^mon m[ée]tier est\s+/i, 'Ton métier est ');
 
-export const answerFromNotes = (question: string, notes: GroundedNote[]): { text: string; evidenceIds: string[] } | null => {
+type GroundedAnswer = { text: string; evidenceIds: string[] };
+
+export const answerFromNotes = (question: string, notes: GroundedNote[]): GroundedAnswer | null => {
+  const parts = personalQuestionParts(question);
+  if (parts) {
+    const answers = parts.map((part) => ({ question: part, answer: answerSingleFromNotes(part, notes) }));
+    if (!answers.some((item) => item.answer)) return null;
+    return {
+      text: answers.map((item) => item.answer?.text ?? `Je ne retrouve pas de réponse à « ${item.question} » dans tes notes utilisables ici.`).join('\n'),
+      evidenceIds: Array.from(new Set(answers.flatMap((item) => item.answer?.evidenceIds ?? [])))
+    };
+  }
+  return answerSingleFromNotes(question, notes);
+};
+
+const answerSingleFromNotes = (question: string, notes: GroundedNote[]): GroundedAnswer | null => {
   const request = analyzeQuestion(question);
   const query = keys(request.content);
   if (!query.length) return null;
@@ -67,6 +82,11 @@ export const answerFromNotes = (question: string, notes: GroundedNote[]): { text
       && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalize(note.excerpt));
     return sentences.map((sentence) => {
       const normalized = normalize(sentence);
+      // A relative's fact is not the owner's fact, even when both share an attribute.
+      const relative = normalized.match(/^(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)?.[1]
+        ?? (!/^(?:je |j |mon (?:prenom|nom|metier) |ma profession |le createur )/.test(normalized)
+          ? normalize(note.title).match(/\b(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)?.[1] : undefined);
+      if (request.personal && relative && !query.includes(relative)) return { note, sentence, score: 0 };
       const slotMatches = request.kind === 'where' ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized)
         : request.kind === 'why' ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized)
         : request.kind === 'when' ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;

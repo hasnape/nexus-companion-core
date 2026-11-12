@@ -12,6 +12,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.SpannableString
+import android.text.InputFilter
+import android.text.InputType
 import android.text.Spanned
 import android.text.method.LinkMovementMethod
 import android.text.style.URLSpan
@@ -22,6 +24,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
@@ -30,6 +33,8 @@ import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import androidx.annotation.StringRes
 import java.util.concurrent.Executors
+import java.text.DateFormat
+import java.util.Date
 
 /** Native UI. A single worker owns the packaged brain and private library operations. */
 open class MainActivity : Activity() {
@@ -84,6 +89,8 @@ open class MainActivity : Activity() {
     private var voiceActive = false
     private var microphoneReady = false
     private var speaking = false
+    private var speechOutput = SpeechOutputState.IDLE
+    private var responsePlayback = false
     private var voiceStatus: String? = null
     private var autoListenEnabled = true
     private var foreground = false
@@ -135,6 +142,14 @@ open class MainActivity : Activity() {
             },
             onInputLevel = { microphoneLevel.progress = it },
             onSpeechOutput = { output ->
+                speechOutput = output
+                if (output == SpeechOutputState.COMPLETED) {
+                    val tracked = responsePlayback
+                    responsePlayback = false
+                    if (tracked && foreground && !destroyed) worker.execute { brain.replyPlayed() }
+                } else if (output in setOf(SpeechOutputState.IDLE, SpeechOutputState.FAILED, SpeechOutputState.UNAVAILABLE, SpeechOutputState.INTERRUPTED)) {
+                    responsePlayback = false
+                }
                 when (output) {
                     SpeechOutputState.UNAVAILABLE, SpeechOutputState.FAILED, SpeechOutputState.INTERRUPTED -> {
                         playbackNotice.setText(output.messageResource())
@@ -380,7 +395,7 @@ open class MainActivity : Activity() {
                         setBusy(false)
                         restoreStatus()
                         success(result)
-                        finishLocalVoice(voiceReply(result), expectAnswer(result))
+                        finishLocalVoice(voiceReply(result), expectAnswer(result), trackContext = true)
                     }
                 }
             } catch (failure: Exception) {
@@ -390,6 +405,7 @@ open class MainActivity : Activity() {
                         showAnswer(when (failure) {
                             is InvalidKnowledgeNote -> R.string.note_invalid
                             is KnowledgeCapacityReached -> R.string.library_full
+                            is KnowledgeChanged -> R.string.note_changed
                             else -> failureMessage
                         })
                         restoreStatus()
@@ -400,10 +416,13 @@ open class MainActivity : Activity() {
         }
     }
 
-    private fun finishLocalVoice(text: String?, expectAnswer: Boolean = false) {
+    private fun finishLocalVoice(text: String?, expectAnswer: Boolean = false, trackContext: Boolean = false) {
+        responsePlayback = false
         if (!foreground || dialogDepth > 0) return
         if (voiceActive) controller.finishResponse(text, expectAnswer)
         else if (text != null) controller.playReply(text)
+        responsePlayback = trackContext && !text.isNullOrBlank() && findViewById<Switch>(R.id.home_spoken_replies).isChecked &&
+            speechOutput in setOf(SpeechOutputState.PREPARING, SpeechOutputState.PLAYING)
     }
 
     private fun respond(message: String) {
@@ -449,6 +468,7 @@ open class MainActivity : Activity() {
             voiceReply = { replyText(it) }, expectAnswer = { it.expectsAnswer }) { reply ->
             val text = replyText(reply)
             showAnswer(text, reply.source)
+            if (reply.editNote != null && foreground) editNote(reply.editNote)
             if (reply.body != null && foreground && generation == bodyGeneration) {
                 faceAvatar.showBody = true
                 setFaceMode(true)
@@ -534,18 +554,85 @@ open class MainActivity : Activity() {
     }
 
     private fun showNote(note: LocalKnowledgeLibrary.Entry) {
-        showDialog(AlertDialog.Builder(this).setTitle(note.title)
-            .setMessage(getString(R.string.library_entry, note.title, note.excerpt, note.source))
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        details.addView(TextView(this).apply {
+            text = getString(R.string.library_entry, note.title, note.excerpt, note.source)
+            textSize = 18f
+        })
+        if (note.manuallyEdited) details.addView(TextView(this).apply { setText(R.string.note_manually_edited) })
+        val history = Button(this).apply { id = R.id.note_history_button; setText(R.string.note_history) }
+        details.addView(history)
+        val dialog = AlertDialog.Builder(this).setTitle(note.title)
+            .setView(ScrollView(this).apply { addView(details) })
             .setNegativeButton(R.string.close, null)
+            .setPositiveButton(R.string.edit_note) { _, _ -> editNote(note) }
             .setNeutralButton(R.string.delete_note) { _, _ ->
                 showDialog(AlertDialog.Builder(this).setTitle(R.string.delete_note)
                     .setMessage(R.string.delete_note_confirmation).setNegativeButton(R.string.cancel, null)
                     .setPositiveButton(R.string.delete_note) { _, _ ->
-                        runTask(R.string.working, R.string.library_write_failed, { library.remove(note.id) }) { removed ->
+                        runTask(R.string.working, R.string.library_write_failed, { library.remove(note.id, note) }) { removed ->
                             showAnswer(if (removed) R.string.note_deleted else R.string.library_no_results)
                         }
                     }.create())
+            }.create()
+        history.setOnClickListener { showHistory(note); dialog.dismiss() }
+        showDialog(dialog)
+    }
+
+    private fun editNote(note: LocalKnowledgeLibrary.Entry) {
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = (20 * resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        val title = EditText(this).apply {
+            id = R.id.note_edit_title; setHint(R.string.note_title)
+            setSingleLine(true); filters = arrayOf(InputFilter.LengthFilter(160)); setText(note.title)
+        }
+        val content = EditText(this).apply {
+            id = R.id.note_edit_body; setHint(R.string.note_content)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            minLines = 6; maxLines = 12
+            filters = arrayOf(InputFilter.LengthFilter(NativeCapacity.MAX_NOTE_CHARS)); setText(note.excerpt)
+        }
+        fields.addView(title); fields.addView(content)
+        showDialog(AlertDialog.Builder(this).setTitle(R.string.edit_note)
+            .setView(ScrollView(this).apply { addView(fields) })
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save_note) { _, _ ->
+                val editedTitle = title.text.toString(); val editedContent = content.text.toString()
+                runTask(R.string.working, R.string.library_write_failed, { library.replace(note, editedTitle, editedContent) }) { result ->
+                    showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
+                }
             }.create())
+    }
+
+    private fun showHistory(current: LocalKnowledgeLibrary.Entry) {
+        runTask(R.string.working, R.string.library_read_failed, { library.history(current.id) }) { versions ->
+            if (versions.isEmpty()) { showAnswer(R.string.note_history_empty); return@runTask }
+            if (foreground) showDialog(AlertDialog.Builder(this).setTitle(R.string.note_history)
+                .setItems(versions.map { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it.recordedAt)) }.toTypedArray()) { _, index ->
+                    val old = versions[index]
+                    showDialog(AlertDialog.Builder(this).setTitle(R.string.note_previous_version)
+                        .setMessage(getString(R.string.library_entry, old.title, old.excerpt, old.source))
+                        .setNegativeButton(R.string.close, null)
+                        .setPositiveButton(R.string.note_restore) { _, _ ->
+                            showDialog(AlertDialog.Builder(this).setTitle(R.string.note_restore)
+                                .setMessage(getString(R.string.note_restore_confirmation, old.excerpt))
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.note_restore) { _, _ ->
+                                    runTask(R.string.working, R.string.library_write_failed,
+                                        { library.replace(current, old.title, old.excerpt) }) { restored ->
+                                        showAnswer(if (restored.created) R.string.note_restored else R.string.note_unchanged)
+                                    }
+                                }.create())
+                        }.create())
+                }.setNegativeButton(R.string.close, null).create())
+        }
     }
 
     /** Notes can contain private text: keep the microphone off while any dialog is visible. */

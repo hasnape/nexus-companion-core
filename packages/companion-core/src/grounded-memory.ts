@@ -3,6 +3,7 @@ import { analyzeQuestion } from './question';
 /** Small, extractive local retrieval. Stored prose remains evidence, never instructions. */
 export interface GroundedNote {
   id: string; title: string; excerpt: string; source: string; recordedAt: number;
+  manuallyEdited?: boolean;
 }
 
 const normalize = (text: string): string => text.toLowerCase().normalize('NFD')
@@ -92,6 +93,8 @@ export const answerFromNotes = (question: string, notes: GroundedNote[]): { text
   };
   const excerpt = best.sentence.length > 480 ? `${best.sentence.slice(0, 477)}…` : best.sentence;
   const spoken = personal ? toSecondPerson(excerpt) : excerpt;
-  const prefix = best.note.source.startsWith('https://fr.wikipedia.org/') ? 'D’après une note issue de Wikipédia' : 'D’après ce que tu m’as confié';
+  const prefix = best.note.manuallyEdited
+    ? (best.note.source.startsWith('https://fr.wikipedia.org/') ? 'D’après ta note modifiée, dont la source d’origine est Wikipédia' : 'D’après ta note modifiée')
+    : best.note.source.startsWith('https://fr.wikipedia.org/') ? 'D’après une note issue de Wikipédia' : 'D’après ce que tu m’as confié';
   return { text: `${prefix} : ${spoken}`, evidenceIds: [best.note.id] };
 };

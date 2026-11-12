@@ -13,6 +13,134 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun longPlaybackRenewsAReadOnlyResponseButCannotReviveConsent() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"played",LocalKnowledgeLibraryTest.JvmCipher("played"))
+        var elapsed=0L;var calls=0
+        NativeBrainService(context,library,{elapsed}) { calls++;null }.use { brain ->
+            val greeting=brain.reply("bonjour")
+            elapsed=NativeCapacity.PENDING_CONFIRMATION_MS+100L
+            brain.replyPlayed()
+            assertEquals(greeting.text,brain.reply("répète").text)
+            brain.reply("Qu’est-ce qu’un volcan ?")
+            elapsed+=NativeCapacity.PENDING_CONFIRMATION_MS+100L
+            brain.replyPlayed();brain.reply("oui")
+            assertEquals(0,calls)
+            assertTrue(library.list().isEmpty())
+        }
+    }
+    @Test fun anExternallyChangedNoteWithTheSameIdentityIsNotReplayed() {
+        val context=RuntimeEnvironment.getApplication()
+        val cipher=LocalKnowledgeLibraryTest.JvmCipher("external-focus")
+        val library=LocalKnowledgeLibrary(context,"external-focus",cipher)
+        library.addUserNote("Métier","Je travaille comme technicien.")
+        val file=File(context.filesDir,"knowledge-external-focus.json")
+        NativeBrainService(context,library).use { brain ->
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("technicien"))
+            val root=JSONObject(String(KnowledgePayload.decode(cipher.decrypt(file.readBytes()))))
+            root.getJSONArray("entries").getJSONObject(0).put("excerpt","Je travaille comme électricien.")
+            file.writeBytes(cipher.encrypt(KnowledgePayload.encode(root.toString().toByteArray())))
+            assertFalse(brain.reply("répète").text.contains("technicien"))
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("électricien"))
+        }
+    }
+    @Test fun repeatKeepsAMemoryApprovalButNeverRenewsItsExpiry() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"repeat-memory",LocalKnowledgeLibraryTest.JvmCipher("repeat-memory"))
+        var elapsed=0L
+        NativeBrainService(context,library,{elapsed}) { null }.use { brain ->
+            val proposal=brain.reply("retiens que je préfère le thé vert")
+            assertEquals(proposal.text,brain.reply("répète").text)
+            assertTrue(library.list().isEmpty())
+            elapsed=NativeCapacity.PENDING_CONFIRMATION_MS-1L
+            assertEquals(proposal.text,brain.reply("répète").text)
+            elapsed+=2
+            brain.reply("oui")
+            assertTrue(library.list().isEmpty())
+            assertTrue(brain.reply("répète").text.contains("aucune recherche"))
+        }
+    }
+    @Test fun repeatingBodySpeechDoesNotCreateAnotherMovementPlan() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"repeat-body",LocalKnowledgeLibraryTest.JvmCipher("repeat-body"))
+        NativeBrainService(context,library).use { brain ->
+            val moved=brain.reply("avance de vingt centimètres")
+            assertNotNull(moved.body)
+            val repeated=brain.reply("répète ta réponse")
+            assertEquals(moved.text,repeated.text)
+            assertNull(repeated.body)
+            assertTrue(library.list().isEmpty())
+        }
+    }
+    @Test fun focusedReadAndEditUseOnlyTheActualSingleNoteFromTheLastAnswer() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"focus",LocalKnowledgeLibraryTest.JvmCipher("focus"))
+        val note=library.addUserNote("Métier","Je travaille comme technicien informatique. Une information complémentaire locale.").entry
+        val before=File(context.filesDir,"knowledge-focus.json").readBytes()
+        NativeBrainService(context,library).use { brain ->
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("technicien"))
+            assertTrue(brain.reply("lis la note complète").text.endsWith(note.excerpt))
+            assertEquals(note,brain.reply("modifie cette note").editNote)
+            assertArrayEquals(before,File(context.filesDir,"knowledge-focus.json").readBytes())
+            brain.clearConversation()
+            assertNull(brain.reply("modifie cette note").editNote)
+        }
+    }
+    @Test fun editedOrDeletedEvidenceCannotBeReplayedFromAnOldConversation() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"stale-focus",LocalKnowledgeLibraryTest.JvmCipher("stale-focus"))
+        val original=library.addUserNote("Métier","Je travaille comme technicien.").entry
+        NativeBrainService(context,library).use { brain ->
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("technicien"))
+            val revised=library.replace(original,"Métier","Je travaille comme ingénieur.").entry
+            assertFalse(brain.reply("répète").text.contains("technicien"))
+            assertTrue(brain.reply("Et mon métier").text.contains("ingénieur"))
+            assertTrue(library.remove(revised.id))
+            assertNull(brain.reply("modifie cette note").editNote)
+            assertFalse(brain.reply("répète").text.contains("ingénieur"))
+        }
+    }
+    @Test fun ambiguousEvidenceDoesNotChooseANoteToEditAndBackgroundClearsTheFocus() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"ambiguous-focus",LocalKnowledgeLibraryTest.JvmCipher("ambiguous-focus"))
+        library.addUserNote("Métier","Je travaille comme technicien.")
+        library.addUserNote("Métier","Je travaille comme électricien.")
+        NativeBrainService(context,library).use { brain ->
+            assertTrue(brain.reply("Quel est mon métier ?").text.contains("Laquelle"))
+            assertNull(brain.reply("modifie cette note").editNote)
+            assertFalse(brain.reply("lis la note complète").text.contains("technicien"))
+            brain.clearConversation()
+            assertTrue(brain.reply("répète").text.contains("plus de réponse"))
+            assertEquals(2,library.list().size)
+        }
+    }
+    @Test fun repeatingAnOnlineExtractDoesNotSearchAgainOrSaveItBeforeApproval() {
+        val context=RuntimeEnvironment.getApplication()
+        val library=LocalKnowledgeLibrary(context,"repeat-source",LocalKnowledgeLibraryTest.JvmCipher("repeat-source"))
+        var calls=0
+        NativeBrainService(context,library) { calls++;WikipediaKnowledgeSearch.Article(42,"Volcan","Un volcan émet de la lave.") }.use { brain ->
+            val first=brain.reply("cherche en ligne volcan")
+            assertEquals(first.text,brain.reply("répète",false).text)
+            assertEquals(1,calls)
+            assertTrue(library.list().isEmpty())
+            brain.reply("oui")
+            assertEquals(1,library.list().size)
+            assertEquals(1,calls)
+        }
+    }
+    @Test fun repeatingAProposalDoesNotDiscardOrExecuteItsPendingApproval() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context,"repeat-proposal",LocalKnowledgeLibraryTest.JvmCipher("repeat-proposal"))
+        var calls = 0
+        NativeBrainService(context,library) { calls++;null }.use { brain ->
+            val first = brain.reply("Qu’est-ce qu’un volcan ?")
+            assertEquals(first.text,brain.reply("Nexus, répète ta réponse").text)
+            assertEquals(0,calls)
+            brain.reply("oui")
+            assertEquals(1,calls)
+            assertTrue(library.list().isEmpty())
+        }
+    }
     @Test fun escapedLargeContextsAreBudgetedWithoutTruncatingTheStoredNotes() {
         val context=RuntimeEnvironment.getApplication()
         val library=LocalKnowledgeLibrary(context,"escaped-expanded",LocalKnowledgeLibraryTest.JvmCipher("escaped-expanded"))

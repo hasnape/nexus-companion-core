@@ -116,6 +116,113 @@ class MainActivityTest {
     }
     private fun send(text: String) { input().setText(text); button(R.string.send).performClick() }
     private fun libraryFile() = File(activity.filesDir, "knowledge-nexus-default.json")
+    private fun localLibrary()=LocalKnowledgeLibrary(activity.applicationContext,"nexus-default",LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))
+    private fun openNoteDetails() : AlertDialog {
+        input().setText("")
+        val previous=ShadowAlertDialog.getLatestAlertDialog()
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== previous && ShadowAlertDialog.getLatestAlertDialog()?.listView != null }
+        val list=ShadowAlertDialog.getLatestAlertDialog()
+        list.listView.performItemClick(null,0,0)
+        shadowOf(Looper.getMainLooper()).idle()
+        return ShadowAlertDialog.getLatestAlertDialog()
+    }
+
+    @Test fun editingRequiresAnExplicitSaveAndRetainsTheFullOldVersion() {
+        val library=localLibrary();val original=library.addUserNote("Métier","Je travaille comme technicien.").entry
+        val details=openNoteDetails()
+        details.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val editor=ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(original.excerpt,editor.findViewById<EditText>(R.id.note_edit_body).text.toString())
+        editor.findViewById<EditText>(R.id.note_edit_body).setText("Je travaille comme ingénieur.")
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        await { hasText(activity.getString(R.string.note_updated)) }
+        val current=library.list().single()
+        assertEquals("Je travaille comme ingénieur.",current.excerpt)
+        assertEquals(original.excerpt,library.history(current.id).single().excerpt)
+        send("Quel est mon métier ?")
+        await { hasText("ingénieur") }
+        assertFalse(hasText("technicien"))
+    }
+    @Test fun cancelingANoteEditPreservesItsCiphertextAndDoesNotCreateHistory() {
+        val library=localLibrary();val original=library.addUserNote("Note","Texte à conserver.").entry
+        val before=libraryFile().readBytes()
+        openNoteDetails().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val editor=ShadowAlertDialog.getLatestAlertDialog()
+        editor.findViewById<EditText>(R.id.note_edit_body).setText("Brouillon non enregistré.")
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertArrayEquals(before,libraryFile().readBytes())
+        assertTrue(library.history(original.id).isEmpty())
+    }
+    @Test fun aStaleEditorCannotOverwriteAnotherLibraryInstancesCorrection() {
+        val library=localLibrary();val original=library.addUserNote("Note","Texte original.").entry
+        openNoteDetails().getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val editor=ShadowAlertDialog.getLatestAlertDialog()
+        library.replace(original,"Note","Modification extérieure.")
+        val before=libraryFile().readBytes()
+        editor.findViewById<EditText>(R.id.note_edit_body).setText("Ancien formulaire.")
+        editor.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        await { hasText(activity.getString(R.string.note_changed)) }
+        assertArrayEquals(before,libraryFile().readBytes())
+        assertEquals("Modification extérieure.",library.list().single().excerpt)
+    }
+    @Test fun previousVersionsCanBeRestoredThroughAnExplicitReview() {
+        val library=localLibrary();val original=library.addUserNote("Note","Ancien contenu.").entry
+        val revised=library.replace(original,"Note","Contenu actuel.").entry
+        val details=openNoteDetails()
+        details.findViewById<Button>(R.id.note_history_button).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== details && ShadowAlertDialog.getLatestAlertDialog()?.listView != null }
+        val history=ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(1,history.listView.adapter.count)
+        history.listView.performItemClick(null,0,0)
+        shadowOf(Looper.getMainLooper()).idle()
+        val old=ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(old.findViewById<TextView>(android.R.id.message).text.contains(original.excerpt))
+        old.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val confirmation=ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(revised.id,library.list().single().id)
+        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        await { hasText(activity.getString(R.string.note_restored)) }
+        val restored=library.list().single()
+        assertEquals(original.excerpt,restored.excerpt)
+        assertEquals(2,library.history(restored.id).size)
+    }
+    @Test fun theFocusedVoiceCommandOpensTheCorrectEditorWithoutSavingAnything() {
+        val library=localLibrary();val original=library.addUserNote("Métier","Je travaille comme technicien.").entry
+        val before=libraryFile().readBytes()
+        send("Quel est mon métier ?")
+        await { hasText("technicien") }
+        send("Nexus, modifie cette note")
+        await { ShadowAlertDialog.getLatestAlertDialog()?.findViewById<EditText>(R.id.note_edit_body) != null }
+        val editor=ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(original.excerpt,editor.findViewById<EditText>(R.id.note_edit_body).text.toString())
+        assertArrayEquals(before,libraryFile().readBytes())
+        editor.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+    @Test fun permanentDeletionExplicitlyIncludesTheVersionsAndKeepsOtherNotes() {
+        val library=localLibrary();val original=library.addUserNote("Note","Ancien contenu.").entry
+        library.replace(original,"Note","Contenu actuel.")
+        openNoteDetails().getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        val confirmation=ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("anciennes versions"))
+        confirmation.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        shadowOf(Looper.getMainLooper()).idle()
+        await { hasText(activity.getString(R.string.note_deleted)) }
+        assertTrue(library.list().isEmpty())
+        assertEquals(0,library.statistics().archivedNotes)
+    }
+
 
     @Test @Config(sdk = [34]) fun typedConversationIsSpokenWithMicrophoneAndOnlineAccessDisabled() {
         assertEquals(PackageManager.PERMISSION_DENIED, activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))

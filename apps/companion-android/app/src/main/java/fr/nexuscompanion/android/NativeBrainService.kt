@@ -21,7 +21,8 @@ internal class NativeBrainService(
         val notesAvailable: Boolean,
         val source: WikipediaKnowledgeSearch.Article? = null,
         val expectsAnswer: Boolean = false,
-        val body: RollingBodyState.Plan? = null
+        val body: RollingBodyState.Plan? = null,
+        val editNote: LocalKnowledgeLibrary.Entry? = null
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
@@ -30,9 +31,18 @@ internal class NativeBrainService(
         data class Save(val title: String, val excerpt: String, val source: String, override val expires: Long) : Pending
     }
     private var pending: Pending? = null
+    private data class Conversation(val reply: Reply, val notes: List<LocalKnowledgeLibrary.Entry>, val expires: Long)
+    private var conversation: Conversation? = null
+    private var turnEvidence: List<LocalKnowledgeLibrary.Entry> = emptyList()
 
     /** Session context is transient and confined to the worker, never written as history. */
-    fun clearConversation() { pending = null }
+    fun clearConversation() { pending = null; conversation = null; turnEvidence = emptyList() }
+
+    /** A long reading starts its follow-up lifetime after confirmed playback, not before it. */
+    fun replyPlayed() {
+        // Approval deadlines are never revived or extended by speech completion.
+        if (pending == null) conversation = conversation?.copy(expires = elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
+    }
 
     private fun brain(): SharedBrainRuntime {
         runtime?.let { return it }
@@ -47,6 +57,52 @@ internal class NativeBrainService(
 
     fun reply(message: String, onlineEnabled: Boolean = true, steeringAxle: String = "front"): Reply {
         require(message.isNotBlank() && message.length <= NativeCapacity.MAX_MESSAGE_CHARS)
+        val instant = elapsed()
+        if (conversation?.expires?.let { instant >= it } == true) conversation = null
+        if (pending?.expires?.let { instant >= it } == true) pending = null
+        turnEvidence = emptyList()
+        val words = VoiceTranscriptPolicy.commandWords(message)
+        val last = conversation
+        val repeat = words in setOf("repete", "repete ta reponse", "peux tu repeter", "redis moi ta reponse", "repete s il te plait")
+        val read = words in setOf("lis la note complete", "lis cette note", "lis moi cette note", "lis toute la note")
+        val edit = words in setOf("modifie cette note", "corrige cette note", "modifier cette note")
+        if (repeat || read || edit) {
+            val available = try {
+                if (last == null || last.notes.isEmpty()) true else {
+                    val current = library.list().associateBy { it.id }
+                    last.notes.all { note -> current[note.id] == note && !KnowledgePolicy.isExpired(note.expiresAt, System.currentTimeMillis()) }
+                }
+            } catch (_: Exception) {
+                clearConversation()
+                return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (!available) {
+                clearConversation()
+                return Reply("La note a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
+            }
+            if (repeat) return last?.reply?.copy(body = null, editNote = null)
+                ?: Reply("Je n’ai plus de réponse récente à répéter. Pose-moi de nouveau ta question.", null, true, expectsAnswer = true)
+            pending = null
+            val note = last?.notes?.singleOrNull()?.let { library.get(it.id) }
+                ?: return Reply("Précise le sujet de la note à utiliser. Tu peux aussi la choisir dans « Mes notes ».", null, true, expectsAnswer = true)
+            turnEvidence = listOf(note)
+            val result = if (edit) Reply("Tu peux relire et modifier cette note dans l’éditeur.", null, true, editNote = note)
+                else answer(message, onlineEnabled, steeringAxle, note)
+            rememberReply(result)
+            return result
+        }
+        turnEvidence = emptyList()
+        val result = answer(message, onlineEnabled, steeringAxle)
+        rememberReply(result)
+        return result
+    }
+
+    private fun rememberReply(reply: Reply) {
+        val expires = minOf(elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS, pending?.expires ?: Long.MAX_VALUE)
+        conversation = Conversation(reply.copy(body = null, editNote = null), turnEvidence.toList(), expires)
+    }
+
+    private fun answer(message: String, onlineEnabled: Boolean, steeringAxle: String, focusedNote: LocalKnowledgeLibrary.Entry? = null): Reply {
         val previous = pending?.takeIf { elapsed() < it.expires }
         pending = null
         val approval = VoiceTranscriptPolicy.confirmation(message)
@@ -57,13 +113,15 @@ internal class NativeBrainService(
                 is Pending.Lookup -> return lookup(previous.query, onlineEnabled, true)
                 is Pending.Save -> {
                     val saved = library.addApprovedSource(previous.title, previous.excerpt, previous.source)
+                    turnEvidence = listOf(saved.entry)
                     return Reply(context.getString(if (saved.created) R.string.note_saved else R.string.note_already_saved), null, true, expectsAnswer = true)
                 }
             }
         }
         if (VoiceTranscriptPolicy.commandWords(message) in setOf("etat de ta memoire", "etat de la memoire", "bilan memoire", "combien de notes as tu")) {
             val stats = library.statistics()
-            return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.", null, true, expectsAnswer = true)
+            val history = if (stats.archivedNotes == 0) "" else " Je conserve aussi ${stats.archivedNotes} ${if (stats.archivedNotes == 1) "ancienne version" else "anciennes versions"}."
+            return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.$history", null, true, expectsAnswer = true)
         }
         val body = JSONObject(brain().bodyJson(JSONObject().put("message", message).put("steeringAxle", steeringAxle).toString()))
         if (body.getBoolean("handled")) return Reply(body.getString("text"), null, true, expectsAnswer = true,
@@ -72,11 +130,11 @@ internal class NativeBrainService(
         val recall = KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
-        val notes = try { library.contextFor(message, now, recall, queryTerms) } catch (_: Exception) { null }
+        val notes = try { focusedNote?.let(::listOf) ?: library.contextFor(message, now, recall, queryTerms) } catch (_: Exception) { null }
         val array = JSONArray()
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
-            .put("notes", array).put("now", now).put("recallRequested", recall != null)
-            .put("readRequested", recall is KnowledgePolicy.Recall.Read)
+            .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
+            .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
         var requestChars = request.toString().length
         // Budget each serialized record once; never repeatedly serialize an oversized context.
         for (note in notes.orEmpty()) {
@@ -84,6 +142,7 @@ internal class NativeBrainService(
                 put("id", note.id); put("title", note.title); put("excerpt", note.excerpt)
                 put("source", note.source); put("recordedAt", note.recordedAt)
                 put("expiresAt", note.expiresAt ?: JSONObject.NULL); put("verified", false)
+                put("manuallyEdited", note.manuallyEdited)
             }
             val added = item.toString().length + if (array.length() > 0) 1 else 0
             if (requestChars + added > SharedBrainRuntime.MAX_REQUEST_CHARS) break
@@ -99,6 +158,9 @@ internal class NativeBrainService(
             Candidate(content, it.getBoolean("sensitive"))
         }
         val evidence = result.optJSONArray("evidenceIds")
+        turnEvidence = notes.orEmpty().filter { note ->
+            (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
+        }.distinctBy { it.id }
         val recalledSource = notes.orEmpty().firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
                 && note.source.matches(Regex("https://fr\\.wikipedia\\.org/\\?curid=[1-9][0-9]*"))

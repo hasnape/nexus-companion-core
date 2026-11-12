@@ -20,6 +20,7 @@ export interface NativeNote {
   recordedAt: number;
   expiresAt: number | null;
   verified: false;
+  manuallyEdited?: boolean;
 }
 
 export interface NativeTurnRequest {
@@ -66,10 +67,11 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
         || !boundedText(item.excerpt, capacity.MAX_NOTE_CHARS) || !boundedText(item.source, 512)
         || !Number.isSafeInteger(item.recordedAt) || (item.recordedAt as number) < 0
         || !(item.expiresAt === null || (Number.isSafeInteger(item.expiresAt) && (item.expiresAt as number) >= 0))
-        || item.verified !== false) throw new Error('Invalid native note');
+        || item.verified !== false || (item.manuallyEdited !== undefined && typeof item.manuallyEdited !== 'boolean')) throw new Error('Invalid native note');
     return {
       id: item.id, title: item.title, excerpt: item.excerpt, source: item.source,
-      recordedAt: item.recordedAt as number, expiresAt: item.expiresAt as number | null, verified: false
+      recordedAt: item.recordedAt as number, expiresAt: item.expiresAt as number | null, verified: false,
+      manuallyEdited: item.manuallyEdited === true
     };
   });
   return {
@@ -137,7 +139,7 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
     const selected = notes[0];
     return {
       ...result, intent: 'memory_recall',
-      text: selected ? `Je lis ta note « ${selected.title} », non vérifiée :\n${selected.excerpt}`
+      text: selected ? `Je lis ta note${selected.manuallyEdited ? ' modifiée' : ''} « ${selected.title} », non vérifiée :\n${selected.excerpt}`
         : 'Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes ».',
       ...(selected ? { evidenceIds: [selected.id] } : {})
     };

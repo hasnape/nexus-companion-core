@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import java.util.zip.Deflater
 
 /** Encodes the JSON inside the authenticated library envelope. */
 internal object KnowledgePayload {
@@ -15,9 +16,15 @@ internal object KnowledgePayload {
 
     fun encode(json: ByteArray): ByteArray {
         require(json.size <= MAX_JSON_BYTES) { "Library payload too large" }
-        val output = ByteArrayOutputStream(minOf(json.size, BUFFER_BYTES))
-        GZIPOutputStream(output).use { it.write(json) }
-        return if (output.size() < json.size) output.toByteArray() else json
+        fun compress(level: Int): ByteArray {
+            val output = ByteArrayOutputStream(minOf(json.size, BUFFER_BYTES))
+            object : GZIPOutputStream(output) { init { def.setLevel(level) } }.use { it.write(json) }
+            return output.toByteArray()
+        }
+        val standard = compress(Deflater.DEFAULT_COMPRESSION)
+        // Save only on explicit writes. Never grow a payload compared with the previous codec.
+        val best = if (json.size >= 4096) compress(Deflater.BEST_COMPRESSION).takeIf { it.size < standard.size } ?: standard else standard
+        return if (best.size < json.size) best else json
     }
 
     fun decode(payload: ByteArray): ByteArray {

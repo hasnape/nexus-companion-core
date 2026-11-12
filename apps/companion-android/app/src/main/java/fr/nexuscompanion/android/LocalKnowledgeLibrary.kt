@@ -30,6 +30,8 @@ internal class LocalKnowledgeLibrary(
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
     private val maxEntries = 500
+    private data class Snapshot(val encrypted: ByteArray, val entries: List<Entry>, val jsonBytes: Int, val payloadBytes: Int)
+    private var snapshot: Snapshot? = null
 
     data class Entry(
         val id: String,
@@ -42,17 +44,31 @@ internal class LocalKnowledgeLibrary(
     )
 
     data class NoteSave(val entry: Entry, val created: Boolean)
+    data class Statistics(val notes: Int, val storedBytes: Int, val jsonBytes: Int, val payloadBytes: Int) {
+        val compressionPercent: Int get() = if (jsonBytes == 0) 0 else ((jsonBytes - payloadBytes).toLong() * 100 / jsonBytes).toInt().coerceIn(0, 100)
+    }
 
     fun list(): List<Entry> = synchronized(storeLock) { readEntries() }
 
+    fun statistics(): Statistics = synchronized(storeLock) {
+        val entries = readEntries()
+        val current = snapshot
+        Statistics(entries.size, current?.encrypted?.size ?: 0, current?.jsonBytes ?: 0, current?.payloadBytes ?: 0)
+    }
+
     private fun readEntries(): List<Entry> {
         val bytes = try { store.openRead().use { KnowledgePayload.readBounded(it, MAX_ENCRYPTED_BYTES) } }
-            catch (_: java.io.FileNotFoundException) { return emptyList() }
+            catch (_: java.io.FileNotFoundException) { snapshot = null; return emptyList() }
+        // Compare authenticated file bytes, not timestamps: other instances and tampering remain visible.
+        snapshot?.takeIf { it.encrypted.contentEquals(bytes) }?.let { return it.entries.toList() }
         // Legacy alpha files were plaintext. Convert only recognized schema-v1 JSON,
         // atomically, before returning records. Do not overwrite on decrypt failure.
         val legacyPlaintext = !cipher.isEncrypted(bytes)
+        var payloadBytes = bytes.size
         val plaintext = if (!legacyPlaintext) {
-            KnowledgePayload.decode(cipher.decrypt(bytes))
+            val packed = cipher.decrypt(bytes)
+            payloadBytes = packed.size
+            KnowledgePayload.decode(packed)
         } else {
             require(bytes.size <= 2_000_000 && bytes.firstOrNull() == '{'.code.toByte()) {
                 "Unknown library format"
@@ -78,7 +94,8 @@ internal class LocalKnowledgeLibrary(
         // Validate every record before replacing a legacy plaintext file.
         require(parsed.all { KnowledgePolicy.isValidUserNote(it.title, it.excerpt) &&
             it.source.isNotBlank() && it.source.length <= 512 }) { "Invalid library entry" }
-        if (legacyPlaintext) writeEncrypted(bytes)
+        if (legacyPlaintext) writeEncrypted(bytes, parsed)
+        else snapshot = Snapshot(bytes, parsed.toList(), plaintext.size, payloadBytes)
         return parsed
     }
 
@@ -109,7 +126,8 @@ internal class LocalKnowledgeLibrary(
         val cleanExcerpt = excerpt.trim()
         val cleanSource = source.trim()
         val duplicate = existing.firstOrNull {
-            it.title == cleanTitle && it.excerpt == cleanExcerpt && it.source == cleanSource &&
+            KnowledgePolicy.noteKey(it.title) == KnowledgePolicy.noteKey(cleanTitle) &&
+                KnowledgePolicy.noteKey(it.excerpt) == KnowledgePolicy.noteKey(cleanExcerpt) && it.source == cleanSource &&
                 it.expiresAt == expiresAt && !it.verified
         }
         if (duplicate != null) return@synchronized NoteSave(duplicate, created = false)
@@ -180,15 +198,17 @@ internal class LocalKnowledgeLibrary(
         }
         val bytes = JSONObject().put("schema", 1).put("entries", array)
             .toString().toByteArray(StandardCharsets.UTF_8)
-        writeEncrypted(bytes)
+        writeEncrypted(bytes, entries)
     }
 
-    private fun writeEncrypted(plaintext: ByteArray) {
-        val encrypted = cipher.encrypt(KnowledgePayload.encode(plaintext))
+    private fun writeEncrypted(plaintext: ByteArray, entries: List<Entry>) {
+        val packed = KnowledgePayload.encode(plaintext)
+        val encrypted = cipher.encrypt(packed)
         val stream = store.startWrite()
         try {
             stream.write(encrypted)
             store.finishWrite(stream)
+            snapshot = Snapshot(encrypted, entries.toList(), plaintext.size, packed.size)
         } catch (failure: Exception) {
             store.failWrite(stream)
             throw failure

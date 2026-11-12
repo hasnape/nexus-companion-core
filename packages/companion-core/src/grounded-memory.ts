@@ -1,3 +1,5 @@
+import { analyzeQuestion } from './question';
+
 /** Small, extractive local retrieval. Stored prose remains evidence, never instructions. */
 export interface GroundedNote {
   id: string; title: string; excerpt: string; source: string; recordedAt: number;
@@ -12,10 +14,11 @@ const stop = new Set(('a au aux ca ce ces de des du en et est il je la le les ma
 const families = [
   ['prenom', 'nom', 'appelle'],
   ['metier', 'profession', 'travaille', 'travail', 'emploi', 'poste'],
-  ['preference', 'preferences', 'prefere', 'aime', 'aimes'],
+  ['preference', 'preferences', 'prefere', 'preferes', 'preferee', 'preferees', 'aime', 'aimes'],
   ['voiture', 'vehicule', 'automobile'],
   ['boisson', 'the', 'cafe', 'jus'],
   ['couleur', 'coloris'],
+  ['age', 'ans'],
   ['projet', 'projets'],
   ['objectif', 'objectifs']
 ];
@@ -29,13 +32,14 @@ const keys = (text: string): string[] => {
 
 /** Both native candidate selection and answer extraction use this one vocabulary. */
 export const nativeRetrievalTerms = (message: string): string[] => {
-  const terms = words(message).slice(0, 12);
+  const terms = words(analyzeQuestion(message).content).slice(0, 12);
   const expanded = terms.flatMap((word) => families.find((family) => family.includes(word)) ?? [word]);
   if (terms.some((word) => families[0].includes(word))) expanded.push('le createur est');
   return Array.from(new Set(expanded)).slice(0, 36);
 };
 
 const toSecondPerson = (text: string): string => text
+  .replace(/^ma\s+/i, 'Ta ').replace(/^mes\s+/i, 'Tes ').replace(/^mon\s+(?!pr[ée]nom\b|nom\b|m[ée]tier\b)/i, 'Ton ')
   .replace(/^le cr[ée]ateur est\s+/i, 'Tu es ')
   .replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, 'Tu préfères ')
   .replace(/^je m['’]appelle\s+/i, 'Tu t’appelles ')
@@ -47,7 +51,8 @@ const toSecondPerson = (text: string): string => text
   .replace(/^mon m[ée]tier est\s+/i, 'Ton métier est ');
 
 export const answerFromNotes = (question: string, notes: GroundedNote[]): { text: string; evidenceIds: string[] } | null => {
-  const query = keys(question);
+  const request = analyzeQuestion(question);
+  const query = keys(request.content);
   if (!query.length) return null;
   // A generic preference word alone cannot answer a question about a different subject.
   const anchors = query.filter((key) => key !== 'preference');
@@ -55,16 +60,24 @@ export const answerFromNotes = (question: string, notes: GroundedNote[]): { text
     const titleKeys = keys(note.title);
     const sentences = note.excerpt.replace(/([.!?])\s+/g, '$1\n').split(/\n+/).map((text) => text.trim()).filter(Boolean);
     return sentences.map((sentence) => {
+      const normalized = normalize(sentence);
+      const slotMatches = request.kind === 'where' ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized)
+        : request.kind === 'why' ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized)
+        : request.kind === 'when' ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;
       const evidence = keys(sentence);
       const matches = query.filter((key) => evidence.includes(key) || titleKeys.includes(key));
       const anchored = !anchors.length || anchors.some((key) => evidence.includes(key) || titleKeys.includes(key));
-      const score = anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter((key) => evidence.includes(key)).length : 0;
+      const relativeMatches = query.filter((key) => ['fille', 'fils', 'enfant', 'fiancee', 'chien', 'chat'].includes(key))
+        .every((key) => evidence.includes(key) || titleKeys.includes(key));
+      const attributeMatches = query.filter((key) => ['prenom', 'metier', 'couleur', 'age', 'boisson', 'voiture', 'objectif'].includes(key))
+        .every((key) => evidence.includes(key) || titleKeys.includes(key));
+      const score = slotMatches && relativeMatches && attributeMatches && anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter((key) => evidence.includes(key)).length : 0;
       return { note, sentence, score };
     });
   }).filter((item) => item.score > 0).sort((a, b) => b.score - a.score || b.note.recordedAt - a.note.recordedAt);
   if (!candidates.length) return null;
   const best = candidates[0];
-  const personal = /\b(?:mon|ma|mes|je|moi)\b/.test(normalize(question));
+  const personal = request.personal;
   const conflicting = personal && candidates.find((item) => item.score === best.score && item.note.id !== best.note.id
     && normalize(item.sentence) !== normalize(best.sentence));
   if (conflicting) return {

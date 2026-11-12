@@ -68,6 +68,8 @@ internal class VoiceSession(
     private val onMicrophoneReady: (Boolean) -> Unit = {}
 ) {
     private var enabled = false
+    private var bodyMoving = false
+    fun setBodyMoving(active: Boolean) { bodyMoving = active }
     private var playbackEnabled = true
     private var listening = false
     private var speechReady: Boolean? = null
@@ -180,10 +182,14 @@ internal class VoiceSession(
                         // A completed client must never forward a late vendor event into the next capture.
                         closeRecognition()
                         failures = 0
-                        val text = VoiceTranscriptPolicy.select(hypotheses, awaitingCommand)
+                        val text = if (bodyMoving && hypotheses.firstOrNull()?.text?.let(VoiceTranscriptPolicy::isStopCommand) == true)
+                            hypotheses.first().text else VoiceTranscriptPolicy.select(hypotheses, awaitingCommand)
                         if (text != null) {
                             showTranscript(text, true)
                             acceptTranscript(text)
+                        } else if (awaitingCommand && VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull())) {
+                            commandTimerPending = true
+                            playReply("Je n’ai pas bien entendu ta confirmation. Peux-tu répéter ?", expectAnswer = true)
                         }
                         if (awaitingCommand && utterance == null && capturing && !commandTimerPending) armCommandTimeout()
                         if (utterance == null) scheduleRestart(delayMs = nextTurnDelay)
@@ -250,7 +256,7 @@ internal class VoiceSession(
     private fun acceptTranscript(transcript: String) {
         if (transcript.isBlank() || transcript.length > 2000) return
         val parsed = VoiceTranscriptPolicy.parse(transcript)
-        if (!parsed.hasWake && !awaitingCommand) return
+        if (!parsed.hasWake && !awaitingCommand && !(bodyMoving && VoiceTranscriptPolicy.isStopCommand(transcript))) return
         val command = parsed.command
         commandTimeout?.cancel()
         commandTimeout = null
@@ -503,6 +509,7 @@ internal class VoiceSession(
     }
 
     fun stopListening() {
+        bodyMoving = false
         val wasEnabled = enabled
         enabled = false
         restart?.cancel()

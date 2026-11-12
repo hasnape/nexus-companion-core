@@ -42,6 +42,31 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun voiceMovementOpensTheRollingBodyAndStopAndSteeringRemainAvailable() {
+        send("avance de vingt centimètres")
+        await { hasText("roule en avant") }
+        val avatar = activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar)
+        assertTrue(avatar.showBody)
+        assertTrue(activity.findViewById<View>(R.id.body_controls).isShown)
+        assertTrue(avatar.bodyFrame.moving)
+        activity.findViewById<Button>(R.id.body_stop).performClick()
+        assertFalse(avatar.bodyFrame.moving)
+        activity.findViewById<Button>(R.id.body_steering).performClick()
+        assertFalse(avatar.bodyFrame.steeringAtFront)
+        lifecycle.recreate(); activity = lifecycle.get()
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).bodyFrame.moving)
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).bodyFrame.steeringAtFront)
+    }
+
+    @Test fun leavingTheRobotStopsItsVirtualMotionAndKeepsFullFaceAccessible() {
+        send("avance de vingt centimètres")
+        await { hasText("roule en avant") }
+        button(R.string.leave_face).performClick()
+        assertFalse(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).bodyFrame.moving)
+        button(R.string.full_face_mode).performClick()
+        assertFalse(activity.findViewById<View>(R.id.body_controls).isShown)
+        assertTrue(activity.findViewById<View>(R.id.face_mode_screen).isShown)
+    }
     @Test fun robotModeRestoresItsBodyAndFullFaceRemainsAvailable() {
         button(R.string.full_robot_mode).performClick()
         assertTrue(activity.findViewById<NexusAvatarView>(R.id.face_mode_avatar).showBody)

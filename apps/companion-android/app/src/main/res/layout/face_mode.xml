@@ -23,6 +23,50 @@
         android:contentDescription="@string/leave_full_face_mode"
         android:text="@string/leave_face" />
 
+    <LinearLayout
+        android:id="@+id/body_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginBottom="58dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/body_motion_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/home_inset"
+            android:gravity="center"
+            android:padding="6dp"
+            android:text="@string/body_ready"
+            android:textColor="@color/home_text"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/body_stop"
+                style="@style/HomeAction"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/body_stop" />
+            <Button
+                android:id="@+id/body_steering"
+                style="@style/HomeAction"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="2"
+                android:text="@string/body_steering_front" />
+        </LinearLayout>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/face_mode_presence"
         android:layout_width="wrap_content"

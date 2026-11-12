@@ -82,6 +82,9 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
             invalidate()
         }
 
+    internal var bodyFrame = RollingBodyState.Frame(RollingBodyState.Pose())
+        set(value) { field = value; invalidate() }
+
     private val portraitHeight get() = if (showBody) 294f else FACE_HEIGHT
 
     internal fun setFaceControls(exitLeft: Int, exitTop: Int, exitRight: Int, exitBottom: Int, statusTop: Int) {
@@ -234,8 +237,6 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         canvas.drawOval(87f, 304f, 213f, 326f, paint)
         fill(0xFF0B515D.toInt())
         canvas.drawRoundRect(133f, 120f, 167f, 154f, 10f, 10f, paint)
-        canvas.drawRoundRect(108f, 266f, 145f, 316f, 14f, 14f, paint)
-        canvas.drawRoundRect(155f, 266f, 192f, 316f, 14f, 14f, paint)
         shade(body)
         canvas.drawRoundRect(75f, 150f, 105f, 244f, 15f, 15f, paint)
         canvas.drawRoundRect(195f, 150f, 225f, 244f, 15f, 15f, paint)
@@ -249,6 +250,24 @@ class NexusAvatarView @JvmOverloads constructor(context: Context, attrs: Attribu
         stroke(context.getColor(R.color.home_mint), 2f)
         canvas.drawLine(140f, 171f, 160f, 171f, paint)
         canvas.drawLine(150f, 171f, 150f, 178f, paint)
+        fill(0xFF143C48.toInt())
+        canvas.drawRoundRect(103f, 279f, 197f, 304f, 10f, 10f, paint)
+        drawWheel(canvas, 116f, 299f, bodyFrame.leftWheelRad, 0f)
+        drawWheel(canvas, 184f, 299f, bodyFrame.rightWheelRad, 0f)
+        drawWheel(canvas, 150f, if (bodyFrame.steeringAtFront) 308f else 289f,
+            (bodyFrame.leftWheelRad + bodyFrame.rightWheelRad) / 2, Math.toDegrees(bodyFrame.steeringRad).toFloat())
+    }
+
+    private fun drawWheel(canvas: Canvas, x: Float, y: Float, phase: Double, steeringDegrees: Float) {
+        val checkpoint = canvas.save()
+        canvas.rotate(steeringDegrees, x, y)
+        fill(0xFF07101B.toInt())
+        canvas.drawRoundRect(x - 10f, y - 12f, x + 10f, y + 12f, 6f, 6f, paint)
+        stroke(0xFF73B1A9.toInt(), 1.5f)
+        canvas.drawRoundRect(x - 7f, y - 10f, x + 7f, y + 10f, 4f, 4f, paint)
+        val offset = if (ValueAnimator.areAnimatorsEnabled()) (kotlin.math.sin(phase) * 7).toFloat() else 0f
+        canvas.drawLine(x - 6f, y + offset, x + 6f, y + offset, paint)
+        canvas.restoreToCount(checkpoint)
     }
 
     private fun drawEye(canvas: Canvas, x: Float, height: Float, gazeOffset: Float) {

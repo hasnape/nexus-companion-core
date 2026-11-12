@@ -4,6 +4,30 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceSessionTest {
+    @Test fun anUncertainShortConfirmationIsRepeatedInsteadOfExecuted() {
+        val f = Fixture(); f.start()
+        f.session.listenForCommand()
+        f.platform.recognition.events.alternatives(listOf(SpeechHypothesis("oui", 0.2f)))
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.platform.speaker.utterances.last().first.contains("Peux-tu répéter"))
+        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(200)
+        f.platform.recognition.events.alternatives(listOf(SpeechHypothesis("oui", 0.9f)))
+        assertEquals(listOf("oui"), f.commands)
+    }
+    @Test fun stopWithoutWakeIsAvailableOnlyWhileTheBodyIsMoving() {
+        val f = Fixture(); f.start()
+        f.session.setBodyMoving(true)
+        f.platform.recognition.events.result("conversation ambiante")
+        f.platform.advance(500)
+        assertTrue(f.commands.isEmpty())
+        f.platform.recognition.events.result("stop")
+        assertEquals(listOf("stop"), f.commands)
+        f.session.setBodyMoving(false)
+        f.platform.advance(500)
+        f.platform.recognition.events.result("stop")
+        assertEquals(1, f.commands.size)
+    }
     @Test fun conversationalReplyAcceptsTheNextSentenceOnlyAfterPlaybackCompletes() {
         val f = Fixture(); f.start()
         val before = f.platform.recognition

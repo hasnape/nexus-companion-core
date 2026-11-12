@@ -91,6 +91,9 @@ var NexusNativeBrain = function () {
     createNativeTurn: function createNativeTurn() {
       return _createNativeTurn;
     },
+    handleNativeBodyJson: function handleNativeBodyJson() {
+      return _handleNativeBodyJson;
+    },
     handleNativeRetrievalJson: function handleNativeRetrievalJson() {
       return _handleNativeRetrievalJson;
     },
@@ -100,7 +103,7 @@ var NexusNativeBrain = function () {
   });
   var WAKE_PREFIX_PATTERNS = [/^(?:hey\b[\s,;:!?.-]*nexus\b)/i, /^(?:ok\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b[\s,;:!?.-]*r[ée]veille(?:[\s'’-]*toi)\b)/i, /^(?:r[ée]veille(?:[\s'’-]*toi)\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b)/i];
   var FULL_NAME_WAKE_PREFIX_PATTERNS = [/^(?:hey\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i, /^(?:ok\b[\s,;:!?.-]*nexus\b[\s,;:!?.-]*companion\b)/i, /^(?:nexus\b[\s,;:!?.-]*companion\b)/i];
-  var COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux[- ]tu|fais|cherche|recherche|planifie|active|d[ée]sactive)\b/i;
+  var COMMAND_AFTER_WAKE_PATTERN = /^(?:souviens(?:-| )toi|retiens|m[ée]morise|garde en m[ée]moire|lance|ouvre|quelle?|quelles?|comment|peux[- ]tu|fais|cherche|recherche|planifie|active|d[ée]sactive|avance|recule|tourne|stop|arr[êe]te|[ée]tat|roue|direction)\b/i;
   var MEMORY_PREFIXES = ["souviens toi", "souviens-toi", "retiens", "retiens ca", "memorise", "garde en memoire"];
   var normalizeWakePhrase = function normalizeWakePhrase(input) {
     return input.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, " ").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
@@ -213,6 +216,34 @@ var NexusNativeBrain = function () {
     if (/^nexus\s+comment$/.test(normalized)) return true;
     return false;
   };
+  var unwrapPoliteRequest = function unwrapPoliteRequest(message) {
+    return stripWakePrefix(message, {
+      allowFullNameWake: true
+    }).trim().replace(/^(?:(?:est[- ]ce que\s+)?(?:tu peux|vous pouvez|peux[- ]tu|pouvez[- ]vous|pourrais[- ]tu|pourriez[- ]vous)|je (?:voudrais|veux) savoir)\s+/i, "").replace(/^(?:me\s+|m['’])(?=(?:dire|expliquer|rappeler|apprendre|donner|parler)\b)/i, "").replace(/^(?:dire|expliquer|apprendre(?!\s+que\b))\s+/i, "");
+  };
+  var isExplicitMemoryRequest = function isExplicitMemoryRequest(message) {
+    return /^(?:retiens|retenir|souviens[- ]toi|m[ée]morise|m[ée]moriser|garde en m[ée]moire|garder en m[ée]moire|apprends que|apprendre que|remember that)\b/i.test(unwrapPoliteRequest(message));
+  };
+  var analyzeQuestion = function analyzeQuestion(message) {
+    var raw = stripWakePrefix(message, {
+      allowFullNameWake: true
+    }).trim();
+    var unwrapped = unwrapPoliteRequest(raw);
+    var content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "");
+    var normalized = normalizeWakePhrase(content);
+    var style = /^(?:parle[- ]moi de mani[èe]re|sois plus|garde un style)\b/i.test(raw);
+    var question = !isExplicitMemoryRequest(raw) && !style && (raw.includes("?") || content !== raw || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|dans quelle\b)/i.test(raw));
+    var kind = /^(?:ou\b|dans quelle (?:ville|entreprise|region)|a quel endroit)/.test(normalized) ? "where" : /^pourquoi\b/.test(normalized) ? "why" : /^quand\b|^a quelle (?:date|heure)\b/.test(normalized) ? "when" : "general";
+    var subject = content.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
+    return {
+      question: question,
+      content: content,
+      normalized: normalized,
+      kind: kind,
+      subject: subject,
+      personal: /\b(?:mon|ma|mes|notre|nos|je|moi|j|m)\b/.test(normalized)
+    };
+  };
   var SENSITIVE_PATTERNS = [/santé|maladie|diagnostic|médicament|therapy|health/i, /religion|croyance|foi/i, /politique|parti|vote/i, /adresse|localisation|gps|location/i, /carte bancaire|iban|compte|revenu|salaire|crypto wallet|password/i, /intime|sexual|orientation/i];
   var PREFERENCE_PATTERNS = [/je préfère|je prefere|j'aime|tu peux me parler|je veux fonctionner|le cr[ée]ateur pr[ée]f[èe]re/i];
   var PROJECT_PATTERNS = [/projet|roadmap|produit|feature|release|deadline|objectif|sans internet|offline|le projet actuel est/i];
@@ -280,10 +311,8 @@ var NexusNativeBrain = function () {
     return "".concat(cleaned, ".");
   };
   var stripMemoryCommandWrapper = function stripMemoryCommandWrapper(input) {
-    var wakeStripped = stripWakePrefix(input, {
-      allowFullNameWake: true
-    }).trim();
-    return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, "").trim();
+    var wakeStripped = unwrapPoliteRequest(input);
+    return wakeStripped.replace(MEMORY_WRAPPER_PREFIX, "").replace(/^(?:retenir|m[ée]moriser|garder en m[ée]moire|apprends|apprendre)(?:\s+que)?\s+/i, "").trim();
   };
   var normalizeMemoryCandidateContent = function normalizeMemoryCandidateContent(input) {
     var stripped = stripMemoryCommandWrapper(input);
@@ -356,13 +385,12 @@ var NexusNativeBrain = function () {
     var raw = stripWakePrefix(userMessage, {
       allowFullNameWake: true
     }).trim();
-    var isQuestion = /\?\s*$/.test(raw) || /^(?:quels?\b|quelles?\b|qu['’]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu]\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi(?! de mani[èe]re\b)\b|d[ée]cris\b)/i.test(raw);
-    if (isQuestion && !MEMORY_WRAPPER_PREFIX.test(raw) && !/^(?:apprends|remember that)\b/i.test(raw)) return [];
+    if (analyzeQuestion(raw).question) return [];
     var rawForDetection = stripMemoryCommandWrapper(raw);
     var content = normalizeMemoryCandidateContent(raw);
     if (!content || content.length < 12) return [];
     if (isWakeFragmentNoise(content) || isIncompleteMemoryCommand(content)) return [];
-    var looksMemorable = PREFERENCE_PATTERNS.some(function (pattern) {
+    var looksMemorable = isExplicitMemoryRequest(raw) || PREFERENCE_PATTERNS.some(function (pattern) {
       return pattern.test(rawForDetection) || pattern.test(content);
     }) || PROJECT_PATTERNS.some(function (pattern) {
       return pattern.test(rawForDetection) || pattern.test(content);
@@ -694,7 +722,7 @@ var NexusNativeBrain = function () {
     return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   };
   var stop = new Set("a au aux ca ce ces de des du en et est il je la le les ma me mes mon ne nos notre on ou par pas pour que quel quelle quelles quels qui sa se ses son sur ta te tes toi ton tu un une vous votre vos comment pourquoi quand peux peut pourrais dire dis explique expliquer parle parler moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens".split(" "));
-  var families = [["prenom", "nom", "appelle"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["projet", "projets"], ["objectif", "objectifs"]];
+  var families = [["prenom", "nom", "appelle"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "preferes", "preferee", "preferees", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["age", "ans"], ["projet", "projets"], ["objectif", "objectifs"]];
   var words = function words(text) {
     return normalize(text).split(" ").filter(function (word) {
       return word.length > 1 && !stop.has(word);
@@ -712,7 +740,7 @@ var NexusNativeBrain = function () {
     return Array.from(new Set(result));
   };
   var nativeRetrievalTerms = function nativeRetrievalTerms(message) {
-    var terms = words(message).slice(0, 12);
+    var terms = words(analyzeQuestion(message).content).slice(0, 12);
     var expanded = terms.flatMap(function (word) {
       var _a;
       return (_a = families.find(function (family) {
@@ -725,10 +753,11 @@ var NexusNativeBrain = function () {
     return Array.from(new Set(expanded)).slice(0, 36);
   };
   var toSecondPerson = function toSecondPerson(text) {
-    return text.replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
+    return text.replace(/^ma\s+/i, "Ta ").replace(/^mes\s+/i, "Tes ").replace(/^mon\s+(?!pr[ée]nom\b|nom\b|m[ée]tier\b)/i, "Ton ").replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
   };
   var answerFromNotes = function answerFromNotes(question, notes) {
-    var query = keys(question);
+    var request = analyzeQuestion(question);
+    var query = keys(request.content);
     if (!query.length) return null;
     var anchors = query.filter(function (key) {
       return key !== "preference";
@@ -739,6 +768,8 @@ var NexusNativeBrain = function () {
         return text.trim();
       }).filter(Boolean);
       return sentences.map(function (sentence) {
+        var normalized = normalize(sentence);
+        var slotMatches = request.kind === "where" ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized) : request.kind === "why" ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized) : request.kind === "when" ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;
         var evidence = keys(sentence);
         var matches = query.filter(function (key) {
           return evidence.includes(key) || titleKeys.includes(key);
@@ -746,7 +777,17 @@ var NexusNativeBrain = function () {
         var anchored = !anchors.length || anchors.some(function (key) {
           return evidence.includes(key) || titleKeys.includes(key);
         });
-        var score = anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
+        var relativeMatches = query.filter(function (key) {
+          return ["fille", "fils", "enfant", "fiancee", "chien", "chat"].includes(key);
+        }).every(function (key) {
+          return evidence.includes(key) || titleKeys.includes(key);
+        });
+        var attributeMatches = query.filter(function (key) {
+          return ["prenom", "metier", "couleur", "age", "boisson", "voiture", "objectif"].includes(key);
+        }).every(function (key) {
+          return evidence.includes(key) || titleKeys.includes(key);
+        });
+        var score = slotMatches && relativeMatches && attributeMatches && anchored && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
           return evidence.includes(key);
         }).length : 0;
         return {
@@ -762,7 +803,7 @@ var NexusNativeBrain = function () {
     });
     if (!candidates.length) return null;
     var best = candidates[0];
-    var personal = /\b(?:mon|ma|mes|je|moi)\b/.test(normalize(question));
+    var personal = request.personal;
     var conflicting = personal && candidates.find(function (item) {
       return item.score === best.score && item.note.id !== best.note.id && normalize(item.sentence) !== normalize(best.sentence);
     });
@@ -776,6 +817,129 @@ var NexusNativeBrain = function () {
     return {
       text: "".concat(prefix, " : ").concat(spoken),
       evidenceIds: [best.note.id]
+    };
+  };
+  var validIdentifier = function validIdentifier(value) {
+    return typeof value === "string" && value.length > 0 && value.length <= 128 && /^[a-zA-Z0-9._:-]+$/.test(value);
+  };
+  function isBoundedMotionRequest(value) {
+    if (!value || _typeof(value) !== "object") return false;
+    var item = value;
+    return validIdentifier(item.motionGroup) && validIdentifier(item.action) && typeof item.durationMs === "number" && Number.isSafeInteger(item.durationMs) && item.durationMs > 0 && item.durationMs <= 5e3 && typeof item.normalizedSpeed === "number" && Number.isFinite(item.normalizedSpeed) && item.normalizedSpeed >= 0 && item.normalizedSpeed <= 1;
+  }
+  var virtualTricycleProfile = function virtualTricycleProfile() {
+    var steeringAxle = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : "front";
+    return {
+      steeringAxle: steeringAxle,
+      wheelbaseM: 0.28,
+      trackM: 0.26,
+      wheelRadiusM: 0.05,
+      maxSpeedMps: 0.15,
+      maxSteeringRad: 0.7
+    };
+  };
+  var planTricycleMotion = function planTricycleMotion(profile, linearMps, angularRadps, durationMs) {
+    if (!["front", "rear"].includes(profile.steeringAxle) || ![profile.wheelbaseM, profile.trackM, profile.wheelRadiusM, profile.maxSpeedMps, profile.maxSteeringRad].every(function (n) {
+      return Number.isFinite(n) && n > 0;
+    }) || profile.maxSpeedMps > 0.3 || profile.maxSteeringRad >= Math.PI / 2 || !Number.isFinite(linearMps) || !Number.isFinite(angularRadps) || Math.abs(linearMps) > profile.maxSpeedMps || Math.abs(angularRadps) > 1 || linearMps === 0 && angularRadps !== 0) throw new Error("Invalid tricycle motion");
+    var steeringRad = linearMps === 0 ? 0 : Math.atan(angularRadps * profile.wheelbaseM / linearMps) * (profile.steeringAxle === "front" ? 1 : -1);
+    var request = {
+      motionGroup: "wheeled-base",
+      action: "roll",
+      durationMs: durationMs,
+      normalizedSpeed: Math.abs(linearMps) / profile.maxSpeedMps
+    };
+    if (Math.abs(steeringRad) > profile.maxSteeringRad || !isBoundedMotionRequest(request)) throw new Error("Motion exceeds tricycle limits");
+    var sample = function sample(elapsedMs) {
+      var t = elapsedMs / 1e3;
+      var headingRad = angularRadps * t;
+      return {
+        elapsedMs: elapsedMs,
+        xM: angularRadps === 0 ? linearMps * t : linearMps / angularRadps * Math.sin(headingRad),
+        yM: angularRadps === 0 ? 0 : linearMps / angularRadps * (1 - Math.cos(headingRad)),
+        headingRad: headingRad,
+        distanceM: linearMps * t
+      };
+    };
+    var samples = [];
+    for (var elapsed = 0; elapsed < durationMs; elapsed += 100) samples.push(sample(elapsed));
+    samples.push(sample(durationMs));
+    return {
+      protocolVersion: 1,
+      execution: "simulation",
+      steeringAxle: profile.steeringAxle,
+      request: request,
+      linearMps: linearMps,
+      angularRadps: angularRadps,
+      steeringRad: steeringRad,
+      leftWheelRadps: (linearMps - angularRadps * profile.trackM / 2) / profile.wheelRadiusM,
+      rightWheelRadps: (linearMps + angularRadps * profile.trackM / 2) / profile.wheelRadiusM,
+      samples: samples
+    };
+  };
+  var numbers = {
+    un: 1,
+    une: 1,
+    deux: 2,
+    trois: 3,
+    quatre: 4,
+    cinq: 5,
+    dix: 10,
+    quinze: 15,
+    vingt: 20,
+    trente: 30,
+    quarante: 40,
+    cinquante: 50,
+    soixante: 60
+  };
+  var resolveBodyCommand = function resolveBodyCommand(command, axle) {
+    var _a;
+    var text = command.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’']/g, " ").replace(/[!?.,;:]/g, " ").replace(/\s+/g, " ").trim();
+    if (/^(?:stop|arrete|arrete[- ]toi|arret|stoppe|stoppe[- ]toi|arrete le corps|arret du corps)$/.test(text)) return {
+      handled: true,
+      action: "stop",
+      text: "Corps virtuel arrêté."
+    };
+    if (/^(?:etat du corps|etat du robot|ou en est ton corps|combien de roues as tu|comment est ton corps|decris ton corps)$/.test(text)) return {
+      handled: true,
+      action: "status",
+      text: "Mon corps virtuel roule sur trois roues. La roue directrice est \xE0 l\u2019".concat(axle === "front" ? "avant" : "arrière", ".")
+    };
+    var straight = text.match(/^(avance|avancer|recule|reculer)(?: de)?(?: ([0-9]+|un|une|deux|trois|quatre|cinq|dix|quinze|vingt|trente|quarante|cinquante) (cm|centimetres?|metres?))?$/);
+    var turn = text.match(/^tourne(?: a)? (gauche|droite)(?: de ([0-9]+|dix|quinze|vingt|trente|quarante|cinquante|soixante) degres?)?$/);
+    if (!straight && !turn) return {
+      handled: false,
+      text: ""
+    };
+    var quantity = function quantity(value, fallback) {
+      var _a2;
+      return value ? (_a2 = numbers[value]) != null ? _a2 : Number(value) : fallback;
+    };
+    if (straight) {
+      var cm = quantity(straight[2], 15) * (((_a = straight[3]) == null ? void 0 : _a.startsWith("metre")) ? 100 : 1);
+      if (cm < 1 || cm > 50) return {
+        handled: true,
+        text: "Pour le corps virtuel, demande une distance de 1 à 50 centimètres."
+      };
+      var direction = straight[1].startsWith("rec") ? -1 : 1;
+      return {
+        handled: true,
+        action: "drive",
+        text: "Simulation : je ".concat(direction === 1 ? "roule en avant" : "recule", " de ").concat(cm, " centim\xE8tres."),
+        plan: planTricycleMotion(virtualTricycleProfile(axle), direction * 0.1, 0, Math.round(cm * 100))
+      };
+    }
+    var degrees = quantity(turn == null ? void 0 : turn[2], 20);
+    if (degrees < 1 || degrees > 60) return {
+      handled: true,
+      text: "Pour le corps virtuel, demande un virage de 1 à 60 degrés."
+    };
+    var left = (turn == null ? void 0 : turn[1]) === "gauche";
+    return {
+      handled: true,
+      action: "drive",
+      text: "Simulation : je roule en virant \xE0 ".concat(left ? "gauche" : "droite", " de ").concat(degrees, " degr\xE9s."),
+      plan: planTricycleMotion(virtualTricycleProfile(axle), 0.1, left ? 0.25 : -0.25, Math.round(degrees * Math.PI / 180 / 0.25 * 1e3))
     };
   };
   var hasQuestion = function hasQuestion(text) {
@@ -1649,23 +1813,23 @@ var NexusNativeBrain = function () {
     });
     var grounded = answerFromNotes(request.message, notes);
     if (grounded) return __spreadValues(__spreadValues({}, result), grounded);
-    if (plan.responseMode === "normal") {
+    var question = analyzeQuestion(request.message);
+    if (plan.responseMode === "normal" || question.question) {
       var support = renderLocalSupportReply(request.message);
       if (support) return __spreadProps(__spreadValues({}, result), {
         text: support
       });
     }
-    if (plan.responseMode !== "normal" || decision.intent === "ask_clarification") {
+    if (question.question && question.personal) return __spreadProps(__spreadValues({}, result), {
+      text: question.kind === "where" ? "Je ne retrouve pas ce lieu dans tes notes. Tu peux me le préciser ?" : question.kind === "why" ? "Tes notes ne précisent pas cette raison. Tu peux me l’expliquer ?" : "Je ne retrouve pas cette information dans tes notes utilisables ici. Tu peux me la préciser ?"
+    });
+    if (!question.question && (plan.responseMode !== "normal" || decision.intent === "ask_clarification")) {
       return __spreadProps(__spreadValues({}, result), {
         text: renderDeterministicNexusReply(plan)
       });
     }
-    var command = stripWakePrefix(request.message, {
-      allowFullNameWake: true
-    }).trim();
-    var question = /^(?:qu['’ ]est[- ]ce qu|c['’ ]est quoi|quels?\b|quelles?\b|comment\b|pourquoi\b|o[ùu]\b|qui\b|explique\b|parle[- ]moi de\b|d[ée]cris\b)/i.test(command);
-    var subject = command.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
-    if (question && isPublicTopic(command) && isPublicTopic(subject)) return __spreadProps(__spreadValues({}, result), {
+    var subject = question.subject;
+    if (question.question && isPublicTopic(question.content) && isPublicTopic(subject)) return __spreadProps(__spreadValues({}, result), {
       text: "Je ne sais pas encore r\xE9pondre pr\xE9cis\xE9ment. Tu veux que je cherche \xAB ".concat(subject, " \xBB sur Internet, dans Wikip\xE9dia ?"),
       publicLookupOffer: subject
     });
@@ -1680,6 +1844,14 @@ var NexusNativeBrain = function () {
         allowFullNameWake: true
       }))
     });
+  };
+  var _handleNativeBodyJson = function _handleNativeBodyJson(input) {
+    if (input.length > 16e3) throw new Error("Invalid body request");
+    var value = JSON.parse(input);
+    if (!record(value) || !boundedText(value.message, 2e3) || !["front", "rear"].includes(value.steeringAxle)) throw new Error("Invalid body request");
+    return JSON.stringify(resolveBodyCommand(stripWakePrefix(value.message, {
+      allowFullNameWake: true
+    }), value.steeringAxle));
   };
   var _handleNativeTurnJson = function _handleNativeTurnJson(input) {
     if (typeof input !== "string" || input.length > MAX_INPUT_CHARS) throw new Error("Native input too large");

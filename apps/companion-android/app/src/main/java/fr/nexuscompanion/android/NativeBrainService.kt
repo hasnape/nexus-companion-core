@@ -20,7 +20,8 @@ internal class NativeBrainService(
         val candidate: Candidate?,
         val notesAvailable: Boolean,
         val source: WikipediaKnowledgeSearch.Article? = null,
-        val expectsAnswer: Boolean = false
+        val expectsAnswer: Boolean = false,
+        val body: RollingBodyState.Plan? = null
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
@@ -54,7 +55,7 @@ internal class NativeBrainService(
         return SharedBrainRuntime(source.toString(Charsets.UTF_8)).also { runtime = it }
     }
 
-    fun reply(message: String, onlineEnabled: Boolean = true): Reply {
+    fun reply(message: String, onlineEnabled: Boolean = true, steeringAxle: String = "front"): Reply {
         require(message.isNotBlank() && message.length <= 2000)
         val previous = pending?.takeIf { elapsed() < it.expires }
         pending = null
@@ -70,6 +71,13 @@ internal class NativeBrainService(
                 }
             }
         }
+        if (VoiceTranscriptPolicy.commandWords(message) in setOf("etat de ta memoire", "etat de la memoire", "bilan memoire", "combien de notes as tu")) {
+            val stats = library.statistics()
+            return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.", null, true, expectsAnswer = true)
+        }
+        val body = JSONObject(brain().bodyJson(JSONObject().put("message", message).put("steeringAxle", steeringAxle).toString()))
+        if (body.getBoolean("handled")) return Reply(body.getString("text"), null, true, expectsAnswer = true,
+            body = body.optJSONObject("plan")?.let(RollingBodyState.Plan::read))
         val now = System.currentTimeMillis()
         val recall = KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")

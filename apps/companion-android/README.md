@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.17 native alpha
+# Nexus Companion Android — 0.4.18 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
 
@@ -36,7 +36,17 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 
 La reconnaissance locale fonctionne par sessions finies et reprises. Le déclenchement attend une transcription finale contenant « Nexus ». La précision et l’autonomie restent à mesurer sur téléphone.
 
-## Mémoire, lecture vocale et capacités 0.4.17
+## Relances et correction des notes 0.4.18
+
+Après une réponse, « répète ta réponse » relit le texte sans relancer une recherche, une sauvegarde ni un mouvement. Une proposition en attente garde sa date d’expiration initiale. « Et mon prénom ? », « Et pour mon métier ? » et quelques autres questions personnelles courtes utilisent le même interpréteur que les questions complètes ; les déclarations ne sont pas transformées en questions.
+
+Quand la dernière réponse cite une seule note, « lis cette note » en lit le contenu complet et « modifie cette note » ouvre son éditeur. Sans référence unique, Nexus demande le sujet. Le contexte est temporaire : cinq minutes, renouvelées après la fin effective d’une lecture de réponse sans confirmation en attente. Une lecture d’acquittement du micro ne le renouvelle pas. Une note modifiée, supprimée ou expirée ne peut pas être répétée comme une information actuelle. Les dialogues privés et l’arrière-plan effacent ce contexte.
+
+Dans **Mes notes**, ouvrir une note puis **Modifier** permet de relire son titre et tout son contenu avant **Enregistrer**. Une correction crée une nouvelle version et conserve les anciennes dans le même stockage chiffré. Seule la version actuelle alimente les réponses et la recherche. **Anciennes versions** permet de relire un ancien contenu et de le restaurer après une seconde confirmation ; la restauration conserve aussi la version qu’elle remplace. Une modification concurrente empêche d’écraser un contenu devenu plus récent. **Supprimer** annonce puis efface toute la chaîne de versions après confirmation.
+
+La source et l’expiration d’origine sont conservées. Une note corrigée est marquée comme modifiée et non vérifiée, y compris si elle provenait initialement de Wikipédia. Le schéma JSON 1 reste lu ; une correction avec historique utilise le schéma 2. Le format GZIP/AES-GCM, le fichier et la clé Keystore ne changent pas. La bibliothèque accepte au plus **20 000 notes actuelles et 40 000 enregistrements au total**, anciennes versions comprises, toujours dans les **32 Mio avant compression**. Une limite atteinte refuse l’écriture sans supprimer l’original.
+
+## Mémoire, lecture vocale et capacités conservées
 
 « Nexus, lis ma note sur le robot » sélectionne une note sur le sujet et lit son texte complet. Cette lecture est explicite, hors ligne et réservée aux notes utilisables par la conversation ; elle ne remplace pas la relecture manuelle des informations sensibles. Sans sujet correspondant, Nexus demande une précision au lieu de prendre une note récente au hasard. Le rappel ordinaire reste un aperçu court.
 
@@ -101,13 +111,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.17-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.18-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (23 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (24 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.17-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.18-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -119,13 +129,13 @@ Après l'installation de 0.4.0, les prochains APK peuvent être sélectionnés d
 
 La permission spéciale `REQUEST_INSTALL_PACKAGES` permet ce passage à l'installateur ; elle ne donne pas le droit de modifier les notes ni de procéder à une installation silencieuse. `INTERNET`, les autorisations générales de stockage et la désinstallation ne sont pas utilisés par ce parcours. L'APK doit être un paquet autonome, pas une archive XAPK ou un ensemble de splits. La rotation de clé est refusée par la comparaison stricte des signataires ; elle nécessiterait une migration distincte.
 
-Le cache privé ne contient que des copies APK, limitées à 64 Mio par fichier et 128 Mio au total. Leur SHA-256 est recalculé après une recréation de l'écran et avant la transmission. Les fichiers non transmis sont supprimés à la fermeture ; ceux transmis à Android restent lisibles pour l'installation, puis sont supprimés à l'import suivant une fois âgés de 24 heures. Le fournisseur non exporté expose uniquement `cache/updates/` et interdit l'écriture, sans accès aux notes.
+Le cache privé ne contient que des copies APK, limitées à 512 Mio par fichier et 1 Gio au total. Leur SHA-256 est recalculé après une recréation de l'écran et avant la transmission. Les fichiers non transmis sont supprimés à la fermeture ; ceux transmis à Android restent lisibles pour l'installation, puis sont supprimés à l'import suivant une fois âgés de 24 heures. Le fournisseur non exporté expose uniquement `cache/updates/` et interdit l'écriture, sans accès aux notes.
 
 ## Limites et prochaine validation
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.18](../../docs/releases/ANDROID-0.4.18-2026-11-12.md), [0.4.17](../../docs/releases/ANDROID-0.4.17-2026-11-12.md), [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 

@@ -9,8 +9,19 @@ export const unwrapPoliteRequest = (message: string): string => stripWakePrefix(
 export const isExplicitMemoryRequest = (message: string): boolean => /^(?:retiens|retenir|souviens[- ]toi|m[ée]morise|m[ée]moriser|garde en m[ée]moire|garder en m[ée]moire|apprends que|apprendre que|remember that)\b/i
   .test(unwrapPoliteRequest(message));
 
+const personalFollowUps = new Map<string, string>(Object.entries({
+  'mon prenom': 'Quel est mon prénom ?', 'mon nom': 'Quel est mon nom ?',
+  'mon metier': 'Quel est mon métier ?', 'ma profession': 'Quelle est ma profession ?',
+  'mon age': 'Quel est mon âge ?', 'ma voiture': 'Quelle est ma voiture ?',
+  'ma couleur preferee': 'Quelle est ma couleur préférée ?',
+  'ma boisson preferee': 'Quelle est ma boisson préférée ?'
+}));
+
 export const analyzeQuestion = (message: string) => {
-  const raw = stripWakePrefix(message, { allowFullNameWake: true }).trim();
+  const literal = stripWakePrefix(message, { allowFullNameWake: true }).trim();
+  const followUp = normalizeWakePhrase(literal).match(/^et(?: pour)? (.+)$/)?.[1];
+  // Exact elliptical questions only. A full statement or action is never rewritten.
+  const raw = (followUp && personalFollowUps.get(followUp)) || literal;
   const unwrapped = unwrapPoliteRequest(raw);
   const content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, '');
   const normalized = normalizeWakePhrase(content);

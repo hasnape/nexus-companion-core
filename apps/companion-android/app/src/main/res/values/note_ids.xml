@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="note_edit_title" type="id" />
+    <item name="note_edit_body" type="id" />
+    <item name="note_history_button" type="id" />
+</resources>

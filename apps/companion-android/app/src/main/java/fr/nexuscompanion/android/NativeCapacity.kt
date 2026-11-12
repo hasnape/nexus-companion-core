@@ -26,4 +26,5 @@ internal object NativeCapacity {
     const val MAX_SPEECH_PART_MS = 180000
     const val MAX_PLAYBACK_MS = 1200000
     const val MAX_REPLY_TEXT_CHARS = 20000
+    const val MAX_LIBRARY_RECORDS = 40000
 }

@@ -224,10 +224,23 @@ var NexusNativeBrain = function () {
   var isExplicitMemoryRequest = function isExplicitMemoryRequest(message) {
     return /^(?:retiens|retenir|souviens[- ]toi|m[ée]morise|m[ée]moriser|garde en m[ée]moire|garder en m[ée]moire|apprends que|apprendre que|remember that)\b/i.test(unwrapPoliteRequest(message));
   };
+  var personalFollowUps = new Map(Object.entries({
+    "mon prenom": "Quel est mon prénom ?",
+    "mon nom": "Quel est mon nom ?",
+    "mon metier": "Quel est mon métier ?",
+    "ma profession": "Quelle est ma profession ?",
+    "mon age": "Quel est mon âge ?",
+    "ma voiture": "Quelle est ma voiture ?",
+    "ma couleur preferee": "Quelle est ma couleur préférée ?",
+    "ma boisson preferee": "Quelle est ma boisson préférée ?"
+  }));
   var analyzeQuestion = function analyzeQuestion(message) {
-    var raw = stripWakePrefix(message, {
+    var _a;
+    var literal = stripWakePrefix(message, {
       allowFullNameWake: true
     }).trim();
+    var followUp = (_a = normalizeWakePhrase(literal).match(/^et(?: pour)? (.+)$/)) == null ? void 0 : _a[1];
+    var raw = followUp && personalFollowUps.get(followUp) || literal;
     var unwrapped = unwrapPoliteRequest(raw);
     var content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "");
     var normalized = normalizeWakePhrase(content);
@@ -822,7 +835,7 @@ var NexusNativeBrain = function () {
     };
     var excerpt = best.sentence.length > 480 ? "".concat(best.sentence.slice(0, 477), "\u2026") : best.sentence;
     var spoken = personal ? toSecondPerson(excerpt) : excerpt;
-    var prefix = best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
+    var prefix = best.note.manuallyEdited ? best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après ta note modifiée, dont la source d’origine est Wikipédia" : "D’après ta note modifiée" : best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
     return {
       text: "".concat(prefix, " : ").concat(spoken),
       evidenceIds: [best.note.id]
@@ -1690,7 +1703,8 @@ var NexusNativeBrain = function () {
     MAX_SPEECH_CHUNK_CHARS: 1e3,
     MAX_SPEECH_PART_MS: 18e4,
     MAX_PLAYBACK_MS: 12e5,
-    MAX_REPLY_TEXT_CHARS: 2e4
+    MAX_REPLY_TEXT_CHARS: 2e4,
+    MAX_LIBRARY_RECORDS: 4e4
   };
   var MAX_INPUT_CHARS = native_capacity_default.MAX_REQUEST_CHARS;
   var record = function record(value) {
@@ -1704,7 +1718,7 @@ var NexusNativeBrain = function () {
       throw new Error("Invalid native turn request");
     }
     var notes = value.notes.map(function (item) {
-      if (!record(item) || !boundedText(item.id, 64) || !boundedText(item.title, 160) || !boundedText(item.excerpt, native_capacity_default.MAX_NOTE_CHARS) || !boundedText(item.source, 512) || !Number.isSafeInteger(item.recordedAt) || item.recordedAt < 0 || !(item.expiresAt === null || Number.isSafeInteger(item.expiresAt) && item.expiresAt >= 0) || item.verified !== false) throw new Error("Invalid native note");
+      if (!record(item) || !boundedText(item.id, 64) || !boundedText(item.title, 160) || !boundedText(item.excerpt, native_capacity_default.MAX_NOTE_CHARS) || !boundedText(item.source, 512) || !Number.isSafeInteger(item.recordedAt) || item.recordedAt < 0 || !(item.expiresAt === null || Number.isSafeInteger(item.expiresAt) && item.expiresAt >= 0) || item.verified !== false || item.manuallyEdited !== void 0 && typeof item.manuallyEdited !== "boolean") throw new Error("Invalid native note");
       return {
         id: item.id,
         title: item.title,
@@ -1712,7 +1726,8 @@ var NexusNativeBrain = function () {
         source: item.source,
         recordedAt: item.recordedAt,
         expiresAt: item.expiresAt,
-        verified: false
+        verified: false,
+        manuallyEdited: item.manuallyEdited === true
       };
     });
     return {
@@ -1808,7 +1823,7 @@ var NexusNativeBrain = function () {
       var selected = notes[0];
       return __spreadValues(__spreadProps(__spreadValues({}, result), {
         intent: "memory_recall",
-        text: selected ? "Je lis ta note \xAB ".concat(selected.title, " \xBB, non v\xE9rifi\xE9e :\n").concat(selected.excerpt) : "Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes »."
+        text: selected ? "Je lis ta note".concat(selected.manuallyEdited ? " modifiée" : "", " \xAB ").concat(selected.title, " \xBB, non v\xE9rifi\xE9e :\n").concat(selected.excerpt) : "Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes »."
       }), selected ? {
         evidenceIds: [selected.id]
       } : {});

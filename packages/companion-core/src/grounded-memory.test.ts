@@ -7,6 +7,28 @@ const note = (excerpt: string, title = 'Repère', id = 'n1'): NativeNote => ({
 const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000 });
 
 describe('grounded conversational memory', () => {
+  it('does not rewrite complete statements or inherited object property names', () => {
+    const fact=turn('Et mon métier est technicien informatique');
+    expect(fact.candidate?.content).toContain('technicien');
+    expect(()=>turn('Et constructor')).not.toThrow();
+  });
+  it('identifies a manually edited source without claiming it is unchanged Wikipedia evidence', () => {
+    const saved={...note('Le volcan émet de la lave.','Volcan'),source:'https://fr.wikipedia.org/?curid=42',manuallyEdited:true};
+    const reply=turn('Qu’est-ce qu’un volcan ?',[saved]);
+    expect(reply.text).toContain('ta note modifiée');
+    expect(reply.text).toContain('source d’origine est Wikipédia');
+    expect(reply.evidenceIds).toEqual(['n1']);
+    expect(()=>turn('bonjour',[{...saved,manuallyEdited:'true' as never}])).toThrow();
+  });
+  it.each([
+    ['Et mon prénom', 'Le créateur est Amine.', 'Amine'],
+    ['Et pour mon métier', 'Je travaille comme technicien informatique.', 'technicien'],
+    ['Et ma boisson préférée', 'Je préfère le thé vert.', 'thé vert']
+  ])('understands a short personal follow-up without proposing a new memory: %s', (question, content, expected) => {
+    const reply = turn(question, [note(content)]);
+    expect(reply.candidate).toBeNull();
+    expect(reply.text).toContain(expected);
+  });
   it.each([
     ['Quelle est ma couleur préférée ?', 'Couleur préférée', 'Mon projet est un robot.'],
     ['Où est-ce que je travaille ?', 'Métier', 'Il reste un document dans ce dossier.'],

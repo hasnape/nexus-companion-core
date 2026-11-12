@@ -1,6 +1,8 @@
 import { buildCompanionContext } from './context';
 import { answerFromNotes, nativeRetrievalTerms } from './grounded-memory';
 import { analyzeQuestion } from './question';
+import { isPublicTopic, resolvePublicLookup, type LookupTarget } from './public-lookup';
+import { renderPracticalLanguageReply } from './practical-language';
 import { resolveBodyCommand } from '../../shared/src/wheeled-body';
 import { decideCompanionResponse } from './decision';
 import { isSensitiveMemoryContent, normalizeMemoryCandidateContent, normalizeMemoryContentKey, shouldRequireLocationConfirmation } from './memory';
@@ -32,6 +34,8 @@ export interface NativeTurnRequest {
   recallRequested?: boolean;
   /** Explicit full-note reading, independently bounded from ordinary short recall. */
   readRequested?: boolean;
+  publicContextTopic?: string;
+  awaitingLookupTarget?: LookupTarget;
 }
 
 export interface NativeTurnReply {
@@ -42,6 +46,10 @@ export interface NativeTurnReply {
   candidate: { content: string; sensitive: boolean } | null;
   publicLookupQuery?: string;
   publicLookupOffer?: string;
+  webLookupQuery?: string;
+  lookupTarget?: LookupTarget;
+  lookupNeedsTopic?: LookupTarget;
+  publicContextTopic?: string;
   evidenceIds?: string[];
 }
 
@@ -59,6 +67,8 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
       || (value.recallRequested !== undefined && typeof value.recallRequested !== 'boolean')
       || (value.readRequested !== undefined && typeof value.readRequested !== 'boolean')
       || (value.readRequested === true && value.recallRequested === false)
+      || (value.publicContextTopic !== undefined && (typeof value.publicContextTopic !== 'string' || !isPublicTopic(value.publicContextTopic)))
+      || (value.awaitingLookupTarget !== undefined && !['web', 'wikipedia'].includes(value.awaitingLookupTarget as string))
       || !Array.isArray(value.notes) || value.notes.length > capacity.MAX_CONTEXT_NOTES) {
     throw new Error('Invalid native turn request');
   }
@@ -76,7 +86,8 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
   });
   return {
     protocolVersion: 1, message: value.message.trim(), notes, now: value.now as number,
-    recallRequested: value.recallRequested, readRequested: value.readRequested
+    recallRequested: value.recallRequested, readRequested: value.readRequested,
+    publicContextTopic: value.publicContextTopic as string | undefined, awaitingLookupTarget: value.awaitingLookupTarget as LookupTarget | undefined
   };
 };
 
@@ -84,29 +95,6 @@ const isRecallRequest = (message: string): boolean => {
   const text = normalizeWakePhrase(stripWakePrefix(message, { allowFullNameWake: true }));
   return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text)
     || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
-};
-
-const lookupPrefix = /^(?:(?:peux[- ]tu|tu peux) +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)? +(?:sur (?:internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
-
-const isPublicTopic = (subject: string): boolean => {
-  const normalized = normalizeWakePhrase(subject);
-  return subject.length <= 180 && Boolean(normalized)
-    && !/[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject)
-    && !/\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
-};
-
-const publicLookup = (message: string): Pick<NativeTurnReply, 'text' | 'publicLookupQuery'> | null => {
-  const command = stripWakePrefix(message, { allowFullNameWake: true });
-  const prefix = command.match(lookupPrefix);
-  if (!prefix) return null;
-  const subject = command.slice(prefix[0].length).replace(/^[\s,.:!?]+/, '')
-    .replace(/^(?:sur|au sujet de|[àa] propos de)\s+/i, '').replace(/[.!?]+$/, '').trim();
-  if (!subject) return { text: 'Quel sujet veux-tu chercher sur Wikipédia ?' };
-
-  if (!isPublicTopic(subject)) {
-    return { text: 'Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle.' };
-  }
-  return { text: 'Je peux rechercher ce sujet sur Wikipédia.', publicLookupQuery: subject };
 };
 
 export const createNativeTurn = (input: unknown): NativeTurnReply => {
@@ -128,12 +116,15 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   context.createdAt = request.now;
   const decision = decideCompanionResponse(context);
   const plan = createResponsePlan({ context, decision });
+  const question = analyzeQuestion(request.message);
   const result: NativeTurnReply = {
-    protocolVersion: 1, engine: 'nexus-core-rules-v1', text: '', intent: decision.intent, candidate: null
+    protocolVersion: 1, engine: 'nexus-core-rules-v1', text: '', intent: decision.intent, candidate: null,
+    ...(question.question && !question.personal && isPublicTopic(question.content) && isPublicTopic(question.subject)
+      ? { publicContextTopic: question.subject } : {})
   };
   // Host commands and memory proposals can never bypass the shared safety decision.
   if (shouldUseSafetyTone(decision)) {
-    return { ...result, text: renderDeterministicNexusReply(plan) };
+    return { ...result, publicContextTopic: undefined, text: renderDeterministicNexusReply(plan) };
   }
   if (request.readRequested) {
     const selected = notes[0];
@@ -154,6 +145,8 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
         : 'Je ne retrouve pas de note non sensible à rappeler ici. Tu peux consulter toutes tes notes avec le bouton « Mes notes ».'
     };
   }
+  const lookup = resolvePublicLookup(request.message, request.publicContextTopic, request.awaitingLookupTarget);
+  if (lookup) return { ...result, ...lookup };
   const memoryCommand = stripWakePrefix(request.message, { allowFullNameWake: true });
   if (/^(?:retiens|souviens[- ]toi|m[ée]morise|garde en m[ée]moire)\b/i.test(memoryCommand)
       && notes.some((note) => normalizeMemoryContentKey(note.excerpt) === normalizeMemoryContentKey(normalizeMemoryCandidateContent(memoryCommand)))) {
@@ -174,12 +167,11 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   }
   const smallTalk = renderLocalSmallTalk(request.message);
   if (smallTalk) return { ...result, text: smallTalk };
-  const lookup = publicLookup(request.message);
-  if (lookup) return { ...result, ...lookup };
   if (plan.responseMode === 'supportive') return { ...result, text: renderDeterministicNexusReply(plan) };
   const grounded = answerFromNotes(request.message, notes);
   if (grounded) return { ...result, ...grounded };
-  const question = analyzeQuestion(request.message);
+  const practical = renderPracticalLanguageReply(request.message);
+  if (practical) return { ...result, text: practical };
   if (plan.responseMode === 'normal' || question.question) {
     const support = renderLocalSupportReply(request.message);
     if (support) return { ...result, text: support };
@@ -196,7 +188,7 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   const subject = question.subject;
   if (question.question && isPublicTopic(question.content) && isPublicTopic(subject)) return {
     ...result,
-    text: `Je ne sais pas encore répondre précisément. Tu veux que je cherche « ${subject} » sur Internet, dans Wikipédia ?`,
+    text: `Je ne sais pas encore répondre précisément. Tu veux que je cherche « ${subject} » dans Wikipédia ? Pour une recherche Web plus large, demande « cherche sur Internet » suivi du sujet.`,
     publicLookupOffer: subject
   };
   return {

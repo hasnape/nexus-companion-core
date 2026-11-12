@@ -51,6 +51,22 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun anInternetRequestOpensTheWebInsteadOfClaimingToHaveReadWikipedia() {
+        send("cherche sur internet les réponses de salutations")
+        await { hasText("recherche Web dans le navigateur") }
+        val intent=nextExternalIntent()!!
+        assertEquals("com.android.chrome",intent.`package`)
+        assertEquals("les réponses de salutations",intent.data?.getQueryParameter("q"))
+        assertEquals(View.GONE,activity.findViewById<TextView>(R.id.home_answer_source).visibility)
+    }
+    @Test fun aMisheardPrefixDoesNotOpenAnythingBeforeAVoiceCompatibleConfirmation() {
+        send("cher sur interdit que répondre bonjour")
+        await { hasText("mal compris le début") }
+        assertNull(nextExternalIntent())
+        send("oui")
+        await { hasText("recherche Web dans le navigateur") }
+        assertEquals("que répondre bonjour",nextExternalIntent()!!.data?.getQueryParameter("q"))
+    }
     @Test fun fallbackIsReportedWithoutClaimingThatTheNamedAppOpenedAndRepeatDoesNotLaunchAgain() {
         val fixture=lifecycle.get();fixture.externalResult=ExternalAppPolicy.LaunchResult.FALLBACK
         send("ouvre Chrome")

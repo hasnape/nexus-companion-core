@@ -195,8 +195,8 @@ var NexusNativeBrain = function () {
   var isIncompleteMemoryCommand = function isIncompleteMemoryCommand(input) {
     var normalized = normalizeMemoryCommand(input);
     if (!normalized) return false;
-    if (MEMORY_PREFIXES.some(function (prefix) {
-      return normalized === prefix;
+    if (MEMORY_PREFIXES.some(function (prefix2) {
+      return normalized === prefix2;
     })) return true;
     if (normalized === "retiens ca" || normalized === "retiens cela") return true;
     if (normalized.startsWith("souviens toi") && !/\bque\b|\bde\b/.test(normalized)) return true;
@@ -238,10 +238,10 @@ var NexusNativeBrain = function () {
     var text = normalizeWakePhrase(stripWakePrefix(message, {
       allowFullNameWake: true
     }));
-    var prefix = /^(?:quel est|quelle est|quels sont|quelles sont|c est quoi|dis moi) /;
-    if (!prefix.test(text)) return null;
-    var labels = text.replace(prefix, "").split(/\s+et\s+/).map(function (part) {
-      return part.replace(prefix, "");
+    var prefix2 = /^(?:quel est|quelle est|quels sont|quelles sont|c est quoi|dis moi) /;
+    if (!prefix2.test(text)) return null;
+    var labels = text.replace(prefix2, "").split(/\s+et\s+/).map(function (part) {
+      return part.replace(prefix2, "");
     });
     if (labels.length < 2 || labels.length > 4) return null;
     var questions = labels.map(function (label) {
@@ -262,7 +262,7 @@ var NexusNativeBrain = function () {
     var content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "");
     var normalized = normalizeWakePhrase(content);
     var style = /^(?:parle[- ]moi de mani[èe]re|sois plus|garde un style)\b/i.test(raw);
-    var question = !isExplicitMemoryRequest(raw) && !style && (raw.includes("?") || content !== raw || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|dans quelle\b)/i.test(raw));
+    var question = !isExplicitMemoryRequest(raw) && !style && (raw.includes("?") || content !== raw || /^(?:que|quoi)\s+(?:faire|dire|r[ée]pondre|choisir|utiliser)\b/i.test(raw) || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|dans quelle\b)/i.test(raw));
     var kind = /^(?:ou\b|dans quelle (?:ville|entreprise|region)|a quel endroit)/.test(normalized) ? "where" : /^pourquoi\b/.test(normalized) ? "why" : /^quand\b|^a quelle (?:date|heure)\b/.test(normalized) ? "when" : "general";
     var subject = content.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
     return {
@@ -795,8 +795,8 @@ var NexusNativeBrain = function () {
     for (var _i4 = 0, _explicitFactPrefixes = explicitFactPrefixes; _i4 < _explicitFactPrefixes.length; _i4++) {
       var _explicitFactPrefixes2 = _slicedToArray(_explicitFactPrefixes[_i4], 2),
         attribute = _explicitFactPrefixes2[0],
-        prefix = _explicitFactPrefixes2[1];
-      var value = query.includes(attribute) ? (_a = literal.match(prefix)) == null ? void 0 : _a[1] : void 0;
+        prefix2 = _explicitFactPrefixes2[1];
+      var value = query.includes(attribute) ? (_a = literal.match(prefix2)) == null ? void 0 : _a[1] : void 0;
       if (value) return "".concat(attribute, ":").concat(value);
     }
     return "literal:".concat(literal);
@@ -901,11 +901,61 @@ var NexusNativeBrain = function () {
     };
     var excerpt = best.sentence.length > 480 ? "".concat(best.sentence.slice(0, 477), "\u2026") : best.sentence;
     var spoken = personal ? toSecondPerson(excerpt) : excerpt;
-    var prefix = best.note.manuallyEdited ? best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après ta note modifiée, dont la source d’origine est Wikipédia" : "D’après ta note modifiée" : best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
+    var prefix2 = best.note.manuallyEdited ? best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après ta note modifiée, dont la source d’origine est Wikipédia" : "D’après ta note modifiée" : best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
     return {
-      text: "".concat(prefix, " : ").concat(spoken),
+      text: "".concat(prefix2, " : ").concat(spoken),
       evidenceIds: [best.note.id]
     };
+  };
+  var isPublicTopic = function isPublicTopic(subject) {
+    var normalized = normalizeWakePhrase(subject);
+    return subject.length <= 180 && Boolean(normalized) && !/[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) && !/\b\d+\s+(?:rue|avenue|boulevard|chemin|all[ée]e|route|impasse)\b/i.test(subject) && !/\b(?:mon|ma|mes|notre|nos|je|moi|my|our|i|mot de passe|password|code de validation|code pin|carte bancaire|iban|cle api|jeton d acces)\b/.test(normalized);
+  };
+  var prefix = /^(?:(?:peux[- ]tu|tu peux|pourrais[- ]tu|vous pouvez)(?: me)? +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)?(?: plut[ôo]t)? +(?:sur (internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
+  var uncertainPrefix = /^(?:(?:cher|recher) sur (?:internet|le web)|(?:cher|cherche|recherche) sur interdit)(?=$|[\s,.:!?])/i;
+  var newCommand = /^(?:ne (?:cherche|recherche)|(?:cherche|recherche) pas|retiens|souviens[- ]toi|m[ée]morise|garde en m[ée]moire|lis|montre|mes notes|rappelle|ouvre|affiche|avance|recule|tourne|stop|annule|bonjour|merci|oui|non|je confirme|d['’ ]accord)\b/i;
+  var resolvePublicLookup = function resolvePublicLookup(message, context, awaiting) {
+    var _a;
+    var command = stripWakePrefix(message, {
+      allowFullNameWake: true
+    }).trim();
+    var exact = command.match(prefix);
+    var uncertain = exact ? null : command.match(uncertainPrefix);
+    var match = exact != null ? exact : uncertain;
+    if (!match && (!awaiting || isExplicitMemoryRequest(command) || newCommand.test(command))) return null;
+    var target = ((_a = exact == null ? void 0 : exact[1]) == null ? void 0 : _a.toLowerCase().startsWith("wikip")) ? "wikipedia" : match ? "web" : awaiting;
+    var supplied = (match ? command.slice(match[0].length) : command).replace(/^[\s,.:!?]+/, "").replace(/^(?:sur|au sujet de|[àa] propos de)\s+/i, "").replace(/[.!?]+$/, "").trim();
+    var subject = supplied || context || "";
+    if (!subject) return {
+      text: "Quel sujet public veux-tu chercher ".concat(target === "web" ? "sur le Web" : "dans Wikipédia", " ?"),
+      lookupNeedsTopic: target
+    };
+    if (!isPublicTopic(subject)) return {
+      text: "Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle."
+    };
+    if (uncertain) return {
+      text: "J\u2019ai peut-\xEAtre mal compris le d\xE9but. Veux-tu lancer une recherche Web sur \xAB ".concat(subject, " \xBB ?"),
+      publicLookupOffer: subject,
+      lookupTarget: target,
+      publicContextTopic: subject
+    };
+    return target === "web" ? {
+      text: "Je pr\xE9pare une recherche Web sur \xAB ".concat(subject, " \xBB dans le navigateur."),
+      webLookupQuery: subject,
+      publicContextTopic: subject
+    } : {
+      text: "Je recherche \xAB ".concat(subject, " \xBB dans Wikip\xE9dia."),
+      publicLookupQuery: subject,
+      publicContextTopic: subject
+    };
+  };
+  var renderPracticalLanguageReply = function renderPracticalLanguageReply(message) {
+    var text = normalizeWakePhrase(unwrapPoliteRequest(message));
+    if (!/^(?:que repondre|quoi repondre|que dire|comment repondre|comment saluer|quelle reponse)\b/.test(text)) return null;
+    if (/\bbonsoir\b/.test(text)) return "Tu peux répondre « Bonsoir ! Comment vas-tu ? ». Dans un échange professionnel, « Bonsoir, comment puis-je vous aider ? » convient aussi.";
+    if (/\b(?:bonjour|salut|salutations?)\b/.test(text)) return "Tu peux répondre « Bonjour ! Comment vas-tu ? ». Dans un échange professionnel, « Bonjour, comment puis-je vous aider ? » convient aussi.";
+    if (/\bmerci\b/.test(text)) return "Tu peux répondre « Avec plaisir ! » ou « Je t’en prie ». Dans un échange formel : « Je vous en prie ».";
+    return null;
   };
   var validIdentifier = function validIdentifier(value) {
     return typeof value === "string" && value.length > 0 && value.length <= 128 && /^[a-zA-Z0-9._:-]+$/.test(value);
@@ -1780,7 +1830,7 @@ var NexusNativeBrain = function () {
     return typeof value === "string" && value.trim().length > 0 && value.length <= max;
   };
   var validateRequest = function validateRequest(value) {
-    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || value.readRequested !== void 0 && typeof value.readRequested !== "boolean" || value.readRequested === true && value.recallRequested === false || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
+    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || value.readRequested !== void 0 && typeof value.readRequested !== "boolean" || value.readRequested === true && value.recallRequested === false || value.publicContextTopic !== void 0 && (typeof value.publicContextTopic !== "string" || !isPublicTopic(value.publicContextTopic)) || value.awaitingLookupTarget !== void 0 && !["web", "wikipedia"].includes(value.awaitingLookupTarget) || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
       throw new Error("Invalid native turn request");
     }
     var notes = value.notes.map(function (item) {
@@ -1802,7 +1852,9 @@ var NexusNativeBrain = function () {
       notes: notes,
       now: value.now,
       recallRequested: value.recallRequested,
-      readRequested: value.readRequested
+      readRequested: value.readRequested,
+      publicContextTopic: value.publicContextTopic,
+      awaitingLookupTarget: value.awaitingLookupTarget
     };
   };
   var isRecallRequest = function isRecallRequest(message) {
@@ -1810,31 +1862,6 @@ var NexusNativeBrain = function () {
       allowFullNameWake: true
     }));
     return /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise)|rappelle moi\b|montre (?:moi )?mes notes\b|mes notes\b|mes preferences\b)/.test(text) || /^(?:tu te souviens|te souviens tu|que sais tu)\b/.test(text);
-  };
-  var lookupPrefix = /^(?:(?:peux[- ]tu|tu peux) +)?(?:cherch(?:e|er)|recherch(?:e|er)|fais une recherche)(?: pour moi)? +(?:sur (?:internet|le web|wikip[ée]dia)|en ligne)(?=$|[\s,.:!?])/i;
-  var isPublicTopic = function isPublicTopic(subject) {
-    var normalized = normalizeWakePhrase(subject);
-    return subject.length <= 180 && Boolean(normalized) && !/[@\r\n]|https?:|www\.|(?:\d[ .-]?){7,}/i.test(subject) && !/\b(?:mon|ma|mes|notre|nos|je|moi|mot de passe|password|code de validation|code pin|carte bancaire|iban)\b/.test(normalized);
-  };
-  var publicLookup = function publicLookup(message) {
-    var command = stripWakePrefix(message, {
-      allowFullNameWake: true
-    });
-    var prefix = command.match(lookupPrefix);
-    if (!prefix) return null;
-    var subject = command.slice(prefix[0].length).replace(/^[\s,.:!?]+/, "").replace(/^(?:sur|au sujet de|[àa] propos de)\s+/i, "").replace(/[.!?]+$/, "").trim();
-    if (!subject) return {
-      text: "Quel sujet veux-tu chercher sur Wikipédia ?"
-    };
-    if (!isPublicTopic(subject)) {
-      return {
-        text: "Donne-moi un sujet public en quelques mots, sans coordonnées ni information personnelle."
-      };
-    }
-    return {
-      text: "Je peux rechercher ce sujet sur Wikipédia.",
-      publicLookupQuery: subject
-    };
   };
   var _createNativeTurn = function _createNativeTurn(input) {
     var _a;
@@ -1873,15 +1900,19 @@ var NexusNativeBrain = function () {
       context: context,
       decision: decision
     });
-    var result = {
+    var question = analyzeQuestion(request.message);
+    var result = __spreadValues({
       protocolVersion: 1,
       engine: "nexus-core-rules-v1",
       text: "",
       intent: decision.intent,
       candidate: null
-    };
+    }, question.question && !question.personal && isPublicTopic(question.content) && isPublicTopic(question.subject) ? {
+      publicContextTopic: question.subject
+    } : {});
     if (shouldUseSafetyTone(decision)) {
       return __spreadProps(__spreadValues({}, result), {
+        publicContextTopic: void 0,
         text: renderDeterministicNexusReply(plan)
       });
     }
@@ -1906,6 +1937,8 @@ var NexusNativeBrain = function () {
         }).join("\n")).concat(shortened ? "\nLes notes complètes restent accessibles dans « Mes notes »." : "") : "Je ne retrouve pas de note non sensible à rappeler ici. Tu peux consulter toutes tes notes avec le bouton « Mes notes »."
       });
     }
+    var lookup = resolvePublicLookup(request.message, request.publicContextTopic, request.awaitingLookupTarget);
+    if (lookup) return __spreadValues(__spreadValues({}, result), lookup);
     var memoryCommand = stripWakePrefix(request.message, {
       allowFullNameWake: true
     });
@@ -1932,14 +1965,15 @@ var NexusNativeBrain = function () {
     if (smallTalk) return __spreadProps(__spreadValues({}, result), {
       text: smallTalk
     });
-    var lookup = publicLookup(request.message);
-    if (lookup) return __spreadValues(__spreadValues({}, result), lookup);
     if (plan.responseMode === "supportive") return __spreadProps(__spreadValues({}, result), {
       text: renderDeterministicNexusReply(plan)
     });
     var grounded = answerFromNotes(request.message, notes);
     if (grounded) return __spreadValues(__spreadValues({}, result), grounded);
-    var question = analyzeQuestion(request.message);
+    var practical = renderPracticalLanguageReply(request.message);
+    if (practical) return __spreadProps(__spreadValues({}, result), {
+      text: practical
+    });
     if (plan.responseMode === "normal" || question.question) {
       var support = renderLocalSupportReply(request.message);
       if (support) return __spreadProps(__spreadValues({}, result), {
@@ -1956,7 +1990,7 @@ var NexusNativeBrain = function () {
     }
     var subject = question.subject;
     if (question.question && isPublicTopic(question.content) && isPublicTopic(subject)) return __spreadProps(__spreadValues({}, result), {
-      text: "Je ne sais pas encore r\xE9pondre pr\xE9cis\xE9ment. Tu veux que je cherche \xAB ".concat(subject, " \xBB sur Internet, dans Wikip\xE9dia ?"),
+      text: "Je ne sais pas encore r\xE9pondre pr\xE9cis\xE9ment. Tu veux que je cherche \xAB ".concat(subject, " \xBB dans Wikip\xE9dia ? Pour une recherche Web plus large, demande \xAB cherche sur Internet \xBB suivi du sujet."),
       publicLookupOffer: subject
     });
     return __spreadProps(__spreadValues({}, result), {

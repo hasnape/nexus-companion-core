@@ -15,6 +15,16 @@ internal object VoiceTranscriptPolicy {
     )
     data class Parsed(val hasWake: Boolean, val command: String)
 
+    /** Only incomplete search requests may wait across a short acoustic endpoint. */
+    fun isIncompleteSearch(text: String): Boolean {
+        val words = commandWords(text).replaceFirst(Regex("^(?:peux tu|tu peux|pourrais tu) (?:me )?"), "")
+        return words in setOf(
+            "cherche", "chercher", "recherche", "rechercher", "cherche sur", "recherche sur",
+            "cherche sur internet", "recherche sur internet", "cherche sur le web", "recherche sur le web",
+            "cherche sur wikipedia", "recherche sur wikipedia", "cherche en ligne", "recherche en ligne"
+        )
+    }
+
     /** Exact approvals shared by the dialog worker and acoustic confidence check. */
     fun confirmation(text: String): Boolean? = when (commandWords(text)) {
         "oui", "oui merci", "oui je confirme", "je confirme", "d accord", "vas y",

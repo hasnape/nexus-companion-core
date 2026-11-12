@@ -23,12 +23,14 @@ internal class NativeBrainService(
         val expectsAnswer: Boolean = false,
         val body: RollingBodyState.Plan? = null,
         val editNote: LocalKnowledgeLibrary.Entry? = null,
-        val external: ExternalAppPolicy.Request? = null
+        val external: ExternalAppPolicy.Request? = null,
+        val publicContextTopic: String? = null
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
         val expires: Long
-        data class Lookup(val query: String, override val expires: Long) : Pending
+        data class Lookup(val query: String, override val expires: Long, val target: String = "wikipedia") : Pending
+        data class Topic(val target: String, override val expires: Long) : Pending
         data class Save(val title: String, val excerpt: String, val source: String, override val expires: Long) : Pending
         data class OpenApp(val request: ExternalAppPolicy.Request, val evidence: List<LocalKnowledgeLibrary.Entry>, override val expires: Long) : Pending
     }
@@ -112,7 +114,12 @@ internal class NativeBrainService(
             if (previous == null) return Reply("Je n’ai aucune recherche ou information en attente de confirmation. Que veux-tu savoir ?", null, true, expectsAnswer = true)
             if (!approval) return Reply("D’accord, j’annule cette proposition.", null, true, expectsAnswer = true)
             when (previous) {
-                is Pending.Lookup -> return lookup(previous.query, onlineEnabled, true)
+                is Pending.Lookup -> return lookup(previous.query, onlineEnabled, true, previous.target)
+                is Pending.Topic -> {
+                    if (!onlineEnabled) return Reply(context.getString(R.string.online_disabled_reply), null, true)
+                    pending = previous
+                    return Reply("Précise le sujet public à rechercher ${if (previous.target == "web") "sur le Web" else "dans Wikipédia"}.", null, true, expectsAnswer = true)
+                }
                 is Pending.Save -> {
                     val saved = library.addApprovedSource(previous.title, previous.excerpt, previous.source)
                     turnEvidence = listOf(saved.entry)
@@ -169,6 +176,10 @@ internal class NativeBrainService(
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
+        if (focusedNote == null) {
+            conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
+            if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
+        }
         var requestChars = request.toString().length
         // Budget each serialized record once; never repeatedly serialize an oversized context.
         for (note in notes.orEmpty()) {
@@ -201,7 +212,16 @@ internal class NativeBrainService(
         }?.let { note -> note.source.substringAfter("curid=").toIntOrNull()?.let { id ->
             WikipediaKnowledgeSearch.Article(id, note.title, note.excerpt)
         } }
-        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true)
+        val publicTopic = result.optString("publicContextTopic").takeIf { it.isNotBlank() }
+        check(publicTopic == null || publicTopic.length <= 180)
+        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true, publicContextTopic = publicTopic)
+        val needsTopic = result.optString("lookupNeedsTopic")
+        if (needsTopic.isNotEmpty()) {
+            check(needsTopic in setOf("web", "wikipedia") && candidate == null)
+            if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
+            pending = Pending.Topic(needsTopic, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
+            return local
+        }
         if (candidate != null && !candidate.sensitive && notes != null && candidate.content.length <= 600) {
             pending = Pending.Save(candidate.content.take(80), candidate.content, "user:manual", elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
             return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
@@ -210,8 +230,15 @@ internal class NativeBrainService(
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
             if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
-            pending = Pending.Lookup(offer, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
+            val target = result.optString("lookupTarget", "wikipedia")
+            check(target in setOf("web", "wikipedia"))
+            pending = Pending.Lookup(offer, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS, target)
             return local
+        }
+        val webQuery = result.optString("webLookupQuery")
+        if (webQuery.isNotEmpty()) {
+            check(webQuery.length <= 180 && candidate == null)
+            return lookup(webQuery, onlineEnabled, notes != null, "web")
         }
         val query = result.optString("publicLookupQuery")
         if (query.isEmpty()) return local
@@ -219,13 +246,18 @@ internal class NativeBrainService(
         return lookup(query, onlineEnabled, notes != null)
     }
 
-    private fun lookup(query: String, onlineEnabled: Boolean, notesAvailable: Boolean): Reply {
-        val local = Reply("", null, notesAvailable, expectsAnswer = true)
+    private fun lookup(query: String, onlineEnabled: Boolean, notesAvailable: Boolean, target: String = "wikipedia"): Reply {
+        val local = Reply("", null, notesAvailable, expectsAnswer = true, publicContextTopic = query)
         if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
+        if (target == "web") {
+            val request = try { ExternalAppPolicy.Request(ExternalAppPolicy.App.CHROME, ExternalAppPolicy.Operation.SEARCH, query) }
+                catch (_: IllegalArgumentException) { return local.copy(text = "Précise un sujet public plus court pour la recherche Web.") }
+            return local.copy(text = "Je lance une recherche Web dans le navigateur sur « $query ». Les résultats s’affichent dans le navigateur.", external = request)
+        }
         return try {
             val article = search(query) ?: return local.copy(text = context.getString(R.string.online_no_match))
             if (notesAvailable) pending = Pending.Save(article.title, article.extract, article.url, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
-            local.copy(text = context.getString(R.string.online_answer, article.extract) +
+            local.copy(text = context.getString(R.string.online_answer, WikipediaAnswerPolicy.excerpt(query, article.extract)) +
                 if (notesAvailable) " Veux-tu que je retienne cette information dans mes notes locales ?" else "", source = article)
         } catch (_: IOException) {
             local.copy(text = context.getString(R.string.online_unavailable))

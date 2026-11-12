@@ -9,6 +9,14 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LocalSpeechResultTest {
+    @Test fun longDictationIsPreservedAndNeverSilentlyTruncated() {
+        val text = "nexus retiens que " + "observation locale ".repeat(240).trim()
+        val payload = """{"text":"$text"}"""
+        val decoded = LocalSpeechResult.hypotheses(payload)
+        assertEquals(text, decoded.single().text)
+        assertEquals(text, VoiceTranscriptPolicy.select(decoded, false))
+        assertTrue(LocalSpeechResult.hypotheses("""{"text":"${"x".repeat(8001)}"}""").isEmpty())
+    }
     @Test fun keepsVoskLikelihoodSeparateFromWordConfidence() {
         val result = LocalSpeechResult.hypotheses("""{"alternatives":[{"text":"nexusbonjour","confidence":120.5},{"text":"nexus bonjour","confidence":120.1}]}""")
         assertNull(result.first().confidence)

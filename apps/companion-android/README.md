@@ -1,4 +1,4 @@
-# Nexus Companion Android — 0.4.15 native alpha
+# Nexus Companion Android — 0.4.16 native alpha
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques demandées par l’utilisateur utilisent l’API de Wikipédia en HTTPS.
 
@@ -16,11 +16,11 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 - **Accès en ligne** dans **Réglages**, activé au départ. Dire ou écrire « Cherche sur Internet la tour Eiffel » lance la recherche du sujet sur Wikipédia en français. Le réglage mémorise le choix. La réponse affiche l’extrait et son article source. Les notes et l’audio restent locaux. L’API renvoie des extraits attribués à leurs auteurs via le lien de l’article. [Conditions de réutilisation](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use)
 - Écoute automatique à l'ouverture si l'autorisation micro a été accordée et si l'utilisateur ne l'a pas désactivée. Bouton d'arrêt visible, préférence conservée. Le micro et la synthèse sont arrêtés dès `onPause`.
 - Reconnaissance française sur le téléphone via le modèle Vosk inclus dans l’APK. Dire « Nexus, bonjour » ou « Nexus », puis la commande après « Je t'écoute ». Les silences ordinaires relancent l'écoute sans épuiser le budget de reprise des pannes.
-- Après une réponse, la conversation peut continuer sans répéter « Nexus » pendant 12 secondes à partir du micro prêt. La fenêtre suit la fin effective de la lecture. Une lecture échouée ne l’ouvre pas. Après le délai, le mot d’activation redevient nécessaire.
+- Après une réponse, la conversation peut continuer sans répéter « Nexus » pendant 20 secondes à partir du micro prêt. La fenêtre suit la fin effective de la lecture. Une lecture échouée ne l’ouvre pas. Après le délai, le mot d’activation redevient nécessaire.
 - « Parler maintenant » lance une dictée directe sans mot d'activation. Le bouton reste désactivé si le micro est arrêté ou pendant un calcul. La dictée peut interrompre une réponse vocale.
 - Aperçu « En cours » puis « Entendu », conservé uniquement en mémoire, effacé après 15 secondes sans transcription et à l'arrêt du micro, en arrière-plan ou dans un dialogue privé. Seul le résultat final peut déclencher une commande ; le texte saisi au clavier reste indépendant.
 - Le mot d’activation et ses variantes restent reconnus uniquement en début de phrase, sur un mot complet. La dictée directe utilise le résultat du décodeur sans exiger de mot d’activation.
-- Le délai de commande de 12 secondes commence après les premiers échantillons du micro. Il limite l’attente avant de parler et se désarme quand un résultat partiel arrive. Le chargement initial dispose de 30 secondes et les captures silencieuses se renouvellent après 20 secondes. L’interface distingue la préparation, l’écoute et la pause pendant la réponse.
+- Le délai de commande de 20 secondes commence après les premiers échantillons du micro. Il limite l’attente avant de parler et se désarme quand un résultat partiel arrive. Le chargement initial dispose de 30 secondes et les captures silencieuses se renouvellent après 20 secondes. L’interface distingue la préparation, l’écoute et la pause pendant la réponse.
 - Les blocs audio sont de 100 ms. Les résultats finaux récupèrent aussi une phrase sans résultat partiel préalable. Le décodage de consensus Vosk est conservé ; une confirmation courte à faible confiance demande de répéter.
 - Chaque capture libère le micro et le décodeur avant de transmettre son résultat. Après un silence ou une phrase ambiante, le moteur embarqué prépare la capture suivante dès le prochain passage de la boucle Android. La reprise réutilise le modèle chargé et ignore les événements de l’ancienne capture.
 - Micro suspendu pendant le calcul local, la synthèse et les dialogues de notes. La préparation du micro redémarre 200 ms après la fin confirmée de la lecture. Un délai de 700 ms s’applique après une erreur ou une expiration de la lecture. La bouche s’ouvre au signal de début de la synthèse.
@@ -35,6 +35,33 @@ Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cib
 - Le témoin du signal micro mesure le niveau des échantillons reçus et revient à zéro pendant les pauses.
 
 La reconnaissance locale fonctionne par sessions finies et reprises. Le déclenchement attend une transcription finale contenant « Nexus ». La précision et l’autonomie restent à mesurer sur téléphone.
+
+## Capacités et mise à jour 0.4.16
+
+Le fichier `packages/companion-core/src/native-capacity.json` est la source unique des capacités natives. `build:native-brain` génère les constantes Kotlin et la ressource de saisie, puis scelle leurs empreintes avec le bundle. `check:native-brain` et Gradle refusent des fichiers désynchronisés.
+
+| Capacité | 0.4.15 | 0.4.16 |
+| --- | --- | --- |
+| Notes locales | 500 | 5 000 |
+| Texte par note / message / transcription | 2 000 caractères | 8 000 caractères |
+| JSON de mémoire avant compression | 8 Mio | 32 Mio |
+| Notes candidates par tour | 8 | 16 |
+| Résultats de recherche dans les notes | 5 | 20 |
+| Requête du moteur, JSON échappé compris | 40 000 caractères | 160 000 caractères |
+| Début d’une réponse sans nouveau mot d’activation | 12 s | 20 s |
+| Dictée continue maximale | 58 s | 118 s |
+| Proposition en attente de confirmation | 90 s | 180 s |
+| Budget du moteur par appel | 3 millions d’instructions / 2,5 s | 120 millions / 5 s |
+| APK importé | 64 Mio | 512 Mio |
+| Cache temporaire des APK | 128 Mio | 1 Gio |
+
+Les plafonds de nombre de notes et de taille totale s’appliquent ensemble. Le contexte garde les notes les mieux classées et retire les dernières si l’échappement JSON dépasse son budget ; les notes stockées restent complètes. Ces capacités ne transforment pas les règles locales en modèle génératif et ne constituent pas une mesure de précision vocale.
+
+L’import réutilise une copie privée identique après vérification et supprime les APK déjà installés. « Nettoyer les anciens APK » libère les autres copies temporaires en gardant la sélection actuelle et les notes. Les erreurs distinguent fichier trop gros, cache plein et manque d’espace disque. Les signataires, le package, la version, la protection des chemins, le condensat et la lecture seule restent vérifiés.
+
+**Depuis 0.4.14 ou 0.4.15 affichant l’erreur de cache**, télécharger le nouvel APK puis l’ouvrir dans l’application Android **Mes fichiers → Téléchargements** et confirmer la mise à jour. Ne pas désinstaller Nexus : l’installateur système peut appliquer le correctif sans passer par l’ancien importeur. Les mises à jour suivantes peuvent ensuite utiliser le nouvel écran intégré.
+
+Les limites de mouvement, l’arrêt, la validation des confirmations, les permissions et le chiffrement restent des contrôles distincts. Les approbations à faible confiance sont redemandées même lorsque le mot « Nexus » est présent. Aucun nouveau droit de réseau, de stockage ou de moteur n’est ajouté.
 
 ## Compilation sur Windows / Android Studio
 
@@ -70,13 +97,13 @@ Sous Linux, depuis la racine, avec JDK 17 complet, Android SDK et les variables 
 bash scripts/build-android-apk.sh
 ```
 
-Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.15-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
+Le script valide la configuration avant de compiler, nettoie les sorties de construction, exécute les tests et Android Lint, vérifie la signature et produit les APK dans `apk-dist/0.4.16-native-alpha/` avec `SHA256SUMS.txt`. Le fichier de sommes référence les APK produits par cette exécution.
 
 Le script optionnel `scripts/build-android-apk-vercel.sh` prépare les outils Linux et appelle le même script. Aucun workflow GitHub Actions n'est nécessaire. Ce bootstrap optionnel n'a pas été validé dans l'environnement Vercel dans cette livraison.
 
-Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (19 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
+Pour installer une mise à jour, l’application doit garder `fr.nexuscompanion.android`, utiliser le même certificat et augmenter `versionCode` (22 pour cette version). L’installation demande la confirmation Android. Installe l’APK signé par-dessus l’application principale existante pour conserver les notes et la clé Keystore associée.
 
-Distribuer uniquement `nexus-companion-v0.4.15-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
+Distribuer uniquement `nexus-companion-v0.4.16-native-alpha-release.apk`, signé avec la clé permanente du paquet principal.
 
 ### Français hors ligne
 
@@ -94,7 +121,7 @@ Le cache privé ne contient que des copies APK, limitées à 64 Mio par fichier 
 
 Le premier pont vers les règles TypeScript est intégré. Le cerveau cognitif complet persistant, l'identité native, l'avatar web complet, l'export/import Android chiffré et la recherche en ligne de nouvelles versions restent à intégrer.
 
-Voir les rapports de validation [0.4.15](../../docs/releases/ANDROID-0.4.15-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Le modèle français est également vérifié séparément sur des enregistrements réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
+Voir les rapports de validation [0.4.16](../../docs/releases/ANDROID-0.4.16-2026-11-12.md), [0.4.14](../../docs/releases/ANDROID-0.4.14-2026-11-11.md), [0.4.13](../../docs/releases/ANDROID-0.4.13-2026-11-11.md), [0.4.12](../../docs/releases/ANDROID-0.4.12-2026-11-08.md), [0.4.11](../../docs/releases/ANDROID-0.4.11-2026-11-08.md), [0.4.10](../../docs/releases/ANDROID-0.4.10-2026-11-08.md), [0.4.9](../../docs/releases/ANDROID-0.4.9-2026-11-08.md), [0.4.8](../../docs/releases/ANDROID-0.4.8-2026-11-08.md), [0.4.7](../../docs/releases/ANDROID-0.4.7-2026-11-07.md), [0.4.6](../../docs/releases/ANDROID-0.4.6-2026-11-07.md), [0.4.5](../../docs/releases/ANDROID-0.4.5-2026-11-07.md) et [0.4.4](../../docs/releases/ANDROID-0.4.4-2026-11-07.md). Les tests exécutent le bundle partagé dans Rhino, l’interface et le câblage vocal dans Robolectric, et la persistance avec AES-GCM de JVM. Les tests Android simulent la source micro. Cette livraison ne mesure pas la précision du modèle sur des enregistrements acoustiques réels. Le microphone, le Bluetooth et l’autonomie restent à vérifier sur téléphone.
 
 ## Développement du moteur partagé
 
@@ -106,6 +133,6 @@ npm run build:native-brain
 npm run check:native-brain
 ```
 
-Voir la [décision d'architecture](../../docs/architecture/ADR-0002-android-shared-brain.md). Une conversation ne sauvegarde pas automatiquement des informations : les propositions courtes et non sensibles se confirment à la voix, et le bouton « Retenir cette information » garde la relecture manuelle. Les propositions sensibles nécessitent cette relecture manuelle. Le moteur assemble des phrases à partir des extraits pertinents ; ce n’est pas un modèle génératif généraliste. Dans « Mes notes », saisir d'abord un sujet dans le champ texte pour rechercher ; sans sujet, les cinquante notes les plus récentes sont affichées.
+Voir la [décision d'architecture](../../docs/architecture/ADR-0002-android-shared-brain.md). Une conversation ne sauvegarde pas automatiquement des informations : les propositions courtes et non sensibles se confirment à la voix, et le bouton « Retenir cette information » garde la relecture manuelle. Les propositions sensibles nécessitent cette relecture manuelle. Le moteur assemble des phrases à partir des extraits pertinents ; ce n’est pas un modèle génératif généraliste. Dans « Mes notes », saisir d'abord un sujet dans le champ texte pour rechercher ; sans sujet, toutes les notes sont accessibles par pages de cinquante avec les boutons Suivantes et Précédentes.
 
 Le contrat de corps roulant et les choix de mémoire/voix sont décrits dans [ADR-0003](../../docs/architecture/ADR-0003-wheeled-body-and-native-memory.md).

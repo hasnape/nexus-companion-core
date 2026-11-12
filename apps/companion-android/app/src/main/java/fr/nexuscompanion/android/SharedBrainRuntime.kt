@@ -9,10 +9,10 @@ import org.mozilla.javascript.ScriptableObject
 /** Only the packaged, trusted bundle is evaluated. Requests are function arguments, never code. */
 internal class SharedBrainRuntime(
     private val source: String,
-    private val instructionLimit: Long = 3_000_000L,
-    private val timeLimitMs: Long = 2_500L
+    private val instructionLimit: Long = NativeCapacity.BRAIN_INSTRUCTIONS.toLong(),
+    private val timeLimitMs: Long = NativeCapacity.BRAIN_TIME_MS.toLong()
 ) : AutoCloseable {
-    companion object { const val MAX_REQUEST_CHARS = 40_000 }
+    companion object { const val MAX_REQUEST_CHARS = NativeCapacity.MAX_REQUEST_CHARS }
     private var scope: Scriptable? = null
     private var closed = false
     private var instructions = 0L
@@ -55,7 +55,7 @@ internal class SharedBrainRuntime(
                 val function = ScriptableObject.getProperty(bridge, functionName) as? Function
                     ?: error("Packaged brain function missing")
                 val result = function.call(context, global, bridge, arrayOf(request))
-                check(result is CharSequence && result.length <= 16_000) { "Invalid local brain response" }
+                check(result is CharSequence && result.length <= NativeCapacity.MAX_RESPONSE_CHARS) { "Invalid local brain response" }
                 result.toString()
             }
         } catch (failure: RuntimeException) {

@@ -90,6 +90,18 @@ class UpdateActivityTest {
         assertTrue(permissions.contains(android.Manifest.permission.REQUEST_INSTALL_PACKAGES))
         assertFalse(permissions.contains(android.Manifest.permission.MANAGE_EXTERNAL_STORAGE))
     }
+    @Test fun clearingOldApksPreservesTheCurrentCandidateAndPrivateNotes() {
+        val (saved, selected) = state()
+        val old = File(selected.parentFile, "update-00000000-0000-0000-0000-000000000002.apk").apply { writeText("old APK") }
+        val notes = File(RuntimeEnvironment.getApplication().filesDir, "knowledge-private.json").apply { writeText("private notes") }
+        create(saved)
+        await { button(R.string.install_update).isEnabled }
+        button(R.string.update_clear_cache).performClick()
+        await { hasText(R.string.update_cache_cleared) }
+        assertTrue(selected.exists()); assertFalse(old.exists())
+        assertEquals("private notes", notes.readText())
+        assertTrue(button(R.string.install_update).isEnabled)
+    }
     @Test fun pickerUsesTheDocumentGrantAndCancelDoesNotEnableInstallation() {
         create(); button(R.string.choose_apk).performClick()
         val started = shadowOf(activity).nextStartedActivityForResult
@@ -145,6 +157,15 @@ class UpdateActivityTest {
         await { button(R.string.install_update).isEnabled }
         assertTrue(file.exists())
         assertTrue(hasText(R.string.update_ready))
+        assertNull(shadowOf(activity).nextStartedActivity)
+    }
+    @Test fun closingAScreenDoesNotDeleteACheckedSnapshotThatAnotherScreenCanReuse() {
+        val (saved, file) = state(); create(saved)
+        await { button(R.string.install_update).isEnabled }
+        lifecycle.pause().stop().destroy()
+        assertTrue(file.exists())
+        create(saved)
+        await { button(R.string.install_update).isEnabled }
         assertNull(shadowOf(activity).nextStartedActivity)
     }
     @Test fun changedFileNeverReachesTheInstallerAndNeverTouchesTheNotes() {

@@ -15,12 +15,19 @@ internal object VoiceTranscriptPolicy {
     )
     data class Parsed(val hasWake: Boolean, val command: String)
 
+    /** Exact approvals shared by the dialog worker and acoustic confidence check. */
+    fun confirmation(text: String): Boolean? = when (commandWords(text)) {
+        "oui", "oui merci", "oui je confirme", "je confirme", "d accord", "vas y",
+        "oui cherche", "oui retiens", "oui retiens le", "retiens le", "enregistre le" -> true
+        "non", "non merci", "annule", "laisse tomber", "n enregistre pas" -> false
+        else -> null
+    }
+
     fun isStopCommand(text: String): Boolean = commandWords(text) in setOf("stop", "arrete", "arrete toi", "arret", "stoppe", "stoppe toi", "arrete le corps", "arret du corps")
 
     fun uncertainConfirmation(hypothesis: SpeechHypothesis?): Boolean {
         val score = hypothesis?.confidence ?: return false
-        return score.isFinite() && score >= 0f && score < 0.45f && commandWords(hypothesis.text) in
-            setOf("oui", "non", "oui merci", "non merci", "d accord", "je confirme", "oui je confirme", "vas y")
+        return score.isFinite() && score >= 0f && score < 0.45f && confirmation(hypothesis.text) != null
     }
 
     /** Whole-command matching for conversational approvals and display controls. */
@@ -36,8 +43,9 @@ internal object VoiceTranscriptPolicy {
 
     fun select(hypotheses: List<SpeechHypothesis>, awaitingCommand: Boolean): String? {
         // Never promote another hypothesis when the best is blank or outside the command limit.
-        val best = hypotheses.firstOrNull()?.takeIf { it.text.isNotBlank() && it.text.length <= 2000 } ?: return null
-        if (awaitingCommand) return best.text.trim().takeUnless { uncertainConfirmation(best) }
+        val best = hypotheses.firstOrNull()?.takeIf { it.text.isNotBlank() && it.text.length <= NativeCapacity.MAX_MESSAGE_CHARS } ?: return null
+        if ((awaitingCommand || parse(best.text).hasWake) && uncertainConfirmation(best)) return null
+        if (awaitingCommand) return best.text.trim()
         if (parse(best.text).hasWake) return best.text.trim()
         // Recover only a lost word boundary; this never substitutes another command.
         val bestLikelihood = best.logLikelihood?.takeIf { it.isFinite() }
@@ -46,7 +54,7 @@ internal object VoiceTranscriptPolicy {
             val collapsed = compact(best.text)
             val recovered = hypotheses.drop(1).take(2).firstOrNull { candidate ->
                 val likelihood = candidate.logLikelihood
-                candidate.text.length <= 2000 && parse(candidate.text).hasWake && likelihood != null && likelihood.isFinite() &&
+                candidate.text.length <= NativeCapacity.MAX_MESSAGE_CHARS && parse(candidate.text).hasWake && likelihood != null && likelihood.isFinite() &&
                     abs(bestLikelihood - likelihood) <= 1.0 && compact(candidate.text) == collapsed
             }
             if (recovered != null) return recovered.text.trim()
@@ -54,7 +62,7 @@ internal object VoiceTranscriptPolicy {
         val bestScore = best.confidence?.takeIf { it.isFinite() && it in 0f..1f } ?: return best.text.trim()
         return hypotheses.drop(1).take(2).firstOrNull { candidate ->
             val score = candidate.confidence
-            candidate.text.isNotBlank() && candidate.text.length <= 2000 && parse(candidate.text).hasWake &&
+            candidate.text.isNotBlank() && candidate.text.length <= NativeCapacity.MAX_MESSAGE_CHARS && parse(candidate.text).hasWake &&
                 score != null && score.isFinite() && score in 0.65f..1f && abs(bestScore - score) <= 0.15f
         }?.text?.trim() ?: best.text.trim()
     }

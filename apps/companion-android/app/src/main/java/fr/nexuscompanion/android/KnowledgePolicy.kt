@@ -69,7 +69,7 @@ internal object KnowledgePolicy {
 
     fun isValidUserNote(title: String, excerpt: String): Boolean =
         title.isNotBlank() && title.length <= 160 &&
-            excerpt.isNotBlank() && excerpt.length <= 2000
+            excerpt.isNotBlank() && excerpt.length <= NativeCapacity.MAX_NOTE_CHARS
 
     fun noteKey(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFC)
         .replace('’', '\'').trim().replace(Regex("\\s+"), " ")

@@ -102,7 +102,7 @@ open class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
-        library = LocalKnowledgeLibrary(applicationContext)
+        library = createKnowledgeLibrary()
         brain = NativeBrainService(applicationContext, library)
         autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
         val spokenRepliesEnabled = voicePreferences.getBoolean(SPOKEN_REPLIES_KEY, autoListenEnabled)
@@ -159,6 +159,7 @@ open class MainActivity : Activity() {
     }
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
+    internal open fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext)
 
     private fun buildScreen(spokenRepliesEnabled: Boolean) {
         setContentView(R.layout.activity_main)
@@ -406,7 +407,7 @@ open class MainActivity : Activity() {
     }
 
     private fun respond(message: String) {
-        if (message.isBlank() || message.length > 2000) return
+        if (message.isBlank() || message.length > NativeCapacity.MAX_MESSAGE_CHARS) return
         if (VoiceTranscriptPolicy.isStopCommand(message)) {
             stopBody()
             worker.execute { brain.clearConversation() }
@@ -512,15 +513,23 @@ open class MainActivity : Activity() {
             }.create())
     }
 
-    private fun showNotes() {
+    private fun showNotes(page: Int = 0) {
         val query = input.text.toString().trim()
         runTask(R.string.working, R.string.library_read_failed, {
-            if (query.isBlank()) library.list().sortedByDescending { it.recordedAt }.take(50) else library.search(query)
+            if (query.isBlank()) library.list().sortedByDescending { it.recordedAt } else library.search(query)
         }) { notes ->
             if (notes.isEmpty()) { showAnswer(R.string.library_no_results); return@runTask }
-            if (foreground) showDialog(AlertDialog.Builder(this).setTitle(R.string.my_notes)
-                .setItems(notes.map { it.title }.toTypedArray()) { _, position -> showNote(notes[position]) }
-                .setNegativeButton(R.string.close, null).create())
+            val start = (page * 50).coerceAtMost(((notes.size - 1) / 50) * 50)
+            val shown = notes.drop(start).take(50)
+            if (foreground) {
+                val dialog = AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.notes_page, start + 1, start + shown.size, notes.size))
+                    .setItems(shown.map { it.title }.toTypedArray()) { _, position -> showNote(shown[position]) }
+                    .setNegativeButton(R.string.close, null)
+                if (start + shown.size < notes.size) dialog.setPositiveButton(R.string.notes_next) { _, _ -> showNotes(page + 1) }
+                if (start > 0) dialog.setNeutralButton(R.string.notes_previous) { _, _ -> showNotes(page - 1) }
+                showDialog(dialog.create())
+            }
         }
     }
 

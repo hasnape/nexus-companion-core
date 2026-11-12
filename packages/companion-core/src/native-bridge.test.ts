@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import capacity from './native-capacity.json';
 import { createNativeTurn, handleNativeBodyJson, handleNativeTurnJson, type NativeNote, type NativeTurnRequest } from './native-bridge';
 
 const now = 1_000_000;
@@ -9,10 +10,25 @@ const note = (excerpt: string, overrides: Partial<NativeNote> = {}): NativeNote 
 const request = (message: string, notes: NativeNote[] = []): NativeTurnRequest => ({ protocolVersion: 1, message, notes, now });
 
 describe('native shared brain protocol', () => {
+  it('uses the expanded context to retrieve evidence after the eighth note', () => {
+    const notes = Array.from({ length: 16 }, (_, i) => note(
+      'Observation documentaire. '.repeat(280) + (i === 15 ? 'Je préfère le thé vert.' : 'Une information générale.'),
+      { id: `note-${i}`, title: `Dossier ${i}` }
+    ));
+    const reply = JSON.parse(handleNativeTurnJson(JSON.stringify(request('Quelle boisson je préfère ?', notes))));
+    expect(reply.text).toContain('thé vert');
+    expect(reply.evidenceIds).toEqual(['note-15']);
+  });
+  it('preserves a long memory proposal without saving or truncating it', () => {
+    const content = 'Une observation locale. '.repeat(290) + 'Dernière information exacte.';
+    const reply = createNativeTurn(request(`retiens que ${content}`));
+    expect(reply.candidate?.content).toBe(content);
+    expect(reply.text).toContain('confirmer');
+  });
   it('keeps valid escaped user text within the body protocol without executing it', () => {
-    const request = JSON.stringify({ message: '"'.repeat(2000), steeringAxle: 'front' });
+    const request = JSON.stringify({ message: '"'.repeat(capacity.MAX_MESSAGE_CHARS), steeringAxle: 'front' });
     expect(JSON.parse(handleNativeBodyJson(request)).handled).toBe(false);
-    expect(() => handleNativeBodyJson(JSON.stringify({ message: 'x'.repeat(2001), steeringAxle: 'front' }))).toThrow();
+    expect(() => handleNativeBodyJson(JSON.stringify({ message: 'x'.repeat(capacity.MAX_MESSAGE_CHARS + 1), steeringAxle: 'front' }))).toThrow();
   });
   it.each(['bonjour', 'Nexus, bonjour !', 'salut', 'comment vas tu', 'comment ça va ?', 'Nexus : comment ca va'])('handles natural greeting: %s', (message) => {
     const reply = createNativeTurn(request(message));
@@ -150,8 +166,8 @@ describe('native shared brain protocol', () => {
   it.each([
     { ...request('bonjour'), protocolVersion: 2 },
     { ...request('mes notes'), recallRequested: 'true' },
-    { ...request('bonjour'), message: 'x'.repeat(2001) },
-    { ...request('bonjour'), notes: Array.from({ length: 9 }, () => note('texte')) },
+    { ...request('bonjour'), message: 'x'.repeat(capacity.MAX_MESSAGE_CHARS + 1) },
+    { ...request('bonjour'), notes: Array.from({ length: capacity.MAX_CONTEXT_NOTES + 1 }, () => note('texte')) },
     { ...request('bonjour'), notes: [note('texte', { verified: true as never })] },
     { ...request('bonjour'), now: -1 },
     { ...request('bonjour'), notes: [note('texte', { expiresAt: -1 })] }
@@ -160,6 +176,6 @@ describe('native shared brain protocol', () => {
   });
 
   it('bounds the serialized input', () => {
-    expect(() => handleNativeTurnJson(' '.repeat(40_001))).toThrow();
+    expect(() => handleNativeTurnJson(' '.repeat(capacity.MAX_REQUEST_CHARS + 1))).toThrow();
   });
 });

@@ -1657,7 +1657,28 @@ var NexusNativeBrain = function () {
     }
     return best.topic.reply;
   };
-  var MAX_INPUT_CHARS = 4e4;
+  var native_capacity_default = {
+    MAX_MESSAGE_CHARS: 8e3,
+    MAX_NOTE_CHARS: 8e3,
+    MAX_LIBRARY_ENTRIES: 5e3,
+    MAX_LIBRARY_JSON_BYTES: 33554432,
+    MAX_CONTEXT_NOTES: 16,
+    MAX_SEARCH_RESULTS: 20,
+    MAX_REQUEST_CHARS: 16e4,
+    MAX_RESPONSE_CHARS: 64e3,
+    MAX_BODY_REQUEST_CHARS: 5e4,
+    MAX_SPEECH_JSON_CHARS: 512e3,
+    COMMAND_WAIT_MS: 2e4,
+    SPEECH_SECONDS: 118,
+    RECOGNITION_TIMEOUT_MS: 12e4,
+    RESPONSE_TIMEOUT_MS: 15e3,
+    PENDING_CONFIRMATION_MS: 18e4,
+    BRAIN_INSTRUCTIONS: 12e7,
+    BRAIN_TIME_MS: 5e3,
+    MAX_UPDATE_BYTES: 536870912,
+    MAX_UPDATE_CACHE_BYTES: 1073741824
+  };
+  var MAX_INPUT_CHARS = native_capacity_default.MAX_REQUEST_CHARS;
   var record = function record(value) {
     return _typeof(value) === "object" && value !== null && !Array.isArray(value);
   };
@@ -1665,11 +1686,11 @@ var NexusNativeBrain = function () {
     return typeof value === "string" && value.trim().length > 0 && value.length <= max;
   };
   var validateRequest = function validateRequest(value) {
-    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, 2e3) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || !Array.isArray(value.notes) || value.notes.length > 8) {
+    if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
       throw new Error("Invalid native turn request");
     }
     var notes = value.notes.map(function (item) {
-      if (!record(item) || !boundedText(item.id, 64) || !boundedText(item.title, 160) || !boundedText(item.excerpt, 2e3) || !boundedText(item.source, 512) || !Number.isSafeInteger(item.recordedAt) || item.recordedAt < 0 || !(item.expiresAt === null || Number.isSafeInteger(item.expiresAt) && item.expiresAt >= 0) || item.verified !== false) throw new Error("Invalid native note");
+      if (!record(item) || !boundedText(item.id, 64) || !boundedText(item.title, 160) || !boundedText(item.excerpt, native_capacity_default.MAX_NOTE_CHARS) || !boundedText(item.source, 512) || !Number.isSafeInteger(item.recordedAt) || item.recordedAt < 0 || !(item.expiresAt === null || Number.isSafeInteger(item.expiresAt) && item.expiresAt >= 0) || item.verified !== false) throw new Error("Invalid native note");
       return {
         id: item.id,
         title: item.title,
@@ -1791,7 +1812,7 @@ var NexusNativeBrain = function () {
       });
     }
     var candidate = decision.memoryCandidates.find(function (item) {
-      return item.content.length > 0 && item.content.length <= 2e3 && item.source !== "environment_signal";
+      return item.content.length > 0 && item.content.length <= native_capacity_default.MAX_NOTE_CHARS && item.source !== "environment_signal";
     });
     if (candidate && decision.intent === "remember_candidate") {
       return __spreadProps(__spreadValues({}, result), {
@@ -1838,7 +1859,7 @@ var NexusNativeBrain = function () {
     });
   };
   var _handleNativeRetrievalJson = function _handleNativeRetrievalJson(input) {
-    if (typeof input !== "string" || input.length > 2e3) throw new Error("Invalid retrieval request");
+    if (typeof input !== "string" || input.length > native_capacity_default.MAX_MESSAGE_CHARS) throw new Error("Invalid retrieval request");
     return JSON.stringify({
       terms: nativeRetrievalTerms(stripWakePrefix(input, {
         allowFullNameWake: true
@@ -1846,9 +1867,9 @@ var NexusNativeBrain = function () {
     });
   };
   var _handleNativeBodyJson = function _handleNativeBodyJson(input) {
-    if (input.length > 16e3) throw new Error("Invalid body request");
+    if (typeof input !== "string" || input.length > native_capacity_default.MAX_BODY_REQUEST_CHARS) throw new Error("Invalid body request");
     var value = JSON.parse(input);
-    if (!record(value) || !boundedText(value.message, 2e3) || !["front", "rear"].includes(value.steeringAxle)) throw new Error("Invalid body request");
+    if (!record(value) || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !["front", "rear"].includes(value.steeringAxle)) throw new Error("Invalid body request");
     return JSON.stringify(resolveBodyCommand(stripWakePrefix(value.message, {
       allowFullNameWake: true
     }), value.steeringAxle));

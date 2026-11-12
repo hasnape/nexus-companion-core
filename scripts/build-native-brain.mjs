@@ -9,6 +9,23 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const destination = path.join(root, 'apps/companion-android/app/src/main/assets/brain');
 const check = process.argv.includes('--check');
+// One capacity contract for the TypeScript bridge, Android host and text field.
+const capacityPath = 'packages/companion-core/src/native-capacity.json';
+const capacity = JSON.parse(await readFile(path.join(root, capacityPath), 'utf8'));
+if (!Object.entries(capacity).every(([key, value]) => /^[A-Z_]+$/.test(key) && Number.isSafeInteger(value) && value > 0 && value <= 2147483647)) {
+  throw new Error('Invalid native capacity contract');
+}
+const generated = {
+  'apps/companion-android/app/src/main/java/fr/nexuscompanion/android/NativeCapacity.kt':
+    `package fr.nexuscompanion.android\n\n// Generated from ${capacityPath}; run npm run build:native-brain.\ninternal object NativeCapacity {\n${Object.entries(capacity).map(([key, value]) => `    const val ${key} = ${value}`).join('\n')}\n}\n`,
+  'apps/companion-android/app/src/main/res/values/native_capacity.xml':
+    `<?xml version="1.0" encoding="utf-8"?>\n<!-- Generated from ${capacityPath}. -->\n<resources>\n    <integer name="nexus_message_chars">${capacity.MAX_MESSAGE_CHARS}</integer>\n</resources>\n`
+};
+for (const [filename, content] of Object.entries(generated)) {
+  if (check) {
+    if (await readFile(path.join(root, filename), 'utf8') !== content) throw new Error(`Stale capacity contract: ${filename}`);
+  } else await writeFile(path.join(root, filename), content);
+}
 const result = await build({
   entryPoints: [path.join(root, 'packages/companion-core/src/native-bridge.ts')],
   absWorkingDir: root, metafile: true,
@@ -24,7 +41,7 @@ const transformed = await transformAsync(result.outputFiles[0].text, {
 });
 if (!transformed?.code) throw new Error('Native brain compiler returned no code');
 const script = Buffer.from(`${transformed.code}\n`, 'utf8');
-const sourceFiles = [...Object.keys(result.metafile.inputs), 'scripts/build-native-brain.mjs', 'package.json', 'package-lock.json'].sort();
+const sourceFiles = [...Object.keys(result.metafile.inputs), ...Object.keys(generated), 'scripts/build-native-brain.mjs', 'package.json', 'package-lock.json'].sort();
 const sources = Object.fromEntries(await Promise.all(sourceFiles.map(async (filename) => [
   filename, createHash('sha256').update(await readFile(path.join(root, filename))).digest('hex')
 ])));

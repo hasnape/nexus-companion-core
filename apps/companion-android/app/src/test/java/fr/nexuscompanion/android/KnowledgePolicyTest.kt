@@ -47,7 +47,7 @@ class KnowledgePolicyTest {
 
     @Test fun rejectsEmptyAndOverlongNotes() {
         assertFalse(KnowledgePolicy.isValidUserNote("", "texte"))
-        assertFalse(KnowledgePolicy.isValidUserNote("titre", "x".repeat(2001)))
+        assertFalse(KnowledgePolicy.isValidUserNote("titre", "x".repeat(NativeCapacity.MAX_NOTE_CHARS + 1)))
         assertTrue(KnowledgePolicy.isValidUserNote("titre", "texte"))
     }
 

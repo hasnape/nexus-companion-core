@@ -9,9 +9,8 @@ import java.util.zip.Deflater
 
 /** Encodes the JSON inside the authenticated library envelope. */
 internal object KnowledgePayload {
-    // 500 entries with up to 2,672 UTF-16 units of text each, plus their metadata.
-    // JSON escapes can use six bytes per unit.
-    const val MAX_JSON_BYTES = 8 * 1024 * 1024
+    // Independent total-byte budget: no record is discarded to make room.
+    const val MAX_JSON_BYTES = NativeCapacity.MAX_LIBRARY_JSON_BYTES
     private const val BUFFER_BYTES = 8192
 
     fun encode(json: ByteArray): ByteArray {

@@ -29,7 +29,7 @@ internal class LocalKnowledgeLibrary(
 
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
-    private val maxEntries = 500
+    private val maxEntries = NativeCapacity.MAX_LIBRARY_ENTRIES
     private data class Snapshot(val encrypted: ByteArray, val entries: List<Entry>, val jsonBytes: Int, val payloadBytes: Int)
     private var snapshot: Snapshot? = null
 
@@ -148,7 +148,7 @@ internal class LocalKnowledgeLibrary(
 
     fun search(query: String, now: Long = System.currentTimeMillis()): List<Entry> {
         val terms = KnowledgePolicy.recallTopic(query) ?: KnowledgePolicy.queryTerms(query)
-        return matchingEntries(list(), terms, now).take(5)
+        return matchingEntries(list(), terms, now).take(NativeCapacity.MAX_SEARCH_RESULTS)
     }
 
     /** One atomic read per conversation turn; expired notes never enter the brain context. */
@@ -168,7 +168,7 @@ internal class LocalKnowledgeLibrary(
         val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
-        return ranked.distinctBy { it.title to it.excerpt }.take(8)
+        return ranked.distinctBy { it.title to it.excerpt }.take(NativeCapacity.MAX_CONTEXT_NOTES)
     }
 
     private fun matchingEntries(entries: List<Entry>, tokens: List<String>, now: Long): List<Entry> {
@@ -198,6 +198,7 @@ internal class LocalKnowledgeLibrary(
         }
         val bytes = JSONObject().put("schema", 1).put("entries", array)
             .toString().toByteArray(StandardCharsets.UTF_8)
+        if (bytes.size > KnowledgePayload.MAX_JSON_BYTES) throw KnowledgeCapacityReached()
         writeEncrypted(bytes, entries)
     }
 

@@ -22,6 +22,24 @@ import javax.crypto.spec.SecretKeySpec
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class LocalKnowledgeLibraryTest {
+    @Test fun growsPastTheOldCapacityAndPreservesLongNotesAcrossRestart() {
+        val entries = (0 until 510).map { entry("id-$it", "note $it") }
+        val id = "expanded"
+        file(id).writeText(legacy(*entries.toTypedArray()))
+        val original = "Observation locale. ".repeat(398) + "FIN EXACTE."
+        val saved = library(id).addUserNote("Dossier long", original)
+        assertEquals(511, library(id).list().size)
+        assertEquals(original, library(id).list().last().excerpt)
+        assertEquals(saved.entry.id, library(id).list().last().id)
+        assertFalse(library(id).addUserNote("Dossier long", original).created)
+    }
+    @Test fun enlargedConversationalSelectionAndSearchKeepOlderMatchingEvidence() {
+        val store = library("context-growth")
+        repeat(22) { store.addUserNote("Robot $it", "Le robot contient le module numéro $it.") }
+        assertEquals(16, store.contextFor("robot").size)
+        assertEquals(20, store.search("robot").size)
+        assertEquals(22, store.list().size)
+    }
     @Test fun unchangedEncryptedFilesReuseTheParsedSnapshotButExternalChangesAreObserved() {
         val id = "cached"
         library(id).addUserNote("Repère", "Une information locale.")
@@ -203,9 +221,9 @@ class LocalKnowledgeLibraryTest {
     }
 
     @Test fun fullLibraryReturnsTheSpecificCapacityFailureWithoutLosingNotes() {
-        val entries = (0 until 500).map { entry("id-$it", "note $it") }
+        val entries = (0 until NativeCapacity.MAX_LIBRARY_ENTRIES).map { entry("id-$it", "note $it") }
         file().writeText(legacy(*entries.toTypedArray()))
-        assertEquals(500, library().list().size)
+        assertEquals(NativeCapacity.MAX_LIBRARY_ENTRIES, library().list().size)
         val before = file().readBytes()
         assertFalse(library().addUserNote("note 0", "note 0").created)
         assertThrows(KnowledgeCapacityReached::class.java) { library().addUserNote("Titre", "note supplémentaire") }

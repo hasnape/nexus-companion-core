@@ -4,6 +4,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class VoiceSessionTest {
+    @Test fun aWokenUncertainConfirmationAsksAgainWithoutExecutingOrReactingToAmbientApprovals() {
+        val f = Fixture(); f.start()
+        f.platform.recognition.events.alternatives(listOf(SpeechHypothesis("oui", .2f)))
+        f.platform.advance(500)
+        assertTrue(f.platform.speaker.utterances.isEmpty())
+        f.platform.recognition.events.alternatives(listOf(SpeechHypothesis("Nexus oui cherche", .2f)))
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.platform.speaker.utterances.last().first.contains("Peux-tu répéter"))
+    }
+    @Test fun conversationalWindowAllowsAThoughtfulAnswerAfterFifteenSeconds() {
+        val f = Fixture(); f.start()
+        f.session.beginResponse(); f.session.finishResponse("Tu veux que je cherche ?", expectAnswer = true)
+        f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
+        f.platform.advance(200 + 15_000L)
+        f.platform.recognition.events.result("oui")
+        assertEquals(listOf("oui"), f.commands)
+    }
     @Test fun anUncertainShortConfirmationIsRepeatedInsteadOfExecuted() {
         val f = Fixture(); f.start()
         f.session.listenForCommand()
@@ -52,7 +69,7 @@ class VoiceSessionTest {
         f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
         f.platform.advance(200 + 5_000L)
         f.platform.recognition.events.ready()
-        f.platform.advance(12_001)
+        f.platform.advance(NativeCapacity.COMMAND_WAIT_MS + 1L)
         f.platform.recognition.events.result("oui")
         assertTrue(f.commands.isEmpty())
         f.platform.advance(500)
@@ -402,7 +419,7 @@ class VoiceSessionTest {
 
     @Test fun directCommandWaitExpiresWithoutExtendingForSilence() {
         val f = Fixture(); f.start(); f.session.listenForCommand()
-        repeat(26) {
+        repeat(NativeCapacity.COMMAND_WAIT_MS / 500 + 2) {
             f.platform.recognition.events.error(RecognitionFailure.SILENCE)
             f.platform.advance(500)
         }
@@ -444,7 +461,7 @@ class VoiceSessionTest {
     @Test fun endlessPartialsHaveABoundedUtteranceDeadline() {
         val f = Fixture(); f.start()
         val old = f.platform.recognition
-        repeat(6) { old.events.partial("Nexus en cours"); f.platform.advance(10_000) }
+        repeat(NativeCapacity.RECOGNITION_TIMEOUT_MS / 10_000) { old.events.partial("Nexus en cours"); f.platform.advance(10_000) }
         f.platform.advance(500)
         assertTrue(old.closed)
         assertEquals(2, f.platform.totalStarts)
@@ -520,7 +537,7 @@ class VoiceSessionTest {
         f.platform.recognition.events.result("Nexus")
         f.platform.speaker.events.finished(f.platform.speaker.utterances.last().second)
         f.platform.advance(700)
-        f.platform.advance(12_000)
+        f.platform.advance(NativeCapacity.COMMAND_WAIT_MS.toLong())
         f.platform.recognition.events.result("bonjour")
         assertTrue(f.commands.isEmpty())
     }
@@ -771,7 +788,7 @@ class VoiceSessionTest {
 
     @Test fun lostWorkerCallbackHasABoundedRecoveryAndStopCancelsIt() {
         val f = Fixture(); f.start()
-        f.session.beginResponse(); f.platform.advance(10_500)
+        f.session.beginResponse(); f.platform.advance(NativeCapacity.RESPONSE_TIMEOUT_MS + 500L)
         assertEquals(2, f.platform.totalStarts)
         f.session.beginResponse(); f.session.stop(); f.platform.advance(20_000)
         assertEquals(2, f.platform.totalStarts)

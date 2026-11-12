@@ -73,7 +73,7 @@
     <string name="voice_diagnostic_copied">Versions Android/Nexus et signatures publiques copiées.</string>
     <string name="note_saved">Note enregistrée localement (non vérifiée).</string>
     <string name="note_already_saved">Cette note est déjà dans ta mémoire locale.</string>
-    <string name="note_invalid">Note trop longue ou invalide (2000 caractères maximum).</string>
+    <string name="note_invalid">Note vide ou trop longue (8 000 caractères maximum).</string>
     <string name="library_full">Bibliothèque locale pleine.</string>
     <string name="library_write_failed">Impossible de lire ou enregistrer la bibliothèque. Données conservées.</string>
     <string name="library_no_results">Aucune note locale correspondante.</string>
@@ -104,7 +104,14 @@
     <string name="update_not_newer">Ce fichier n’est pas plus récent que la version installée.</string>
     <string name="update_wrong_signature">La signature diffère de celle de l’application installée. Garde ton application et tes notes ; ne la désinstalle pas.</string>
     <string name="update_android_version">Cette version nécessite un Android plus récent.</string>
-    <string name="update_too_large">Ce fichier ou le cache de mises à jour dépasse la limite autorisée.</string>
+    <string name="update_too_large">Cet APK dépasse 512 Mio. Choisis le fichier complet distribué pour Nexus Companion.</string>
+    <string name="update_cache_full">Le cache des APK est plein. Appuie sur « Nettoyer les anciens APK », puis choisis de nouveau le fichier. Tes notes restent conservées.</string>
+    <string name="update_no_space">Le téléphone manque d’espace libre pour copier cet APK. Libère de l’espace dans Android, puis réessaie. Garde Nexus installé pour conserver ses notes.</string>
+    <string name="update_clear_cache">Nettoyer les anciens APK</string>
+    <string name="update_cache_cleared">Anciens APK temporaires nettoyés. Tes notes et le fichier actuellement sélectionné sont conservés.</string>
+    <string name="notes_page">Mes notes (%1$d–%2$d / %3$d)</string>
+    <string name="notes_next">Suivantes</string>
+    <string name="notes_previous">Précédentes</string>
     <string name="update_changed">Le fichier a changé depuis sa vérification. Choisis de nouveau l’APK.</string>
     <string name="update_invalid">Ce fichier APK est invalide ou incomplet.</string>
     <string name="update_read_failed">Impossible de lire ce fichier. Choisis de nouveau l’APK ; tes notes restent dans l’application.</string>

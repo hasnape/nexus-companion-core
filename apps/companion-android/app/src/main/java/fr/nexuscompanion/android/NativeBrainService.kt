@@ -34,16 +34,6 @@ internal class NativeBrainService(
     /** Session context is transient and confined to the worker, never written as history. */
     fun clearConversation() { pending = null }
 
-    private fun confirmation(message: String): Boolean? {
-        val words = VoiceTranscriptPolicy.commandWords(message)
-        return when (words) {
-            "oui", "oui merci", "oui je confirme", "je confirme", "d accord", "vas y",
-            "oui cherche", "oui retiens", "oui retiens le", "retiens le", "enregistre le" -> true
-            "non", "non merci", "annule", "laisse tomber", "n enregistre pas" -> false
-            else -> null
-        }
-    }
-
     private fun brain(): SharedBrainRuntime {
         runtime?.let { return it }
         val source = context.assets.open("brain/nexus-brain.js").use { it.readBytes() }
@@ -56,10 +46,10 @@ internal class NativeBrainService(
     }
 
     fun reply(message: String, onlineEnabled: Boolean = true, steeringAxle: String = "front"): Reply {
-        require(message.isNotBlank() && message.length <= 2000)
+        require(message.isNotBlank() && message.length <= NativeCapacity.MAX_MESSAGE_CHARS)
         val previous = pending?.takeIf { elapsed() < it.expires }
         pending = null
-        val approval = confirmation(message)
+        val approval = VoiceTranscriptPolicy.confirmation(message)
         if (approval != null) {
             if (previous == null) return Reply("Je n’ai aucune recherche ou information en attente de confirmation. Que veux-tu savoir ?", null, true, expectsAnswer = true)
             if (!approval) return Reply("D’accord, j’annule cette proposition.", null, true, expectsAnswer = true)
@@ -103,7 +93,7 @@ internal class NativeBrainService(
         check(text.isNotBlank() && text.length <= 12_000)
         val candidate = result.optJSONObject("candidate")?.let {
             val content = it.getString("content")
-            check(content.isNotBlank() && content.length <= 2000)
+            check(content.isNotBlank() && content.length <= NativeCapacity.MAX_NOTE_CHARS)
             Candidate(content, it.getBoolean("sensitive"))
         }
         val evidence = result.optJSONArray("evidenceIds")
@@ -115,14 +105,14 @@ internal class NativeBrainService(
         } }
         val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true)
         if (candidate != null && !candidate.sensitive && notes != null && candidate.content.length <= 600) {
-            pending = Pending.Save(candidate.content.take(80), candidate.content, "user:manual", elapsed() + 90_000L)
+            pending = Pending.Save(candidate.content.take(80), candidate.content, "user:manual", elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
             return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
         }
         val offer = result.optString("publicLookupOffer")
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
             if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
-            pending = Pending.Lookup(offer, elapsed() + 90_000L)
+            pending = Pending.Lookup(offer, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
             return local
         }
         val query = result.optString("publicLookupQuery")
@@ -136,7 +126,7 @@ internal class NativeBrainService(
         if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
         return try {
             val article = search(query) ?: return local.copy(text = context.getString(R.string.online_no_match))
-            if (notesAvailable) pending = Pending.Save(article.title, article.extract, article.url, elapsed() + 90_000L)
+            if (notesAvailable) pending = Pending.Save(article.title, article.extract, article.url, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
             local.copy(text = context.getString(R.string.online_answer, article.extract) +
                 if (notesAvailable) " Veux-tu que je retienne cette information dans mes notes locales ?" else "", source = article)
         } catch (_: IOException) {

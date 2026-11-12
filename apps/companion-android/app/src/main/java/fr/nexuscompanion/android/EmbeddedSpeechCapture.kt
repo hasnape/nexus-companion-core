@@ -121,7 +121,7 @@ internal class EmbeddedSpeechCapture(
                 }
             }
             if (firstSpeech < 0 && received >= SAMPLE_RATE * 20) return decoder.hypotheses(final = true)
-            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * 58) return decoder.hypotheses(final = true)
+            if (firstSpeech >= 0 && received - firstSpeech >= SAMPLE_RATE * NativeCapacity.SPEECH_SECONDS) return decoder.hypotheses(final = true)
         }
         return null
     }

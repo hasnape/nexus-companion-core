@@ -5,6 +5,19 @@ import org.junit.Test
 import java.io.File
 
 class SharedBrainRuntimeTest {
+    @Test fun expandedContextExecutesInTheRealInterpreterAndFindsTheSixteenthNote() {
+        val notes = (0 until 16).joinToString(",", "[", "]") { i ->
+            val excerpt = "Observation documentaire. ".repeat(280) + if (i == 15) "Je préfère le thé vert." else "Une information générale."
+            """{"id":"note-$i","title":"Dossier $i","excerpt":"$excerpt","source":"user:manual","recordedAt":$i,"expiresAt":null,"verified":false}"""
+        }
+        val input = request("Quelle boisson je préfère ?", notes)
+        assertTrue(input.length > 40_000)
+        runtime().use { brain ->
+            val reply = brain.replyJson(input)
+            assertTrue(reply, reply.contains("thé vert"))
+            assertTrue(reply, reply.contains("note-15"))
+        }
+    }
     private fun runtime() = SharedBrainRuntime(File(requireNotNull(System.getProperty("nexus.brain.asset"))).readText())
     private fun request(message: String, notes: String = "[]"): String {
         val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
@@ -86,7 +99,7 @@ class SharedBrainRuntimeTest {
 
     @Test fun rejectsOversizedInputBeforeEvaluationAndClosedRuntimes() {
         val brain = runtime()
-        assertThrows(IllegalArgumentException::class.java) { brain.replyJson("x".repeat(40_001)) }
+        assertThrows(IllegalArgumentException::class.java) { brain.replyJson("x".repeat(NativeCapacity.MAX_REQUEST_CHARS + 1)) }
         brain.close()
         assertThrows(IllegalStateException::class.java) { brain.replyJson(request("bonjour")) }
     }

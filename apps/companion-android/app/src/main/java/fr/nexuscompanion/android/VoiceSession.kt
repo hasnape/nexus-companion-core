@@ -187,7 +187,8 @@ internal class VoiceSession(
                         if (text != null) {
                             showTranscript(text, true)
                             acceptTranscript(text)
-                        } else if (awaitingCommand && VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull())) {
+                        } else if ((awaitingCommand || hypotheses.firstOrNull()?.text?.let(VoiceTranscriptPolicy::parse)?.hasWake == true)
+                            && VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull())) {
                             commandTimerPending = true
                             playReply("Je n’ai pas bien entendu ta confirmation. Peux-tu répéter ?", expectAnswer = true)
                         }
@@ -254,7 +255,7 @@ internal class VoiceSession(
     }
 
     private fun acceptTranscript(transcript: String) {
-        if (transcript.isBlank() || transcript.length > 2000) return
+        if (transcript.isBlank() || transcript.length > NativeCapacity.MAX_MESSAGE_CHARS) return
         val parsed = VoiceTranscriptPolicy.parse(transcript)
         if (!parsed.hasWake && !awaitingCommand && !(bodyMoving && VoiceTranscriptPolicy.isStopCommand(transcript))) return
         val command = parsed.command
@@ -277,7 +278,7 @@ internal class VoiceSession(
         commandTimeout = null
         if (!enabled || !awaitingCommand) return
         val session = generation
-        commandTimeout = platform.after(12_000L) {
+        commandTimeout = platform.after(NativeCapacity.COMMAND_WAIT_MS.toLong()) {
             if (enabled && generation == session) {
                 commandTimeout = null
                 awaitingCommand = false
@@ -294,7 +295,7 @@ internal class VoiceSession(
             commandTimerPending = false
             commandTimeout?.cancel(); commandTimeout = null
         }
-        armRecognitionTimeout(60_000L)
+        armRecognitionTimeout(NativeCapacity.RECOGNITION_TIMEOUT_MS.toLong())
         onMicrophoneReady(true)
         onStatus("Je t'écoute — parle naturellement.")
     }
@@ -314,7 +315,7 @@ internal class VoiceSession(
 
     private fun showTranscript(text: String, final: Boolean) {
         transcriptTimeout?.cancel()
-        onTranscript(text.take(2000), final)
+        onTranscript(text.take(NativeCapacity.MAX_MESSAGE_CHARS), final)
         val session = generation
         transcriptTimeout = platform.after(15_000L) {
             if (enabled && generation == session) onTranscript("", false)
@@ -362,7 +363,7 @@ internal class VoiceSession(
         closeRecognition()
         onStatus("Nexus réfléchit — micro en pause")
         val session = generation
-        responseTimeout = platform.after(10_000L) {
+        responseTimeout = platform.after(NativeCapacity.RESPONSE_TIMEOUT_MS.toLong()) {
             if (enabled && generation == session && processing) {
                 processing = false
                 responseTimeout = null

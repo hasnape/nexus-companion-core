@@ -1,6 +1,7 @@
 package fr.nexuscompanion.android
 
 import android.content.Context
+import android.annotation.SuppressLint
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -19,20 +20,21 @@ internal class LocalUpdateRepository(
     private val installed: () -> UpdatePackage,
     private val archive: (File) -> UpdatePackage,
     private val sdk: Int,
-    private val maxBytes: Long = 64L * 1024 * 1024,
-    private val maxStagedBytes: Long = 128L * 1024 * 1024
+    private val maxBytes: Long = NativeCapacity.MAX_UPDATE_BYTES.toLong(),
+    private val maxStagedBytes: Long = NativeCapacity.MAX_UPDATE_CACHE_BYTES.toLong(),
+    private val usableBytes: () -> Long = { availableStorageBytes(directory) }
 ) {
     // Android can expose the app data directory through a framework-owned path alias.
     private val directory = directory.canonicalFile
     private val tokenPattern = Regex("update-[a-f0-9-]{36}\\.apk")
 
-    fun prepare(input: InputStream): PreparedUpdate {
+    fun prepare(input: InputStream): PreparedUpdate = synchronized(storeLock) {
         var target: File? = null
         var accepted = false
         try {
             val prepared = input.use { source ->
                 if (!directory.isDirectory && !directory.mkdirs()) throw UpdateRejected(UpdateProblem.READ_FAILED)
-                pruneExpired()
+                pruneObsolete()
                 val used = directory.listFiles().orEmpty().sumOf { it.length() }
                 val file = File(directory, "update-${UUID.randomUUID()}.apk")
                 target = file
@@ -46,7 +48,9 @@ internal class LocalUpdateRepository(
                         if (size < 0) break
                         if (size == 0) throw UpdateRejected(UpdateProblem.READ_FAILED)
                         copied += size
-                        if (copied > maxBytes || copied + used > maxStagedBytes) throw UpdateRejected(UpdateProblem.TOO_LARGE)
+                        if (copied > maxBytes) throw UpdateRejected(UpdateProblem.TOO_LARGE)
+                        if (used > maxStagedBytes || copied > maxStagedBytes - used) throw UpdateRejected(UpdateProblem.CACHE_FULL)
+                        if (usableBytes() < size + DISK_RESERVE_BYTES) throw UpdateRejected(UpdateProblem.NO_SPACE)
                         output.write(buffer, 0, size)
                         digest.update(buffer, 0, size)
                     }
@@ -56,16 +60,31 @@ internal class LocalUpdateRepository(
                 if (copied == 0L) throw UpdateRejected(UpdateProblem.INVALID)
                 val metadata = archive(file)
                 UpdatePackagePolicy.validate(installed(), metadata, sdk)
+                val hash = hex(digest.digest())
+                // Repeated selections of the same APK must not consume another cache slot.
+                // Recheck the old snapshot before reusing its read-only installer URI.
+                val duplicate = snapshots().firstNotNullOfOrNull { previous ->
+                    if (previous == file || previous.length() != copied) null
+                    else try { restore(previous.name, hash).takeIf { it.metadata == metadata } }
+                        catch (_: UpdateRejected) { null }
+                        catch (canceled: InterruptedIOException) { throw canceled }
+                        catch (_: java.io.IOException) { null } // Android may evict an older cache entry.
+                }
+                if (duplicate != null) {
+                    if (!file.delete()) throw UpdateRejected(UpdateProblem.READ_FAILED)
+                    target = null
+                    return@use duplicate
+                }
                 if (!file.setReadOnly()) throw UpdateRejected(UpdateProblem.READ_FAILED)
-                PreparedUpdate(file.name, metadata, hex(digest.digest()))
+                PreparedUpdate(file.name, metadata, hash)
             }
             accepted = true
-            return prepared
+            prepared
         } finally { if (!accepted) target?.delete() }
     }
 
     /** Recheck after screen recreation or permission settings, before handing bytes to Android. */
-    fun restore(token: String, expectedSha256: String): PreparedUpdate {
+    fun restore(token: String, expectedSha256: String): PreparedUpdate = synchronized(storeLock) {
         val file = file(token)
         if (!Regex("[a-f0-9]{64}").matches(expectedSha256) || !file.isFile || file.length() !in 1..maxBytes) {
             throw UpdateRejected(UpdateProblem.INVALID)
@@ -86,7 +105,7 @@ internal class LocalUpdateRepository(
         if (hex(digest.digest()) != expectedSha256) throw UpdateRejected(UpdateProblem.CHANGED)
         val metadata = archive(file)
         UpdatePackagePolicy.validate(installed(), metadata, sdk)
-        return PreparedUpdate(token, metadata, expectedSha256)
+        PreparedUpdate(token, metadata, expectedSha256)
     }
 
     fun file(token: String): File {
@@ -98,16 +117,47 @@ internal class LocalUpdateRepository(
         return file
     }
 
+    // Deletion does not allocate quota. Never make an activity wait for a large worker import.
     fun discard(token: String) { file(token).delete() }
 
-    private fun pruneExpired() {
+    /** User-requested cleanup only in the dedicated APK directory; keep the current selection. */
+    fun clearCache(keepToken: String? = null): Int = synchronized(storeLock) {
+        val keep = keepToken?.let(::file)
+        var cleared = 0
+        snapshots().filter { it != keep }.forEach {
+            if (it.delete()) cleared++
+            else if (it.exists()) throw UpdateRejected(UpdateProblem.READ_FAILED)
+        }
+        cleared
+    }
+
+    private fun snapshots(): List<File> = directory.listFiles().orEmpty().filter {
+        tokenPattern.matches(it.name) && it.isFile && it.canonicalFile == it.absoluteFile
+    }
+
+    private fun pruneObsolete() {
         val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
-        directory.listFiles().orEmpty().filter { tokenPattern.matches(it.name) && it.lastModified() < cutoff }.forEach { it.delete() }
+        val current = installed()
+        snapshots().forEach { file ->
+            val obsolete = if (file.lastModified() < cutoff) true else try {
+                val previous = archive(file)
+                previous.packageName == current.packageName && previous.versionCode <= current.versionCode &&
+                    previous.signers.isNotEmpty() && previous.signers == current.signers
+            } catch (_: Exception) { false }
+            if (obsolete) file.delete()
+        }
     }
 
     private fun checkInterrupted() { if (Thread.currentThread().isInterrupted) throw InterruptedIOException("Update import canceled") }
 
     companion object {
+        // Multiple activity instances must share the quota and snapshot lifecycle.
+        private val storeLock = Any()
+        private const val DISK_RESERVE_BYTES = 16L * 1024 * 1024
+        // This is a conservative streaming guard for disposable cache, not a space reservation.
+        // Do not ask StorageManager to evict other caches (the source document can be cached too).
+        @SuppressLint("UsableSpace")
+        private fun availableStorageBytes(directory: File): Long = directory.usableSpace
         private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it.toInt() and 255) }
 
         @Suppress("DEPRECATION")

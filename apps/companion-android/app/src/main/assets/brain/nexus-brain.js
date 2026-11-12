@@ -788,6 +788,19 @@ var NexusNativeBrain = function () {
   var toSecondPerson = function toSecondPerson(text) {
     return text.replace(/^ma\s+/i, "Ta ").replace(/^mes\s+/i, "Tes ").replace(/^mon\s+(?!pr[ée]nom\b|nom\b|m[ée]tier\b)/i, "Ton ").replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
   };
+  var explicitFactPrefixes = [["prenom", /^(?:mon prenom est|mon nom est|je m appelle|le createur est) (.+)$/], ["metier", /^(?:mon metier est|ma profession est|je travaille comme|je travaille en tant que) (.+)$/], ["boisson", /^(?:ma boisson preferee est|je prefere) (.+)$/], ["couleur", /^(?:ma couleur preferee est|je prefere) (.+)$/]];
+  var factKey = function factKey(sentence, query) {
+    var _a;
+    var literal = normalize(sentence);
+    for (var _i4 = 0, _explicitFactPrefixes = explicitFactPrefixes; _i4 < _explicitFactPrefixes.length; _i4++) {
+      var _explicitFactPrefixes2 = _slicedToArray(_explicitFactPrefixes[_i4], 2),
+        attribute = _explicitFactPrefixes2[0],
+        prefix = _explicitFactPrefixes2[1];
+      var value = query.includes(attribute) ? (_a = literal.match(prefix)) == null ? void 0 : _a[1] : void 0;
+      if (value) return "".concat(attribute, ":").concat(value);
+    }
+    return "literal:".concat(literal);
+  };
   var answerFromNotes = function answerFromNotes(question, notes) {
     var parts = personalQuestionParts(question);
     if (parts) {
@@ -875,12 +888,16 @@ var NexusNativeBrain = function () {
     if (!candidates.length) return null;
     var best = candidates[0];
     var personal = request.personal;
+    var bestFact = factKey(best.sentence, query);
     var conflicting = personal && candidates.find(function (item) {
-      return item.score === best.score && item.note.id !== best.note.id && normalize(item.sentence) !== normalize(best.sentence);
+      if (item.score !== best.score) return false;
+      var otherFact = factKey(item.sentence, query);
+      if (otherFact === bestFact) return false;
+      return item.note.id !== best.note.id || request.kind === "general" && !bestFact.startsWith("literal:") && otherFact.startsWith(bestFact.slice(0, bestFact.indexOf(":") + 1));
     });
     if (conflicting) return {
       text: "J\u2019ai deux informations dans tes notes : \xAB ".concat(best.sentence.slice(0, 200), " \xBB et \xAB ").concat(conflicting.sentence.slice(0, 200), " \xBB. Laquelle est \xE0 jour ?"),
-      evidenceIds: [best.note.id, conflicting.note.id]
+      evidenceIds: Array.from(new Set([best.note.id, conflicting.note.id]))
     };
     var excerpt = best.sentence.length > 480 ? "".concat(best.sentence.slice(0, 477), "\u2026") : best.sentence;
     var spoken = personal ? toSecondPerson(excerpt) : excerpt;
@@ -1243,8 +1260,8 @@ var NexusNativeBrain = function () {
     } finally {
       _iterator4.f();
     }
-    for (var _i4 = 0, _learningEvents = learningEvents; _i4 < _learningEvents.length; _i4++) {
-      var event = _learningEvents[_i4];
+    for (var _i5 = 0, _learningEvents = learningEvents; _i5 < _learningEvents.length; _i5++) {
+      var event = _learningEvents[_i5];
       var evaluated = evaluateLearningEvent(event);
       if (evaluated.accepted && evaluated.candidate) {
         memoryCandidates.push(evaluated.candidate);

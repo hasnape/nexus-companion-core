@@ -69,11 +69,15 @@ class ExternalAppPolicyTest {
         try {
             val activity=controller.get();activity.missingPreferred=true
             val request=open("itinéraire vers Lyon")
-            assertTrue(ExternalAppPolicy.launch(activity,request))
+            assertEquals(ExternalAppPolicy.LaunchResult.FALLBACK,ExternalAppPolicy.launch(activity,request))
             assertEquals(listOf("com.google.android.apps.maps",null),activity.attempts.map { it.`package` })
             assertTrue(activity.attempts.all { it.action==Intent.ACTION_VIEW && it.extras==null && it.hasCategory(Intent.CATEGORY_BROWSABLE) })
-            activity.unavailable=true;assertFalse(ExternalAppPolicy.launch(activity,request))
-            activity.denied=true;assertFalse(ExternalAppPolicy.launch(activity,request))
+            activity.unavailable=true;assertEquals(ExternalAppPolicy.LaunchResult.UNAVAILABLE,ExternalAppPolicy.launch(activity,request))
+            activity.denied=true;assertEquals(ExternalAppPolicy.LaunchResult.UNAVAILABLE,ExternalAppPolicy.launch(activity,request))
+            activity.unavailable=false;activity.denied=false;activity.missingPreferred=false
+            val attempts=activity.attempts.size
+            assertEquals(ExternalAppPolicy.LaunchResult.PREFERRED,ExternalAppPolicy.launch(activity,request))
+            assertEquals(attempts+1,activity.attempts.size)
         } finally { controller.pause().stop().destroy() }
     }
 }

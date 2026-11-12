@@ -4,6 +4,7 @@
     <string name="external_online_disabled">L’accès en ligne est désactivé dans Nexus. Active-le dans les réglages pour ouvrir Google Maps ou Chrome.</string>
     <string name="external_app_unavailable">Aucune application compatible ne peut ouvrir cette demande. Vérifie que Google Maps, Chrome ou un autre navigateur est installé et activé.</string>
     <string name="external_cancelled">L’ouverture a été annulée. Redemande l’application ou le lieu si nécessaire.</string>
+    <string name="external_app_fallback">%1$s n’a pas pu être ouvert. La demande a été transmise à une autre application compatible.</string>
     <string name="online_allowed">Web autorisé</string>
     <string name="online_disabled_badge">Web désactivé</string>
     <string name="online_access">Accès en ligne</string>
@@ -144,7 +145,7 @@
     <string name="note_restore_confirmation">Reprendre ce contenu ? La version actuelle restera dans l’historique.\n\n%1$s</string>
     <string name="note_restored">Ancienne version restaurée. La version précédente reste dans l’historique.</string>
     <string name="note_deleted">Note supprimée.</string>
-    <string name="about_text">Nexus Companion %1$s\nCompagnon Android en version alpha. Le cerveau local utilise des règles et peut consulter Wikipédia sur demande.\n\nLogiciels libres et licences :</string>
+    <string name="about_text">Nexus Companion %1$s\n\nPropriété du projet : Amine HARBI.\nÉditeur : Rép&amp;Web.\n© 2026 Amine HARBI — Rép&amp;Web. Droits réservés sur les éléments originaux propres au projet, sous réserve des droits des tiers.\n\nCompagnon personnel Android : conversation et mémoire locales, interaction vocale et accès en ligne sur demande.\n\nComposants tiers et licences\nLes composants ci-dessous conservent leurs auteurs, leurs droits et leurs licences respectives.</string>
     <string name="reply_with_library_warning">%1$s\n\n%2$s</string>
     <string name="confirm_sensitive_note_message">Cette information semble personnelle. Veux-tu la conserver uniquement dans tes notes locales ?\n\n%1$s\n\nTu pourras la supprimer dans « Mes notes ».</string>
 </resources>

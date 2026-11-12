@@ -175,6 +175,7 @@ open class MainActivity : Activity() {
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
     internal open fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext)
+    internal open fun launchExternalApp(request: ExternalAppPolicy.Request): ExternalAppPolicy.LaunchResult = ExternalAppPolicy.launch(this, request)
 
     private fun buildScreen(spokenRepliesEnabled: Boolean) {
         setContentView(R.layout.activity_main)
@@ -473,10 +474,16 @@ open class MainActivity : Activity() {
             if (reply.external != null && foreground && generation == bodyGeneration) {
                 stopBody()
                 worker.execute { brain.clearConversation() }
-                if (ExternalAppPolicy.launch(this, reply.external)) controller.stop()
-                else {
-                    externalFeedback = getString(R.string.external_app_unavailable)
-                    showAnswer(externalFeedback!!)
+                when (launchExternalApp(reply.external)) {
+                    ExternalAppPolicy.LaunchResult.PREFERRED -> controller.stop()
+                    ExternalAppPolicy.LaunchResult.FALLBACK -> {
+                        showAnswer(getString(R.string.external_app_fallback, reply.external.app.label))
+                        controller.stop()
+                    }
+                    ExternalAppPolicy.LaunchResult.UNAVAILABLE -> {
+                        externalFeedback = getString(R.string.external_app_unavailable)
+                        showAnswer(externalFeedback!!)
+                    }
                 }
             }
             if (reply.editNote != null && foreground) editNote(reply.editNote)

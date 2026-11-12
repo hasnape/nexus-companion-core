@@ -36,6 +36,12 @@ import java.io.File
 import java.util.Locale
 
 class MainActivityWithAndroidVoice : MainActivity() {
+    var externalResult: ExternalAppPolicy.LaunchResult? = null
+    val externalRequests = mutableListOf<ExternalAppPolicy.Request>()
+    override fun launchExternalApp(request: ExternalAppPolicy.Request): ExternalAppPolicy.LaunchResult {
+        externalRequests.add(request)
+        return externalResult ?: super.launchExternalApp(request)
+    }
     override fun createVoiceInput(): VoiceInput = AndroidVoiceInput(applicationContext)
     override fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext,
         "nexus-default", LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))
@@ -45,6 +51,25 @@ class MainActivityWithAndroidVoice : MainActivity() {
 @Config(sdk = [35])
 @LooperMode(LooperMode.Mode.PAUSED)
 class MainActivityTest {
+    @Test fun fallbackIsReportedWithoutClaimingThatTheNamedAppOpenedAndRepeatDoesNotLaunchAgain() {
+        val fixture=lifecycle.get();fixture.externalResult=ExternalAppPolicy.LaunchResult.FALLBACK
+        send("ouvre Chrome")
+        await { hasText(activity.getString(R.string.external_app_fallback,"Chrome")) }
+        assertEquals(1,fixture.externalRequests.size)
+        assertFalse(hasText("J’ouvre Chrome."))
+        send("répète")
+        await { hasText("Je n’ai plus de réponse récente") }
+        assertEquals(1,fixture.externalRequests.size)
+    }
+    @Test fun anUnavailableExternalAppReportsFailureAndTheConversationRemainsUsable() {
+        val fixture=lifecycle.get();fixture.externalResult=ExternalAppPolicy.LaunchResult.UNAVAILABLE
+        send("ouvre Google Maps")
+        await { hasText(activity.getString(R.string.external_app_unavailable)) }
+        assertEquals(1,fixture.externalRequests.size)
+        send("bonjour")
+        await { hasText("Bonjour") }
+        assertEquals(1,fixture.externalRequests.size)
+    }
     @Test fun explicitGoogleSearchOpensChromeWithOnlyTheRequestedTextAndStopsTheBody() {
         send("avance de vingt centimètres")
         await { hasText("roule en avant") }

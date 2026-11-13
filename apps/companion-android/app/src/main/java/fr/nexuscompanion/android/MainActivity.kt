@@ -90,6 +90,7 @@ open class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private var pendingCandidate: NativeBrainService.Candidate? = null
     private var pendingBrowserReading: BrowserReading? = null
+    private var taskEpoch = 0L
     private var voiceActive = false
     private var microphoneReady = false
     private var speaking = false
@@ -303,6 +304,8 @@ open class MainActivity : Activity() {
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
         bindButton(R.id.home_learning) { showLearning() }
+        bindButton(R.id.home_local_model) { startActivity(Intent(this, LocalModelActivity::class.java)) }
+        bindButton(R.id.home_voice_diagnostic) { startActivity(Intent(this, VoiceDiagnosticActivity::class.java)) }
         bindButton(R.id.home_voice_settings) { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
         findViewById<Switch>(R.id.home_chrome_auto_read).apply {
             isChecked = onlinePreferences.getBoolean(CHROME_READING_KEY, false)
@@ -431,6 +434,7 @@ open class MainActivity : Activity() {
         setBusy(true)
         controller.beginResponse()
         status.setText(progress)
+        val taskToken = taskEpoch
         worker.execute {
             try {
                 val result = task()
@@ -438,6 +442,11 @@ open class MainActivity : Activity() {
                     if (!destroyed) {
                         setBusy(false)
                         restoreStatus()
+                        if (!foreground || taskToken != taskEpoch) {
+                            if (foreground) showAnswer(if (result is NativeBrainService.Reply && result.external != null) getString(R.string.external_cancelled)
+                                else "Traitement interrompu lors de la mise en arrière-plan. Repose ta question.")
+                            return@post
+                        }
                         success(result)
                         finishLocalVoice(voiceReply(result), expectAnswer(result), trackContext = true)
                     }
@@ -446,6 +455,7 @@ open class MainActivity : Activity() {
                 main.post {
                     if (!destroyed) {
                         setBusy(false)
+                        if (!foreground || taskToken != taskEpoch) return@post
                         showAnswer(when (failure) {
                             is InvalidKnowledgeNote -> R.string.note_invalid
                             is KnowledgeCapacityReached -> R.string.library_full
@@ -527,6 +537,13 @@ open class MainActivity : Activity() {
             privateDisplayed = reply.protectedInformation
             val text = replyText(reply)
             showAnswer(text, reply.source)
+            if (reply.evidenceSources.isNotEmpty() || reply.generatedLocally) {
+                findViewById<TextView>(R.id.home_answer_source).apply {
+                    this.text = if (reply.generatedLocally) "Réponse du modèle local · à vérifier" else
+                        "Notes utilisées : " + reply.evidenceSources.joinToString(", ") { it.title }
+                    visibility = View.VISIBLE
+                }
+            }
             if (reply.external != null && foreground && generation == bodyGeneration) {
                 stopBody()
                 worker.execute { brain.clearConversation() }
@@ -1009,6 +1026,8 @@ open class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        taskEpoch++
+        if (::brain.isInitialized) brain.cancelGeneration()
         foreground = false
         main.removeCallbacks(accessTick); main.removeCallbacks(learningIdle)
         UserAccessSession.lock()
@@ -1021,6 +1040,8 @@ open class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        taskEpoch++
+        if (::brain.isInitialized) brain.cancelGeneration()
         if (isFinishing) ChromeAiReaderService.cancelReading()
         destroyed = true
         awaitingUserAccess = null

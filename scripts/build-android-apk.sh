@@ -14,6 +14,7 @@ if (( present == 4 )); then
   [[ -f "$NEXUS_ANDROID_KEYSTORE_PATH" ]] || { echo 'Release keystore not found.' >&2; exit 1; }
   keytool -list -keystore "$NEXUS_ANDROID_KEYSTORE_PATH" -storepass:env NEXUS_ANDROID_STORE_PASSWORD -alias "$NEXUS_ANDROID_KEY_ALIAS" >/dev/null
 fi
+python3 "$ROOT/scripts/prepare-local-llm.py"
 cd "$ROOT/apps/companion-android"
 tasks=(:app:clean :app:testDebugUnitTest :app:lintDebug :app:assembleDebug)
 if (( present == 4 )); then tasks+=(:app:testReleaseUnitTest :app:lintRelease :app:assembleRelease); fi
@@ -43,6 +44,6 @@ printf '%s\n' \
   'The signed release APK is the distribution build for the main app.' \
   'An update requires the same installed certificate and a higher versionCode.' \
   'Do not uninstall an existing app with notes: there is no portable Android backup yet.' \
-  'The shared Nexus rule engine is embedded locally; this is not a general-purpose LLM.' \
+  'The shared rule engine is embedded; the optional local LFM2.5 model is installed separately.' \
   'French speech recognition uses the bundled offline model.' > "$OUT/README.txt"
 echo "APK files and checksums: $OUT"

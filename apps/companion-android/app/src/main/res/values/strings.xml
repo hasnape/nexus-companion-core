@@ -188,4 +188,22 @@
     <string name="code_android_failed">Impossible d’ouvrir la vérification Android.</string>
     <string name="learning_automatic">Consolidation locale automatique</string>
     <string name="learning_description">%1$s\n\nNotes consolidées : %2$d ; en attente : %3$d.\nExercices de rappel réussis : %4$d/%5$d.\n\nCes exercices mesurent le rappel des sources, pas leur vérité ni une intelligence générale. La consolidation est locale, compressée et chiffrée. Les notes d’origine restent intactes ; une modification, suppression ou expiration invalide les associations concernées. Les nouvelles sources Internet demandent toujours ton accord avant enregistrement.</string>
+<string name="local_model_settings">Modèle de langage local</string>
+<string name="local_voice_diagnostic">Test vocal sur ce téléphone</string>
+<string name="llm_ui_1">Utiliser le modèle local</string>
+<string name="llm_ui_2">Annuler l’opération</string>
+<string name="vocal_ui_1">Test interrompu : délai dépassé.\n%1$s</string>
+<string name="vocal_ui_2">Ce test vérifie deux captures, la pause du micro pendant la réponse et la reprise de l’écoute. Mets le téléphone en mode avion si tu veux vérifier le fonctionnement hors ligne. Aucun enregistrement audio n’est conservé.</string>
+<string name="vocal_ui_3">Démarrer le test vocal</string>
+<string name="vocal_ui_4">Arrêter</string>
+<string name="vocal_ui_5">Test arrêté.\n%1$s</string>
+<string name="vocal_ui_6">Exporter le rapport JSON</string>
+<string name="vocal_ui_7">Termine ou arrête le test avant l’export.</string>
+<string name="vocal_ui_8">Test terminé. Vérifie les deux transcriptions et l’audibilité de la réponse.\n%1$s</string>
+<string name="vocal_ui_9">La sortie vocale n’a pas abouti.\n%1$s</string>
+<string name="vocal_ui_10">Le microphone est nécessaire pour réaliser ce test.</string>
+<string name="vocal_ui_11">Rapport exporté.</string>
+<string name="vocal_ui_12">Impossible d’exporter le rapport.</string>
+<string name="vocal_ui_13">Test interrompu par la sortie de l’écran.\n%1$s</string>
+<string name="vocal_ui_status">%1$s\n%2$s</string>
 </resources>

@@ -1,5 +1,7 @@
 # Nexus Companion Android — 0.4.22 native alpha
 
+Android **0.4.26** : modèle LFM2.5 local optionnel et diagnostic vocal sur appareil. [Installation, portée et preuves](../../docs/releases/ANDROID-0.4.26-2026-11-13.md).
+
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques distinguent le Web ouvert dans le navigateur de Wikipédia consulté dans l’application en HTTPS.
 
 ## Fonctions actuelles

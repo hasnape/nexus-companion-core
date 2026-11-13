@@ -37,6 +37,7 @@ internal class SharedBrainRuntime(
     fun replyJson(request: String): String = call("handleNativeTurnJson", request)
     fun retrievalJson(message: String): String = call("handleNativeRetrievalJson", message)
     fun bodyJson(request: String): String = call("handleNativeBodyJson", request)
+    fun understandingJson(request: String): String = call("handleNativeUnderstandingJson", request)
     fun learningJson(request: String): String = call("handleNativeLearningJson", request)
     @Synchronized fun configure(budget: DeviceResources.Budget) {
         instructionLimit = budget.instructions.coerceIn(1, NativeCapacity.BRAIN_INSTRUCTIONS.toLong())

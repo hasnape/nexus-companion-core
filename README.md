@@ -1,5 +1,7 @@
 # Nexus Companion Face (V1)
 
+Android **0.4.26** : modèle LFM2.5 local optionnel et diagnostic vocal sur appareil. [Installation, portée et preuves](docs/releases/ANDROID-0.4.26-2026-11-13.md).
+
 Compagnon IA **local-first** avec visage animé 2D, voix (fallback silencieux), écoute micro (Web Speech API), mémoire utile locale, moteur d'état interne et micro-décisions sociales.
 
 ## Objectif

@@ -16,11 +16,12 @@ internal object LocalSpeechResult {
             val text = entry.optString("text").trim()
             if (text.isEmpty() || text.length > NativeCapacity.MAX_MESSAGE_CHARS) return@mapNotNull null
             val words = entry.optJSONArray("result")
-            val confidence = (0 until (words?.length() ?: 0)).mapNotNull { i ->
+            val wordScores = (0 until (words?.length() ?: 0)).mapNotNull { i ->
                 words?.optJSONObject(i)?.optDouble("conf", Double.NaN)?.takeIf { it.isFinite() && it in 0.0..1.0 }
-            }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
+            }
+            val confidence = wordScores.takeIf { it.isNotEmpty() }?.average()?.toFloat()
             val likelihood = if (alternatives == null) null else entry.optDouble("confidence", Double.NaN).takeIf { it.isFinite() }
-            SpeechHypothesis(text, confidence, likelihood)
+            SpeechHypothesis(text, confidence, likelihood, wordScores.minOrNull()?.toFloat())
         }.distinctBy { it.text }
     }
 }

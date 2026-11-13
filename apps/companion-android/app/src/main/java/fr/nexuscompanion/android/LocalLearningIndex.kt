@@ -10,7 +10,7 @@ import java.security.MessageDigest
 /** Rebuildable derived index. It cannot change original notes, verification, or personality. */
 internal class LocalLearningIndex(context: Context, companionId: String = "nexus-default",
     private val cipher: KnowledgeCipher = LocalKnowledgeCipher("learning-$companionId")) {
-    companion object { private val lock = Any(); private const val SCHEMA = 1 }
+    companion object { private val lock = Any(); private const val SCHEMA = 2 }
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val file = AtomicFile(File(context.filesDir, "learning-$safeId.json"))
     private data class Learned(val fingerprint: String, val terms: List<String>, val exercises: Int, val passed: Int, val concepts: Int)

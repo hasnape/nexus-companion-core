@@ -218,7 +218,7 @@ internal class LocalKnowledgeLibrary(
             KnowledgePolicy.Recall.Overview -> emptyList()
             null -> queryTerms
         }
-        val matches = matchingEntries(terms, now)
+        val matches = matchingEntries(terms, now, recall == null)
         val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic && recall !is KnowledgePolicy.Recall.Read) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
@@ -230,12 +230,12 @@ internal class LocalKnowledgeLibrary(
         (matches + learned + ranked).distinctBy { it.title to it.excerpt }.take(maxNotes.coerceIn(1, NativeCapacity.MAX_CONTEXT_NOTES))
     }
 
-    private fun matchingEntries(tokens: List<String>, now: Long): List<Entry> {
+    private fun matchingEntries(tokens: List<String>, now: Long, conversational: Boolean = false): List<Entry> {
         if (tokens.isEmpty()) return emptyList()
         val current = snapshot ?: return emptyList()
         val index = current.searchIndex ?: KnowledgeSearchIndex(current.entries.filter { it.supersededBy == null }).also { current.searchIndex = it }
         // Expiry is evaluated on every call, including cached rankings.
-        return index.rank(tokens).filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
+        return (if (conversational) index.rankForConversation(tokens, now) else index.rank(tokens)).filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
     }
 
     private fun save(entries: List<Entry>) {

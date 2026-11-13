@@ -22,14 +22,17 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 29
-  versionName = "0.4.23-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 32
+  versionName = "0.4.26-native-alpha" + if (nexusPreview) "-preview" else ""
+  externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release"); targets += "nexus_llm" } }
   ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) }
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
   buildConfigField("String", "FRENCH_MODEL_ID", "\"$frenchModelId\"")
   buildConfigField("String", "FRENCH_MODEL_CACHE_ID", "\"$frenchModelId-${frenchModelSha256.take(12)}\"")
   manifestPlaceholders["nexusLabel"] = if (nexusPreview) "Nexus Companion Test" else "@string/app_name"
  }
+ ndkVersion = "27.2.12479018"
+ externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
  compileOptions {
   sourceCompatibility = JavaVersion.VERSION_17
   targetCompatibility = JavaVersion.VERSION_17

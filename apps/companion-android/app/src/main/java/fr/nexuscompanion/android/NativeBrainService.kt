@@ -15,9 +15,11 @@ internal class NativeBrainService(
     private val privateAccess: () -> Boolean = { false },
     private val resources: () -> DeviceResources.Snapshot = { DeviceResources.inspect(context) },
     private val learning: LocalLearningIndex = LocalLearningIndex(context),
-    private val search: (String) -> WikipediaKnowledgeSearch.Article? = { WikipediaKnowledgeSearch.search(context, it) }
+    private val search: (String) -> WikipediaKnowledgeSearch.Article? = { WikipediaKnowledgeSearch.search(context, it) },
+    private val generator: LocalDraftGenerator = LocalTextGenerator(context)
 ) : AutoCloseable {
     data class Candidate(val content: String, val sensitive: Boolean)
+    data class EvidenceSource(val id: String, val title: String, val source: String)
     data class Reply(
         val text: String,
         val candidate: Candidate?,
@@ -30,7 +32,9 @@ internal class NativeBrainService(
         val publicContextTopic: String? = null,
         val browserReading: BrowserReading? = null,
         val requiresUserCode: Boolean = false,
-        val protectedInformation: Boolean = false
+        val protectedInformation: Boolean = false,
+        val evidenceSources: List<EvidenceSource> = emptyList(),
+        val generatedLocally: Boolean = false
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
@@ -41,9 +45,11 @@ internal class NativeBrainService(
         data class OpenApp(val request: ExternalAppPolicy.Request, val evidence: List<LocalKnowledgeLibrary.Entry>, override val expires: Long) : Pending
     }
     private var pending: Pending? = null
-    private data class Conversation(val reply: Reply, val notes: List<LocalKnowledgeLibrary.Entry>, val expires: Long)
+    private data class Conversation(val reply: Reply, val notes: List<LocalKnowledgeLibrary.Entry>, val expires: Long, val question: String? = null)
     private var conversation: Conversation? = null
     private var turnEvidence: List<LocalKnowledgeLibrary.Entry> = emptyList()
+    private var turnQuestion: String? = null
+    fun cancelGeneration() { generator.cancel() }
     private var accessOnPreviousTurn = false
     private var budget: DeviceResources.Budget? = null
     private fun codeRequired() = Reply("Le code utilisateur est nécessaire pour consulter ces informations personnelles. Saisis-le dans l’écran sécurisé.", null, true, requiresUserCode = true)
@@ -66,7 +72,7 @@ internal class NativeBrainService(
     }
 
     /** Session context is transient and confined to the worker, never written as history. */
-    fun clearConversation() { pending = null; conversation = null; turnEvidence = emptyList() }
+    fun clearConversation() { pending = null; conversation = null; turnEvidence = emptyList(); turnQuestion = null }
 
     /** A long reading starts its follow-up lifetime after confirmed playback, not before it. */
     fun replyPlayed() {
@@ -96,6 +102,7 @@ internal class NativeBrainService(
         if (conversation?.expires?.let { instant >= it } == true) conversation = null
         if (pending?.expires?.let { instant >= it } == true) pending = null
         turnEvidence = emptyList()
+        turnQuestion = message.takeIf { it.length <= 600 }
         val words = VoiceTranscriptPolicy.commandWords(message)
         val last = conversation
         val repeat = words in setOf("repete", "repete ta reponse", "peux tu repeter", "redis moi ta reponse", "repete s il te plait")
@@ -136,13 +143,15 @@ internal class NativeBrainService(
 
     private fun rememberReply(reply: Reply) {
         val expires = minOf(elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS, pending?.expires ?: Long.MAX_VALUE)
-        conversation = Conversation(reply.copy(body = null, editNote = null, external = null), turnEvidence.toList(), expires)
+        conversation = Conversation(reply.copy(body = null, editNote = null, external = null), turnEvidence.toList(), expires, turnQuestion)
     }
 
     /** External prose is read as data; it never enters the command, body, or lookup parsers. */
     fun readBrowserResult(reading: BrowserReading): Reply {
         clearConversation()
         accessOnPreviousTurn = privateAccess()
+        val terms = JSONObject(brain().retrievalJson(reading.text)).getJSONArray("terms")
+        turnQuestion = "Explique " + (0 until minOf(8, terms.length())).joinToString(" ") { terms.getString(it) }
         val metadata = JSONObject(brain().learningJson(JSONObject().put("protocolVersion", 1).put("message", "classification")
             .put("now", System.currentTimeMillis()).put("notes", JSONArray().put(JSONObject()
                 .put("id", "browser-classification").put("title", reading.title).put("excerpt", reading.text)
@@ -225,19 +234,43 @@ internal class NativeBrainService(
             }
         }
         val now = System.currentTimeMillis()
-        val recall = KnowledgePolicy.recallFor(message)
-        val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")
+        val last = conversation.takeIf { focusedNote == null }
+        val externalNote = if (!last?.notes.isNullOrEmpty()) null else last?.reply?.browserReading?.let {
+            LocalKnowledgeLibrary.Entry("external-context", it.title, it.text, it.source, now, null, false)
+        } ?: last?.reply?.source?.let { LocalKnowledgeLibrary.Entry("external-context", it.title, it.extract, it.url, now, null, false) }
+        val previousNotes = last?.notes?.takeIf { it.isNotEmpty() } ?: externalNote?.let(::listOf).orEmpty()
+        val question = if (externalNote != null && last?.reply?.source != null) "Explique ${last.reply.source.title}" else last?.question
+        val evidenceContext = question?.takeIf { previousNotes.isNotEmpty() }?.let {
+            JSONObject().put("question", it).put("evidenceIds", JSONArray(previousNotes.map { note -> note.id }))
+        }
+        val understandingRequest = JSONObject().put("message", message).apply { if (evidenceContext != null) put("evidenceContext", evidenceContext) }
+        val understanding = JSONObject(brain().understandingJson(understandingRequest.toString()))
+        val contextual = understanding.getBoolean("contextual") && !understanding.getBoolean("needsContext")
+        if (contextual && last?.reply?.protectedInformation == true && !privateAccess()) { clearConversation(); return codeRequired() }
+        if (contextual && !last?.notes.isNullOrEmpty()) {
+            val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                clearConversation(); return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (last!!.notes.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, now) }) {
+                clearConversation(); return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
+            }
+        }
+        val resolvedQuery = understanding.getString("query")
+        turnQuestion = resolvedQuery.takeIf { it.length <= 600 }
+        val recall = if (contextual) null else KnowledgePolicy.recallFor(message)
+        val terms = JSONObject(brain().retrievalJson(resolvedQuery)).getJSONArray("terms")
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
         val notes = try {
             val selected = requireNotNull(budget)
             val preferred = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
-            focusedNote?.let(::listOf) ?: library.contextFor(message, now, recall, queryTerms, selected.contextNotes, preferred)
+            focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferred)
         } catch (_: Exception) { null }
         val array = JSONArray()
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
             .put("privateAccessGranted", privateAccess())
+        if (evidenceContext != null) request.put("evidenceContext", evidenceContext)
         if (focusedNote == null) {
             conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
             if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
@@ -261,7 +294,16 @@ internal class NativeBrainService(
         }
         val evidence = result.optJSONArray("evidenceIds")
         turnEvidence = notes.orEmpty().filter { note ->
-            (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
+            note.id != "external-context" && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
+        }.distinctBy { it.id }
+        val sources = result.optJSONArray("evidenceSources")
+        check((sources?.length() ?: 0) <= 4)
+        val evidenceSources = (0 until (sources?.length() ?: 0)).map { i ->
+            val item = requireNotNull(sources).getJSONObject(i)
+            val source = EvidenceSource(item.getString("id"), item.getString("title"), item.getString("source"))
+            check(source.id.length in 1..64 && source.title.length in 1..160 && source.source.length in 1..512)
+            check(notes.orEmpty().any { it.id == source.id } && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == source.id })
+            source
         }.distinctBy { it.id }
         val recalledSource = notes.orEmpty().firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
@@ -271,8 +313,9 @@ internal class NativeBrainService(
         } }
         val publicTopic = result.optString("publicContextTopic").takeIf { it.isNotBlank() }
         check(publicTopic == null || publicTopic.length <= 180)
-        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true, publicContextTopic = publicTopic,
-            requiresUserCode = result.optBoolean("requiresUserCode"))
+        val local = Reply(text, candidate, notes != null, recalledSource ?: last?.reply?.source.takeIf { contextual }, expectsAnswer = true, publicContextTopic = publicTopic,
+            browserReading = last?.reply?.browserReading.takeIf { contextual },
+            requiresUserCode = result.optBoolean("requiresUserCode"), evidenceSources = evidenceSources)
         if (local.requiresUserCode) return local
         val needsTopic = result.optString("lookupNeedsTopic")
         if (needsTopic.isNotEmpty()) {
@@ -288,6 +331,12 @@ internal class NativeBrainService(
         val offer = result.optString("publicLookupOffer")
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
+            // Only this core-validated public fallback may enter the language model.
+            if (message.length <= 600 && evidenceContext == null && !privateAccess() && turnEvidence.isEmpty()) {
+                generator.generate(LocalDraftRequest(message, offer))?.let { draft ->
+                    return local.copy(text = draft, generatedLocally = true, publicContextTopic = null)
+                }
+            }
             if (!onlineEnabled) return local.copy(text = context.getString(R.string.online_disabled_reply))
             val target = result.optString("lookupTarget", "wikipedia")
             check(target in setOf("web", "wikipedia"))
@@ -323,5 +372,5 @@ internal class NativeBrainService(
         }
     }
 
-    override fun close() { clearConversation(); runtime?.close(); runtime = null }
+    override fun close() { generator.close(); clearConversation(); runtime?.close(); runtime = null }
 }

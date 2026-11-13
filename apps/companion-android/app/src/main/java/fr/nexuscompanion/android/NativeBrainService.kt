@@ -328,11 +328,17 @@ internal class NativeBrainService(
             pending = Pending.Save(candidate.content.take(80), candidate.content, "user:manual", elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
             return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
         }
+        // A read, edit, confirmation, lookup or clarification never becomes a model operation.
+        if (generator.usesNotes && privateAccess() && candidate == null && recall == null && focusedNote == null &&
+            !text.trimEnd().endsWith("?") && result.optString("publicLookupOffer").isEmpty() &&
+            result.optString("publicLookupQuery").isEmpty() && result.optString("webLookupQuery").isEmpty() && turnEvidence.isNotEmpty()) {
+            groundedReply(message, queryTerms, local)?.let { return it }
+        }
         val offer = result.optString("publicLookupOffer")
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
             // Only this core-validated public fallback may enter the language model.
-            if (message.length <= 600 && evidenceContext == null && !privateAccess() && turnEvidence.isEmpty()) {
+            if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null && turnEvidence.isEmpty()) {
                 generator.generate(LocalDraftRequest(message, offer))?.let { draft ->
                     return local.copy(text = draft, generatedLocally = true, publicContextTopic = null)
                 }
@@ -352,6 +358,33 @@ internal class NativeBrainService(
         if (query.isEmpty()) return local
         check(query.isNotBlank() && query.length <= 180 && candidate == null)
         return lookup(query, onlineEnabled, notes != null)
+    }
+
+    private fun groundedReply(message: String, terms: List<String>, fallback: Reply): Reply? {
+        if (message.length > 600 || !GroundedNotes.safeText(message)) return null
+        return try {
+            val selected = turnEvidence.take(2).filter { note ->
+                val metadata = JSONObject(brain().learningJson(JSONObject().put("protocolVersion", 1).put("message", "classification")
+                    .put("now", System.currentTimeMillis()).put("notes", JSONArray().put(noteJson(note))).toString()))
+                !metadata.getBoolean("credential")
+            }
+            val evidence = GroundedNotes.prepare(selected, terms)
+            if (evidence.isEmpty() || !privateAccess()) return null
+            val request = LocalDraftRequest(message, "notes", evidence)
+            val quotes = GroundedNotes.validate(generator.generate(request), evidence) ?: return null
+            // A model result cannot extend the unlock window or keep superseded evidence alive.
+            if (!privateAccess()) { clearConversation(); return codeRequired() }
+            val current = library.list().associateBy { it.id }
+            if (selected.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) }) {
+                clearConversation()
+                return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
+            }
+            val ids = quotes.map { quote -> evidence.single { it.key == quote.source }.noteId }.toSet()
+            turnEvidence = selected.filter { it.id in ids }
+            fallback.copy(text = "D’après tes notes enregistrées, non vérifiées :\n" + quotes.joinToString("\n") { it.text },
+                generatedLocally = true, protectedInformation = true,
+                evidenceSources = fallback.evidenceSources.filter { it.id in ids })
+        } catch (_: Exception) { null }
     }
 
     private fun lookup(query: String, onlineEnabled: Boolean, notesAvailable: Boolean, target: String = "wikipedia"): Reply {

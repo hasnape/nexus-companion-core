@@ -4,6 +4,7 @@ package fr.nexuscompanion.android;
 public class NativeLocalLlm {
     public native long create();
     public native String generate(long handle, String file, String question, int threads, int timeoutMs);
+    public native String generateGrounded(long handle, String file, String question, String evidence, int threads, int timeoutMs);
     public native void cancel(long handle);
     public native void release(long handle);
     public static void main(String[] args) throws Exception {
@@ -15,6 +16,17 @@ public class NativeLocalLlm {
             String answer = engine.generate(id, args[1], question, 4, 12000);
             engine.release(id);
             System.out.println("ANSWER\t" + (System.nanoTime() - start) / 1000000 + "\t" + question + "\t" + answer.replace('\n', ' ').replace('\t', ' '));
+        }
+        String[][] grounded = {
+            {"Quel est mon métier ?", "SOURCE N1:\nJe travaille comme technicien informatique.\nJe préfère les réponses courtes."},
+            {"Quelle boisson est-ce que je préfère ?", "SOURCE N1:\nJe préfère le thé vert.\nJe ne bois pas de café."},
+            {"Est-ce que je bois du café ?", "SOURCE N1:\nJe ne bois pas de café.\nJe préfère le thé vert."}
+        };
+        for (String[] item : grounded) {
+            long handle = engine.create(); long start = System.nanoTime();
+            String answer = engine.generateGrounded(handle, args[1], item[0], item[1], 4, 20000);
+            engine.release(handle);
+            System.out.println("GROUNDED\t" + (System.nanoTime() - start) / 1000000 + "\t" + item[0] + "\t" + answer.replace('\n', ' ').replace('\t', ' '));
         }
         long id = engine.create();
         if (!engine.generate(id, "/missing/model.gguf", "Bonjour", 1, 500).isEmpty()) throw new AssertionError("Missing model");

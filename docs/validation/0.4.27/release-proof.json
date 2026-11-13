@@ -1,0 +1,172 @@
+{
+  "version": "0.4.27-native-alpha",
+  "versionCode": 33,
+  "package": "fr.nexuscompanion.android",
+  "sourceTreeBeforeDocumentation": "04d21184f2965df86177d0555021ece85f59cdca",
+  "apkBytes": 67983825,
+  "apkSha256": "980df2a0c3842861c057dbf6ce896e29e555e0a4afbc284ad836061b9b075906",
+  "certificateSha256": "01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1",
+  "preservedBrainSha256": "48da6489e14dd595c48706c0d65f9d3e3c72b83d3d062b22636968bf4deaf779",
+  "voskModelSha256": "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad",
+  "android": {
+    "debug": {
+      "tests": 377,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "lintIssues": 0,
+      "memoryAudit": {
+        "total": 35,
+        "passed": 35,
+        "failed": 0
+      }
+    },
+    "release": {
+      "tests": 377,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "lintIssues": 0,
+      "memoryAudit": {
+        "total": 35,
+        "passed": 35,
+        "failed": 0
+      }
+    }
+  },
+  "typescript": {
+    "tests": 438,
+    "suites": 51,
+    "typecheck": true,
+    "lint": true,
+    "nativeRuntimePreserved": true,
+    "scope": "Available typed source baseline 0.4.23; Android preserves exact recovered 0.4.25 runtime."
+  },
+  "nativeInference": {
+    "platform": "Linux x86_64 CPU AVX2; actual JNI; not an Android benchmark",
+    "publicQuestions": [
+      {
+        "question": "Quelle est la capitale de la France ?",
+        "answer": "Paris est la capitale de la France.",
+        "elapsedMs": 2873
+      },
+      {
+        "question": "Combien font deux plus deux ?",
+        "answer": "Deux plus deux est quatre.",
+        "elapsedMs": 1110
+      },
+      {
+        "question": "Pourquoi le ciel est-il bleu ?",
+        "answer": "Le ciel apparaît bleu en raison de la diffusion de la lumière du soleil par l'atmosphère.",
+        "elapsedMs": 1202
+      },
+      {
+        "question": "Que signifie CPU en informatique ?",
+        "answer": "Le CPU est le processeur principal d'un ordinateur, responsable des calculs et du traitement des données.",
+        "elapsedMs": 1226
+      },
+      {
+        "question": "Qu’est-ce qu’un triangle ?",
+        "answer": "Un triangle est une figure géométrique formée par trois côtés et trois angles.",
+        "elapsedMs": 1316
+      }
+    ],
+    "syntheticNoteQuestions": [
+      {
+        "question": "Quel est mon métier ?",
+        "answer": {
+          "quotes": [
+            {
+              "source": "N1",
+              "text": "Je travaille comme technicien informatique."
+            }
+          ]
+        },
+        "elapsedMs": 1703,
+        "exactQuoteValidated": true
+      },
+      {
+        "question": "Quelle boisson est-ce que je préfère ?",
+        "answer": {
+          "quotes": [
+            {
+              "source": "N1",
+              "text": "Je préfère le thé vert."
+            }
+          ]
+        },
+        "elapsedMs": 1567,
+        "exactQuoteValidated": true
+      },
+      {
+        "question": "Est-ce que je bois du café ?",
+        "answer": {
+          "quotes": [
+            {
+              "source": "N1",
+              "text": "Je ne bois pas de café."
+            }
+          ]
+        },
+        "elapsedMs": 1947,
+        "exactQuoteValidated": true
+      }
+    ],
+    "checks": [
+      {
+        "name": "missing_model",
+        "result": "passed"
+      },
+      {
+        "name": "deadline",
+        "result": "passed"
+      },
+      {
+        "name": "cancel_and_release_during_generation",
+        "result": "passed"
+      }
+    ]
+  },
+  "notesLlm": {
+    "explicitOptIn": true,
+    "defaultEnabled": false,
+    "maxSourceNotes": 2,
+    "maxSourceCharacters": 840,
+    "exactQuotesOnly": true,
+    "noModelCommandsOrMemoryWrites": true
+  },
+  "portableBackup": {
+    "format": "NXB v1",
+    "scope": [
+      "all native notes",
+      "complete note revision history"
+    ],
+    "exclusions": [
+      "settings",
+      "derived learning cache",
+      "models",
+      "PIN",
+      "Android Keystore keys",
+      "transient conversation"
+    ],
+    "cipher": "AES-256-GCM",
+    "kdf": "PBKDF2WithHmacSHA256",
+    "iterations": 600000,
+    "replacementRequiresPreviewAndConfirmation": true,
+    "encryptedUndoPoint": true
+  },
+  "permissionsUnchangedFrom026": true,
+  "zipIntegrity": true,
+  "zipAlign16KiB": true,
+  "signatureV2": true,
+  "physicalPhoneConnected": false,
+  "acousticTestsPerformed": false,
+  "batteryMeasurementsPerformed": false,
+  "remaining": [
+    "companion profiles and full brain state export",
+    "background listening",
+    "camera perception",
+    "speaker recognition",
+    "physical robot adapter and hardware validation"
+  ]
+}

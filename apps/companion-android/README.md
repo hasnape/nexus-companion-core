@@ -1,11 +1,13 @@
-# Nexus Companion Android — 0.4.22 native alpha
+# Nexus Companion Android — 0.4.27 native alpha
 
-Android **0.4.26** : modèle LFM2.5 local optionnel et diagnostic vocal sur appareil. [Installation, portée et preuves](../../docs/releases/ANDROID-0.4.26-2026-11-13.md).
+Android **0.4.27** : accès volontaire du modèle local à des extraits de notes autorisées, citations exactes contrôlées et archive portable chiffrée des notes et de leur historique. [Installation, portée et preuves](../../docs/releases/ANDROID-0.4.27-2026-11-13.md) · [Finalisation par étapes](../../docs/implementation/ANDROID-FINALISATION-PAR-ETAPES-2026-11-13.md).
 
 Application Kotlin native en version **alpha**. Android 12 minimum (API 31), cible Android 15 (API 35). La conversation et la mémoire fonctionnent sur le téléphone. Les recherches publiques distinguent le Web ouvert dans le navigateur de Wikipédia consulté dans l’application en HTTPS.
 
 ## Fonctions actuelles
 
+- **Modèle de langage local** : LFM2.5 optionnel, installé séparément et vérifié par SHA-256. Pour les questions personnelles, activer aussi **Utiliser mes notes avec le modèle local** et ouvrir la session par le code utilisateur. Le moteur central sélectionne au plus deux notes ; la génération ne peut restituer que des phrases complètes effectivement fournies. Les commandes, modifications et confirmations ne sont pas confiées au modèle ; les erreurs reviennent au moteur central.
+- **Sauvegarde de ma mémoire** : toutes les notes et leurs anciennes versions dans un fichier `.nxb` chiffré avec une phrase choisie par l’utilisateur. Aperçu et confirmation avant remplacement ; retour à l’état précédent possible tant que les notes ne sont pas modifiées ensuite. Les réglages, le code utilisateur, les clés Android et les poids des modèles sont exclus : ce n’est pas encore l’export de l’ensemble d’une personnalité.
 - Accueil natif avec portrait dessiné, indicateur textuel de l’état et sections distinctes pour la voix, la conversation, la mémoire et les réglages. Le portrait réagit à la disponibilité du micro, au calcul et à la lecture. Les clignements et la bouche animée suivent le réglage d’animation d’Android.
 - Les deux pupilles restent visibles dans les quatre états du portrait. Elles se décalent ensemble pendant la réflexion et disparaissent au clignement.
 - **Corps roulant virtuel** : deux roues latérales et une roue directrice centrale, configurable avant/arrière. « Avance de vingt centimètres », « recule de dix centimètres », « tourne à gauche de trente degrés » et « stop » pilotent une trajectoire bornée. Le bouton Arrêter reste disponible pendant un calcul. La position simulée et le cap s’affichent ; sortir du mode ou passer en arrière-plan arrête le mouvement. Le plan en unités physiques est réutilisable par un futur adaptateur matériel, qui reste à construire.

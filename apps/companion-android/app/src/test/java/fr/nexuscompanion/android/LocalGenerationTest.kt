@@ -53,6 +53,14 @@ class LocalGenerationTest {
             assertEquals(1, generator.requests.size)
         }
     }
+    @Test fun unlockingPersonalAccessDoesNotDisableThePublicQuestionModel() {
+        val context = RuntimeEnvironment.getApplication(); val model = FakeGenerator()
+        NativeBrainService(context, library("draft-unlocked-public"), privateAccess = { true }, resources = { balancedTestDevice }, generator = model).use {
+            val reply = it.reply("Qu’est-ce qu’un volcan ?", false)
+            assertTrue(reply.generatedLocally)
+            assertTrue(model.requests.single().evidence.isEmpty())
+        }
+    }
     @Test fun outputSanitizerRejectsInternalTagsAndIncompleteShortAnswers() {
         assertNull(LocalDraftPolicy.clean("<think>raisonnement</think> Une réponse."))
         assertNull(LocalDraftPolicy.clean("<|im_start|>assistant"))

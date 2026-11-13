@@ -21,6 +21,7 @@ class LocalModelActivity : Activity() {
     private var closed = false
     private lateinit var status: TextView
     private lateinit var toggle: Switch
+    private lateinit var notesToggle: Switch
     private lateinit var store: LocalModelStore
     private val actions = mutableListOf<Button>()
     override fun onCreate(state: Bundle?) {
@@ -38,6 +39,12 @@ class LocalModelActivity : Activity() {
             isChecked = store.enabled
             setOnCheckedChangeListener { _, checked -> store.enabled = checked; refresh() }
         }.also(panel::addView)
+        notesToggle = Switch(this).apply {
+            text = getString(R.string.llm_use_notes)
+            isChecked = store.notesEnabled
+            setOnCheckedChangeListener { _, checked -> store.notesEnabled = checked }
+        }.also(panel::addView)
+        text(getString(R.string.llm_notes_explanation))
         fun button(label: String, action: () -> Unit) = Button(this).also { b ->
             b.text = label; b.setOnClickListener { action() }; panel.addView(b); actions.add(b)
         }
@@ -65,6 +72,8 @@ class LocalModelActivity : Activity() {
         status.text = message ?: if (busy) "Opération en cours…" else if (installed) "Modèle vérifié et installé." else "Modèle non installé. Le moteur Nexus actuel reste disponible."
         toggle.isEnabled = !busy && installed
         toggle.isChecked = store.enabled
+        notesToggle.isEnabled = !busy && installed && store.enabled
+        notesToggle.isChecked = store.notesEnabled
         actions.forEach { it.isEnabled = !busy }
     }
     private fun transfer(action: () -> Unit) {

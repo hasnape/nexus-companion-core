@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="fr">
     <string name="learning_and_hardware">Matériel et apprentissage</string>
     <string name="user_code_access">Code utilisateur et accès personnel</string>
     <string name="lock_personal_access">Verrouiller les informations personnelles</string>
@@ -206,4 +206,28 @@
 <string name="vocal_ui_12">Impossible d’exporter le rapport.</string>
 <string name="vocal_ui_13">Test interrompu par la sortie de l’écran.\n%1$s</string>
 <string name="vocal_ui_status">%1$s\n%2$s</string>
+<string name="llm_use_notes">Utiliser mes notes avec le modèle local</string>
+<string name="llm_notes_explanation">Après déverrouillage par ton code utilisateur, Nexus peut transmettre au modèle local quelques phrases des notes pertinentes. Le modèle sélectionne des citations exactes, contrôlées avant lecture. Les mots de passe et codes sont exclus. Aucun extrait n’est envoyé sur Internet et aucune réponse n’est enregistrée automatiquement.</string>
+<string name="backup_title">Sauvegarde de ma mémoire</string>
+<string name="backup_explanation">Exporte toutes tes notes et leurs anciennes versions dans une archive chiffrée, restaurable sur un autre appareil. Choisis une phrase secrète de 12 à 128 caractères et conserve-la séparément : elle est indispensable pour restaurer. Les clés Android, le code utilisateur, les modèles et les réglages ne sont pas exportés. Déverrouille avant de saisir la phrase.</string>
+<string name="backup_unlock">Déverrouiller avec mon code utilisateur</string>
+<string name="backup_secret">Phrase secrète de la sauvegarde</string>
+<string name="backup_confirm_secret">Confirmer la phrase pour créer une sauvegarde</string>
+<string name="backup_export">Créer une sauvegarde chiffrée</string>
+<string name="backup_choose">Choisir une sauvegarde à restaurer</string>
+<string name="backup_preview">Ouvrir et vérifier la sauvegarde</string>
+<string name="backup_restore">Restaurer la mémoire</string>
+<string name="backup_undo">Annuler la dernière restauration</string>
+<string name="backup_locked">Accès verrouillé. Déverrouille avec ton code avant de consulter ou restaurer la mémoire.</string>
+<string name="backup_unlocked">Accès ouvert. Saisis la phrase secrète pour créer ou ouvrir une sauvegarde.</string>
+<string name="backup_bad_secret">La phrase doit contenir 12 à 128 caractères. Pour un export, les deux saisies doivent être identiques.</string>
+<string name="backup_working">Chiffrement ou vérification en cours…</string>
+<string name="backup_failed">Opération interrompue ou impossible. Vérifie la phrase secrète, le fichier et l’espace disponible. La mémoire existante est conservée si la restauration échoue.</string>
+<string name="backup_changed">La mémoire a changé depuis la vérification, ou aucun point de restauration compatible n’est disponible. Vérifie de nouveau la sauvegarde.</string>
+<string name="backup_preview_counts">Sauvegarde vérifiée. Notes actives : %1$d ; anciennes versions : %2$d. La restauration remplacera la mémoire actuelle après ta confirmation.</string>
+<string name="backup_restore_confirm">Remplacer les notes et leur historique par la sauvegarde vérifiée ? Un point de retour chiffré permettra d’annuler cette restauration tant que les notes ne sont pas modifiées ensuite.</string>
+<string name="backup_restored">Mémoire restaurée. Le point de retour chiffré est disponible.</string>
+<string name="backup_undo_done">La mémoire précédant la restauration a été rétablie.</string>
+<string name="backup_exported">Sauvegarde chiffrée écrite. Conserve le fichier et sa phrase secrète séparément.</string>
+<string name="backup_selected">Archive sélectionnée. Déverrouille, puis saisis sa phrase secrète pour la vérifier.</string>
 </resources>

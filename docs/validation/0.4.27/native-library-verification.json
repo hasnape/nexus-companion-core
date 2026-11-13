@@ -1,0 +1,120 @@
+{
+  "lib/arm64-v8a/libjnidispatch.so": {
+    "bytes": 165992,
+    "sha256": "ddfc6c965bbe366615c000ec1f06552ddf0bb2b4f9d921d0bff8c75b3cb2ca4c",
+    "loadAlignments": [
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  },
+  "lib/arm64-v8a/libnexus_llm.so": {
+    "bytes": 6683128,
+    "sha256": "13163de49c33b527f66e4dfc8515ad4bb6452dcd2b6cdc810efcdea6816c441a",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384,
+      16384
+    ]
+  },
+  "lib/arm64-v8a/libvosk.so": {
+    "bytes": 10042800,
+    "sha256": "06965ebb4e5eb3a9e4a815755e178d9553392e3fe8d3d368ac46952ad3694173",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  },
+  "lib/armeabi-v7a/libjnidispatch.so": {
+    "bytes": 116344,
+    "sha256": "4a2fc525286a13179b1e62e10bd8ab96422eb205a2db8dbeb2e177564700bf4a",
+    "loadAlignments": [
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  },
+  "lib/armeabi-v7a/libnexus_llm.so": {
+    "bytes": 2652,
+    "sha256": "e814709847b81956de440fa36e730179f28c62edef8681ae32a9628ec9f43121",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384
+    ]
+  },
+  "lib/armeabi-v7a/libvosk.so": {
+    "bytes": 8985628,
+    "sha256": "a89defe2b093be392c793fd9fe21c65dd0a86818de9e42eef51b76db92549181",
+    "loadAlignments": [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    "identicalTo026": true
+  },
+  "lib/x86/libjnidispatch.so": {
+    "bytes": 116260,
+    "sha256": "5bdc5edf4d0722a01051d836d9f404e895dc5465b11a07d83953cbad323b71de",
+    "loadAlignments": [
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  },
+  "lib/x86/libnexus_llm.so": {
+    "bytes": 2988,
+    "sha256": "1ce35e67c3c18dc4b13dc9d427ec5b7a47529ad498facc627e0dcf4498d1fefc",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384
+    ]
+  },
+  "lib/x86/libvosk.so": {
+    "bytes": 10397552,
+    "sha256": "ecc56ef0a441f2bab6ff34401f4b6935576fd58e9f41d207026efabd748b3982",
+    "loadAlignments": [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    "identicalTo026": true
+  },
+  "lib/x86_64/libjnidispatch.so": {
+    "bytes": 116904,
+    "sha256": "288eafff19a70e833498201071c3d724f03f32ee8ff64a14fca50b57d975db70",
+    "loadAlignments": [
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  },
+  "lib/x86_64/libnexus_llm.so": {
+    "bytes": 7311080,
+    "sha256": "bd6cf2436ce84cce2d6e146d36261e4fb377e75c6b1a22c7b440193675137025",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384,
+      16384
+    ]
+  },
+  "lib/x86_64/libvosk.so": {
+    "bytes": 10335120,
+    "sha256": "139c42691fae9f5a65c390c0a1311fac1fc9119be662469f32e1af6cefbe496f",
+    "loadAlignments": [
+      16384,
+      16384,
+      16384,
+      16384
+    ],
+    "identicalTo026": true
+  }
+}

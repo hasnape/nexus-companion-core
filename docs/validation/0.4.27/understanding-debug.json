@@ -1,0 +1,581 @@
+{
+  "version": "0.4.27-native-alpha",
+  "engine": "nexus-core-rules-v1",
+  "fixture": "Six notes reconstituées ; contenus Salutation et Politesse synthétiques, pas une copie des données du téléphone",
+  "total": 35,
+  "passed": 35,
+  "failed": 0,
+  "rows": [
+    {
+      "id": "name_direct",
+      "query": "Quel est mon prénom ?",
+      "expected": "Retrouver Amine",
+      "passed": true,
+      "actual": "Ton prénom est Amine.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "name_natural",
+      "query": "Comment je m’appelle ?",
+      "expected": "Retrouver Amine",
+      "passed": true,
+      "actual": "Ton prénom est Amine.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "city_direct",
+      "query": "Où est-ce que je vis ?",
+      "expected": "Retrouver Lyon",
+      "passed": true,
+      "actual": "Tu habites à Lyon.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "city_response_person",
+      "query": "Où est-ce que je vis ?",
+      "expected": "Répondre au propriétaire à la deuxième personne",
+      "passed": true,
+      "actual": "Tu habites à Lyon.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "city_paraphrase",
+      "query": "Où est-ce que j’habite ?",
+      "expected": "Retrouver Lyon",
+      "passed": true,
+      "actual": "Tu habites à Lyon.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "city_elliptic",
+      "query": "Et ma ville ?",
+      "expected": "Retrouver Lyon",
+      "passed": true,
+      "actual": "Tu habites à Lyon.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "creator",
+      "query": "Qui est le créateur ?",
+      "expected": "Retrouver Amine",
+      "passed": true,
+      "actual": "Ton prénom est amine.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "reply_preference",
+      "query": "Quel type de réponses je préfère ?",
+      "expected": "Retrouver la préférence de réponses courtes",
+      "passed": true,
+      "actual": "D’après ce que tu m’as confié : Tu préfères les réponses courtes.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "description_imperative",
+      "query": "Décris la salutation",
+      "expected": "Utiliser la note Salutation",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "description_infinitive",
+      "query": "décrire la salutation",
+      "expected": "Utiliser la note Salutation, cas de la capture",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "definition_verb",
+      "query": "Définis la salutation",
+      "expected": "Utiliser la note Salutation",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "explain",
+      "query": "Explique la salutation",
+      "expected": "Utiliser la note Salutation",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "polite_explain",
+      "query": "Peux-tu m’expliquer la salutation",
+      "expected": "Utiliser la note Salutation",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "politeness",
+      "query": "C’est quoi la politesse ?",
+      "expected": "Utiliser la note Politesse",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : La politesse est un ensemble de règles de respect dans les relations sociales.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "full_read",
+      "query": "Lis la note Salutation",
+      "expected": "Lire exactement le contenu de Salutation",
+      "passed": true,
+      "actual": "Je lis ta note « Salutation », non vérifiée :\nUne salutation est une manière de manifester de la politesse envers une personne rencontrée. Bonjour, bonsoir et salut sont des formules de salutation.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "recall_topic",
+      "query": "Qu’ai-je noté sur la salutation ?",
+      "expected": "Rappeler les notes pertinentes",
+      "passed": true,
+      "actual": "Dans tes notes locales, non vérifiées :\n• Une salutation est une manière de manifester de la politesse envers une personne rencontrée. Bonjour, bonsoir et salut sont des formules de salutation.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "read_politeness",
+      "query": "Lis la note Politesse",
+      "expected": "Lire exactement la note Politesse",
+      "passed": true,
+      "actual": "Je lis ta note « Politesse », non vérifiée :\nLa politesse est un ensemble de règles de respect dans les relations sociales. Dire bonjour et remercier sont des marques de politesse.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "bare_note_title",
+      "query": "La note Salutation",
+      "expected": "Comprendre une demande de note ou demander quelle action effectuer",
+      "passed": true,
+      "actual": "D’après la source enregistrée, non vérifiée : Une salutation est une manière de manifester de la politesse envers une personne rencontrée.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "misheard_note_title",
+      "query": "la note solution",
+      "expected": "Demander une précision sur la note, sans deviner Salutation",
+      "passed": true,
+      "actual": "Je ne retrouve pas exactement cette note. Précise le titre de la note ; je peux proposer « Salutation », « Politesse ».",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "missing_note",
+      "query": "Lis la note Astronomie",
+      "expected": "Indiquer qu’aucune note pertinente n’est disponible",
+      "passed": true,
+      "actual": "Je ne retrouve pas de note non sensible à lire sur ce sujet. Précise le sujet ou consulte « Mes notes ».",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "practical_with_notes",
+      "query": "Que répondre à bonjour ?",
+      "expected": "Donner une formule de réponse pratique, même avec des notes",
+      "passed": true,
+      "actual": "Tu peux répondre « Bonjour ! Comment vas-tu ? ». Dans un échange professionnel, « Bonjour, comment puis-je vous aider ? » convient aussi.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "practical_without_notes",
+      "query": "Que répondre à bonjour ?",
+      "expected": "Donner une formule pratique sans note",
+      "passed": true,
+      "actual": "Tu peux répondre « Bonjour ! Comment vas-tu ? ». Dans un échange professionnel, « Bonjour, comment puis-je vous aider ? » convient aussi.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 0,
+        "notesAfter": 0,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "no_invented_preference",
+      "query": "Quelle est ma couleur préférée ?",
+      "expected": "Admettre l’absence de cette information",
+      "passed": true,
+      "actual": "Je ne retrouve pas cette information dans tes notes utilisables ici. Tu peux me la préciser ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "no_relative_confusion",
+      "query": "Quel est le prénom de ma fille ?",
+      "expected": "Ne pas utiliser Amine comme prénom de la fille",
+      "passed": true,
+      "actual": "Je ne retrouve pas cette information dans tes notes utilisables ici. Tu peux me la préciser ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "no_invented_reason",
+      "query": "Pourquoi est-ce que je vis à Lyon ?",
+      "expected": "Admettre que la raison n’est pas précisée",
+      "passed": true,
+      "actual": "Tes notes ne précisent pas cette raison. Tu peux me l’expliquer ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "compound_facts",
+      "query": "Quel est mon prénom et mon métier ?",
+      "expected": "Combiner Amine et technicien informatique",
+      "passed": true,
+      "actual": "D’après ce que tu m’as confié : Tu t’appelles Amine.\nD’après ce que tu m’as confié : Tu travailles comme technicien informatique.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 7,
+        "notesAfter": 7,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "conflicting_names",
+      "query": "Quel est mon prénom ?",
+      "expected": "Demander clarification entre deux prénoms contradictoires",
+      "passed": true,
+      "actual": "Plusieurs valeurs de prénom sont enregistrées : « Karim », « amine », « Amine ». Laquelle est à jour ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 7,
+        "notesAfter": 7,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "internal_memory_definition",
+      "query": "Qu’est-ce que ta mémoire interne ?",
+      "expected": "Expliquer localement la mémoire de Nexus",
+      "passed": true,
+      "actual": "Ma mémoire interne est ma bibliothèque locale chiffrée : tes notes, leurs sources et leurs anciennes versions. Je consolide les informations enregistrées en un index et je vérifie des questions de rappel pour mieux les retrouver. Je garde les contradictions et les incertitudes visibles. Le contexte de conversation est temporaire. Cet apprentissage local ne réentraîne pas un modèle de langage ; Internet reste une source optionnelle. Sans code utilisateur, seuls ton prénom et ta ville sont accessibles parmi tes informations personnelles.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "memory_statistics",
+      "query": "État de ta mémoire",
+      "expected": "Compter les six notes et décrire l’occupation locale",
+      "passed": true,
+      "actual": "Ma mémoire contient 6 notes. Elle occupe 1 kilo-octets. La compression économise 59 pour cent avant chiffrement.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {
+        "notesBefore": 6,
+        "notesAfter": 6,
+        "networkCalls": 0
+      }
+    },
+    {
+      "id": "save_requires_approval",
+      "query": "Retiens que je préfère le thé vert",
+      "expected": "Proposer, sans enregistrer immédiatement",
+      "passed": true,
+      "actual": "Je peux retenir : « Le créateur préfère le thé vert. ». Tu confirmes son enregistrement local ?",
+      "notesAvailable": true,
+      "candidate": "Le créateur préfère le thé vert.",
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {}
+    },
+    {
+      "id": "save_after_yes",
+      "query": "oui",
+      "expected": "Enregistrer exactement une note après accord",
+      "passed": true,
+      "actual": "Note enregistrée localement (non vérifiée).",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {}
+    },
+    {
+      "id": "recall_after_restart",
+      "query": "Quelle boisson je préfère ?",
+      "expected": "Retrouver le thé vert après recréation du moteur",
+      "passed": true,
+      "actual": "D’après ce que tu m’as confié : Tu préfères le thé vert.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {}
+    },
+    {
+      "id": "expired_consent",
+      "query": "oui après expiration",
+      "expected": "Ne pas enregistrer un ancien accord",
+      "passed": true,
+      "actual": "Je n’ai aucune recherche ou information en attente de confirmation. Que veux-tu savoir ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {}
+    },
+    {
+      "id": "web_scope",
+      "query": "cherche sur Internet les réponses de salutations",
+      "expected": "Préparer Chrome sans appeler Wikipédia",
+      "passed": true,
+      "actual": "Je lance une recherche Web dans le navigateur sur « les réponses de salutations ». Les résultats s’affichent dans le navigateur.",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": "CHROME",
+      "externalQuery": "les réponses de salutations",
+      "hasBodyPlan": false,
+      "details": {}
+    },
+    {
+      "id": "corrupted_search",
+      "query": "cher sur interdit que répondre bonjour",
+      "expected": "Demander confirmation sans ouvrir de recherche",
+      "passed": true,
+      "actual": "J’ai peut-être mal compris le début. Veux-tu lancer une recherche Web sur « que répondre bonjour » ?",
+      "notesAvailable": true,
+      "candidate": null,
+      "external": null,
+      "externalQuery": null,
+      "hasBodyPlan": false,
+      "details": {}
+    }
+  ]
+}

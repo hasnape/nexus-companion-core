@@ -304,6 +304,7 @@ open class MainActivity : Activity() {
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
         bindButton(R.id.home_learning) { showLearning() }
+        bindButton(R.id.home_brain_backup) { startActivity(Intent(this, BrainBackupActivity::class.java)) }
         bindButton(R.id.home_local_model) { startActivity(Intent(this, LocalModelActivity::class.java)) }
         bindButton(R.id.home_voice_diagnostic) { startActivity(Intent(this, VoiceDiagnosticActivity::class.java)) }
         bindButton(R.id.home_voice_settings) { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
@@ -539,7 +540,8 @@ open class MainActivity : Activity() {
             showAnswer(text, reply.source)
             if (reply.evidenceSources.isNotEmpty() || reply.generatedLocally) {
                 findViewById<TextView>(R.id.home_answer_source).apply {
-                    this.text = if (reply.generatedLocally) "Réponse du modèle local · à vérifier" else
+                    this.text = if (reply.generatedLocally && reply.evidenceSources.isNotEmpty()) "Modèle local · notes utilisées : " + reply.evidenceSources.joinToString(", ") { it.title }
+                        else if (reply.generatedLocally) "Réponse du modèle local · à vérifier" else
                         "Notes utilisées : " + reply.evidenceSources.joinToString(", ") { it.title }
                     visibility = View.VISIBLE
                 }

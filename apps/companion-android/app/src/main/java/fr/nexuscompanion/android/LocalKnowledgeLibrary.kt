@@ -30,6 +30,7 @@ internal class LocalKnowledgeLibrary(
 
     private val safeId = requireNotNull(companionId.takeIf { it.matches(Regex("[a-zA-Z0-9_-]{1,64}")) })
     private val store = AtomicFile(File(context.filesDir, "knowledge-$safeId.json"))
+    private val rescue = AtomicFile(File(context.noBackupFilesDir, "knowledge-rescue-$safeId.bin"))
     private val maxEntries = NativeCapacity.MAX_LIBRARY_ENTRIES
     private data class Snapshot(val encrypted: ByteArray, val entries: List<Entry>, val jsonBytes: Int, val payloadBytes: Int,
         var searchIndex: KnowledgeSearchIndex? = null)
@@ -93,13 +94,34 @@ internal class LocalKnowledgeLibrary(
             }
             bytes
         }
-        val root = JSONObject(String(plaintext, StandardCharsets.UTF_8))
+        val parsed = parseEntries(plaintext)
+        if (legacyPlaintext) writeEncrypted(bytes, parsed)
+        else snapshot = Snapshot(bytes, parsed.toList(), plaintext.size, payloadBytes)
+        return parsed
+    }
+
+    private fun parseEntries(plaintext: ByteArray, portable: Boolean = false): List<Entry> {
+        require(plaintext.size <= KnowledgePayload.MAX_JSON_BYTES)
+        val decoded = StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(plaintext)).toString()
+        val parser = org.json.JSONTokener(decoded)
+        val root = parser.nextValue() as? JSONObject ?: error("Invalid library object")
+        require(parser.nextClean() == '\u0000')
         val schema = root.optInt("schema")
         require(schema in 1..2) { "Unknown library schema" }
+        if (portable) require(root.keys().asSequence().toSet() == setOf("schema", "entries") && root.get("schema") is Int)
         val entries = root.getJSONArray("entries")
         require(entries.length() <= NativeCapacity.MAX_LIBRARY_RECORDS) { "Invalid library capacity" }
         val parsed = (0 until entries.length()).map { i ->
             val item = entries.getJSONObject(i)
+            if (portable) {
+                val allowed = setOf("id", "title", "excerpt", "source", "recordedAt", "expiresAt", "verified", "supersededBy", "manuallyEdited")
+                require(item.keys().asSequence().all { it in allowed })
+                require(listOf("id", "title", "excerpt", "source").all { item.get(it) is String })
+                require(item.get("recordedAt") is Int || item.get("recordedAt") is Long)
+                require(item.isNull("expiresAt") || item.get("expiresAt") is Int || item.get("expiresAt") is Long)
+                require(item.get("verified") is Boolean)
+            }
             Entry(
                 id = item.getString("id"),
                 title = item.getString("title"),
@@ -121,8 +143,10 @@ internal class LocalKnowledgeLibrary(
             it.source.isNotBlank() && it.source.length <= 512 }) { "Invalid library entry" }
         require(schema == 2 || parsed.none { it.supersededBy != null || it.manuallyEdited }) { "Version history requires schema 2" }
         validateVersions(parsed)
-        if (legacyPlaintext) writeEncrypted(bytes, parsed)
-        else snapshot = Snapshot(bytes, parsed.toList(), plaintext.size, payloadBytes)
+        if (portable) {
+            val limit = 9_007_199_254_740_991L
+            require(parsed.all { !it.verified && it.recordedAt in 0..limit && (it.expiresAt == null || it.expiresAt in 0..limit) }) { "Unsupported portable metadata" }
+        }
         return parsed
     }
 
@@ -238,8 +262,12 @@ internal class LocalKnowledgeLibrary(
         return (if (conversational) index.rankForConversation(tokens, now) else index.rank(tokens)).filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
     }
 
-    private fun save(entries: List<Entry>) {
+    private fun save(entries: List<Entry>, authorize: () -> Unit = {}) {
         if (entries.size > NativeCapacity.MAX_LIBRARY_RECORDS || entries.count { it.supersededBy == null } > maxEntries) throw KnowledgeCapacityReached()
+        writeEncrypted(serializeEntries(entries), entries, authorize)
+    }
+
+    private fun serializeEntries(entries: List<Entry>): ByteArray {
         val array = JSONArray()
         entries.forEach { entry ->
             array.put(JSONObject().apply {
@@ -258,7 +286,59 @@ internal class LocalKnowledgeLibrary(
         val bytes = JSONObject().put("schema", schema).put("entries", array)
             .toString().toByteArray(StandardCharsets.UTF_8)
         if (bytes.size > KnowledgePayload.MAX_JSON_BYTES) throw KnowledgeCapacityReached()
-        writeEncrypted(bytes, entries)
+        return bytes
+    }
+
+    data class PortableSummary(val activeNotes: Int, val archivedNotes: Int)
+    fun portableSnapshot(): ByteArray = synchronized(storeLock) { serializeEntries(readEntries()) }
+    fun portableFingerprint(): String = synchronized(storeLock) { fingerprint(serializeEntries(readEntries())) }
+    fun inspectPortable(data: ByteArray): PortableSummary = synchronized(storeLock) {
+        val entries = parseEntries(data, true)
+        PortableSummary(entries.count { it.supersededBy == null }, entries.count { it.supersededBy != null })
+    }
+    private fun fingerprint(data: ByteArray) = java.security.MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it.toInt() and 255) }
+    private fun rescueBytes(): ByteArray? = try { rescue.openRead().use { KnowledgePayload.readBounded(it, MAX_ENCRYPTED_BYTES + 160) } }
+        catch (_: java.io.FileNotFoundException) { null }
+    private fun writeAtomic(file: AtomicFile, bytes: ByteArray) {
+        file.baseFile.parentFile?.mkdirs()
+        val stream = file.startWrite()
+        try { stream.write(bytes); file.finishWrite(stream) }
+        catch (failure: Exception) { file.failWrite(stream); throw failure }
+    }
+    /** Preserve a device-encrypted undo point before the atomic library commit. */
+    fun restorePortable(data: ByteArray, expectedFingerprint: String, authorize: () -> Unit = {}) = synchronized(storeLock) {
+        val parsed = parseEntries(data, true)
+        val previous = readEntries()
+        if (fingerprint(serializeEntries(previous)) != expectedFingerprint) throw KnowledgeChanged()
+        val oldEncrypted = snapshot?.encrypted ?: cipher.encrypt(KnowledgePayload.encode(serializeEntries(previous)))
+        val after = fingerprint(serializeEntries(parsed)).toByteArray(Charsets.US_ASCII)
+        val journal = cipher.encrypt(byteArrayOf(78, 88, 82, 1) + after + oldEncrypted)
+        val previousRescue = rescueBytes()
+        authorize()
+        writeAtomic(rescue, journal)
+        try { save(parsed, authorize) }
+        catch (failure: Exception) {
+            if (previousRescue == null) rescue.delete() else writeAtomic(rescue, previousRescue)
+            throw failure
+        }
+    }
+    private fun recovery(): Pair<String, List<Entry>>? {
+        val bytes = rescueBytes() ?: return null
+        val decoded = cipher.decrypt(bytes)
+        require(decoded.size >= 68 && decoded.copyOfRange(0, 4).contentEquals(byteArrayOf(78, 88, 82, 1)))
+        val expected = String(decoded.copyOfRange(4, 68), Charsets.US_ASCII)
+        require(expected.matches(Regex("[a-f0-9]{64}")))
+        val old = KnowledgePayload.decode(cipher.decrypt(decoded.copyOfRange(68, decoded.size)))
+        return expected to parseEntries(old)
+    }
+    fun canUndoRestore(): Boolean = synchronized(storeLock) {
+        try { recovery()?.first == fingerprint(serializeEntries(readEntries())) } catch (_: Exception) { false }
+    }
+    fun undoRestore(authorize: () -> Unit = {}) = synchronized(storeLock) {
+        val (expected, previous) = recovery() ?: throw KnowledgeChanged()
+        if (expected != fingerprint(serializeEntries(readEntries()))) throw KnowledgeChanged()
+        save(previous, authorize)
+        rescue.delete()
     }
 
     /** History is a set of independent, finite, non-branching version chains. */
@@ -281,9 +361,10 @@ internal class LocalKnowledgeLibrary(
         }
     }
 
-    private fun writeEncrypted(plaintext: ByteArray, entries: List<Entry>) {
+    private fun writeEncrypted(plaintext: ByteArray, entries: List<Entry>, authorize: () -> Unit = {}) {
         val packed = KnowledgePayload.encode(plaintext)
         val encrypted = cipher.encrypt(packed)
+        authorize()
         val stream = store.startWrite()
         try {
             stream.write(encrypted)

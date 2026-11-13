@@ -9,12 +9,16 @@ import java.io.InputStream
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 
-/** Only the core's public-knowledge fallback can create a draft. No notes or tools cross JNI. */
-internal data class LocalDraftRequest(val question: String, val topic: String) {
-    init { require(question.isNotBlank() && question.length <= 600 && topic.isNotBlank() && topic.length <= 180) }
+/** The core authorizes the public question or a small set of current note excerpts. */
+internal data class LocalDraftRequest(val question: String, val topic: String, val evidence: List<LocalDraftEvidence> = emptyList()) {
+    init {
+        require(question.isNotBlank() && question.length <= 600 && GroundedNotes.safeText(question) && topic.isNotBlank() && topic.length <= 180)
+        require(evidence.size <= 2 && evidence.map { it.key }.distinct().size == evidence.size && evidence.sumOf { it.sentences.sumOf(String::length) } <= 840)
+    }
 }
 
 internal interface LocalDraftGenerator : AutoCloseable {
+    val usesNotes: Boolean get() = false
     fun generate(request: LocalDraftRequest): String?
     fun cancel()
 }
@@ -38,6 +42,9 @@ internal class LocalModelStore(context: Context, private val availableBytes: () 
     var enabled: Boolean
         get() = preferences.getBoolean("enabled", false)
         set(value) { preferences.edit().putBoolean("enabled", value).apply() }
+    var notesEnabled: Boolean
+        get() = preferences.getBoolean("notes_enabled", false)
+        set(value) { preferences.edit().putBoolean("notes_enabled", value).apply() }
 
     @Synchronized fun installed(): Boolean = try {
         val metadata = JSONObject(stamp.readText())
@@ -73,13 +80,14 @@ internal class LocalModelStore(context: Context, private val availableBytes: () 
             stamp.writeText(JSONObject().put("sha256", LocalModelSpec.SHA256).put("bytes", size).put("modified", file.lastModified()).toString())
         } finally { temporary.delete() }
     }
-    @Synchronized fun delete() { enabled = false; stamp.delete(); file.delete() }
+    @Synchronized fun delete() { enabled = false; notesEnabled = false; stamp.delete(); file.delete() }
 }
 
 internal object NativeLocalLlm {
     val available: Boolean = try { System.loadLibrary("nexus_llm"); true } catch (_: LinkageError) { false }
     external fun create(): Long
     external fun generate(handle: Long, model: String, question: String, threads: Int, timeoutMs: Int): String
+    external fun generateGrounded(handle: Long, model: String, question: String, evidence: String, threads: Int, timeoutMs: Int): String
     external fun cancel(handle: Long)
     external fun release(handle: Long)
 }
@@ -108,20 +116,23 @@ internal class LocalTextGenerator(
     private val store: LocalModelStore = LocalModelStore(context),
     private val resources: () -> DeviceResources.Snapshot = { DeviceResources.inspect(context) }
 ) : LocalDraftGenerator {
+    override val usesNotes: Boolean get() = store.enabled && store.notesEnabled
     private val epoch = AtomicLong()
     private val active = AtomicLong()
     @Volatile private var closed = false
     override fun generate(request: LocalDraftRequest): String? {
         val token = epoch.get()
-        if (closed || !android.os.Process.is64Bit() || !store.enabled || !store.installed() || !LocalDraftPolicy.permitted(resources()) || !NativeLocalLlm.available) return null
+        if (closed || !android.os.Process.is64Bit() || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled) || !store.installed() || !LocalDraftPolicy.permitted(resources()) || !NativeLocalLlm.available) return null
         val handle = try { NativeLocalLlm.create() } catch (_: LinkageError) { return null }
         if (handle == 0L) return null
         active.set(handle)
         return try {
             if (closed || epoch.get() != token) return null
-            val raw = NativeLocalLlm.generate(handle, store.file.absolutePath, request.question,
-                Runtime.getRuntime().availableProcessors().coerceIn(1, 4), 20_000)
-            if (closed || epoch.get() != token) null else LocalDraftPolicy.clean(raw)
+            val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+            val raw = if (request.evidence.isEmpty()) NativeLocalLlm.generate(handle, store.file.absolutePath, request.question, threads, 20_000)
+                else NativeLocalLlm.generateGrounded(handle, store.file.absolutePath, request.question, GroundedNotes.prompt(request.evidence), threads, 20_000)
+            if (closed || epoch.get() != token || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled)) null
+                else if (request.evidence.isEmpty()) LocalDraftPolicy.clean(raw) else raw.takeIf { GroundedNotes.validate(it, request.evidence) != null }
         } catch (_: Exception) { null } catch (_: LinkageError) { null }
         finally { active.compareAndSet(handle, 0); NativeLocalLlm.release(handle) }
     }

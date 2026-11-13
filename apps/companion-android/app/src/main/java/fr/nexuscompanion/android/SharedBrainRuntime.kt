@@ -9,8 +9,8 @@ import org.mozilla.javascript.ScriptableObject
 /** Only the packaged, trusted bundle is evaluated. Requests are function arguments, never code. */
 internal class SharedBrainRuntime(
     private val source: String,
-    private val instructionLimit: Long = NativeCapacity.BRAIN_INSTRUCTIONS.toLong(),
-    private val timeLimitMs: Long = NativeCapacity.BRAIN_TIME_MS.toLong()
+    private var instructionLimit: Long = NativeCapacity.BRAIN_INSTRUCTIONS.toLong(),
+    private var timeLimitMs: Long = NativeCapacity.BRAIN_TIME_MS.toLong()
 ) : AutoCloseable {
     companion object { const val MAX_REQUEST_CHARS = NativeCapacity.MAX_REQUEST_CHARS }
     private var scope: Scriptable? = null
@@ -37,6 +37,11 @@ internal class SharedBrainRuntime(
     fun replyJson(request: String): String = call("handleNativeTurnJson", request)
     fun retrievalJson(message: String): String = call("handleNativeRetrievalJson", message)
     fun bodyJson(request: String): String = call("handleNativeBodyJson", request)
+    fun learningJson(request: String): String = call("handleNativeLearningJson", request)
+    @Synchronized fun configure(budget: DeviceResources.Budget) {
+        instructionLimit = budget.instructions.coerceIn(1, NativeCapacity.BRAIN_INSTRUCTIONS.toLong())
+        timeLimitMs = budget.brainMs.coerceIn(1, NativeCapacity.BRAIN_TIME_MS.toLong())
+    }
 
     @Synchronized
     private fun call(functionName: String, request: String): String {

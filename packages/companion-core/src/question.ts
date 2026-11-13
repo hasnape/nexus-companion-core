@@ -11,6 +11,7 @@ export const isExplicitMemoryRequest = (message: string): boolean => /^(?:retien
 
 const personalFollowUps = new Map<string, string>(Object.entries({
   'mon prenom': 'Quel est mon prénom ?', 'mon nom': 'Quel est mon nom ?',
+  'ma ville': 'Quelle est ma ville ?',
   'mon metier': 'Quel est mon métier ?', 'ma profession': 'Quelle est ma profession ?',
   'mon age': 'Quel est mon âge ?', 'ma voiture': 'Quelle est ma voiture ?',
   'ma couleur preferee': 'Quelle est ma couleur préférée ?',

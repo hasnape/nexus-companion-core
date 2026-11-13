@@ -63,7 +63,7 @@ class LocalKnowledgeLibraryTest {
     @Test fun enlargedConversationalSelectionAndSearchKeepOlderMatchingEvidence() {
         val store = library("context-growth")
         repeat(110) { store.addUserNote("Robot $it", "Le robot contient le module numéro $it.") }
-        assertEquals(32, store.contextFor("robot").size)
+        assertEquals(110, store.contextFor("robot").size)
         assertEquals(100, store.search("robot").size)
         assertEquals(110, store.list().size)
     }

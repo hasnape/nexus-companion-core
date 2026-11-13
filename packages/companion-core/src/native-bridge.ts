@@ -5,13 +5,15 @@ import { isPublicTopic, resolvePublicLookup, type LookupTarget } from './public-
 import { renderPracticalLanguageReply } from './practical-language';
 import { resolveBodyCommand } from '../../shared/src/wheeled-body';
 import { decideCompanionResponse } from './decision';
-import { isSensitiveMemoryContent, normalizeMemoryCandidateContent, normalizeMemoryContentKey, shouldRequireLocationConfirmation } from './memory';
+import { isSensitiveMemoryContent, normalizeMemoryCandidateContent, normalizeMemoryContentKey } from './memory';
 import { createDefaultCompanionProfile } from './profile';
 import { createResponsePlan, renderDeterministicNexusReply, renderLocalSmallTalk, shouldUseSafetyTone } from './response';
 import { renderLocalSupportReply } from './support-knowledge';
 import { normalizeWakePhrase, stripWakePrefix } from './wake';
 import type { CompanionMemoryItem, ResponseIntent } from './types';
 import capacity from './native-capacity.json';
+import { answerPublicPersonal, asksForPrivateInformation, containsCredential, isPrivateMemory, publicProjection, USER_CODE_REQUIRED } from './memory-access';
+import { consolidateNote } from './local-learning';
 
 /** Versioned, data-only bridge for native hosts. It never reads or writes storage. */
 export interface NativeNote {
@@ -36,6 +38,7 @@ export interface NativeTurnRequest {
   readRequested?: boolean;
   publicContextTopic?: string;
   awaitingLookupTarget?: LookupTarget;
+  privateAccessGranted?: boolean;
 }
 
 export interface NativeTurnReply {
@@ -51,6 +54,7 @@ export interface NativeTurnReply {
   lookupNeedsTopic?: LookupTarget;
   publicContextTopic?: string;
   evidenceIds?: string[];
+  requiresUserCode?: boolean;
 }
 
 const MAX_INPUT_CHARS = capacity.MAX_REQUEST_CHARS;
@@ -66,6 +70,7 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
       || !Number.isSafeInteger(value.now) || (value.now as number) < 0
       || (value.recallRequested !== undefined && typeof value.recallRequested !== 'boolean')
       || (value.readRequested !== undefined && typeof value.readRequested !== 'boolean')
+      || (value.privateAccessGranted !== undefined && typeof value.privateAccessGranted !== 'boolean')
       || (value.readRequested === true && value.recallRequested === false)
       || (value.publicContextTopic !== undefined && (typeof value.publicContextTopic !== 'string' || !isPublicTopic(value.publicContextTopic)))
       || (value.awaitingLookupTarget !== undefined && !['web', 'wikipedia'].includes(value.awaitingLookupTarget as string))
@@ -87,6 +92,7 @@ const validateRequest = (value: unknown): NativeTurnRequest => {
   return {
     protocolVersion: 1, message: value.message.trim(), notes, now: value.now as number,
     recallRequested: value.recallRequested, readRequested: value.readRequested,
+    privateAccessGranted: value.privateAccessGranted === true,
     publicContextTopic: value.publicContextTopic as string | undefined, awaitingLookupTarget: value.awaitingLookupTarget as LookupTarget | undefined
   };
 };
@@ -99,11 +105,12 @@ const isRecallRequest = (message: string): boolean => {
 
 export const createNativeTurn = (input: unknown): NativeTurnReply => {
   const request = validateRequest(input);
-  const notes = request.notes.filter((note) => (
-    (note.expiresAt === null || note.expiresAt > request.now)
-    && !isSensitiveMemoryContent(`${note.title} ${note.excerpt}`)
-    && !shouldRequireLocationConfirmation(note.excerpt)
-  ));
+  const active = request.notes.filter((note) => (note.expiresAt === null || note.expiresAt > request.now)
+    && !containsCredential(`${note.title} ${note.excerpt}`));
+  const notes = request.privateAccessGranted ? active : active.flatMap((note) => {
+    const projected = publicProjection(note);
+    return projected ? [projected] : [];
+  });
   const memories: CompanionMemoryItem[] = notes.map((note) => ({
     id: note.id, type: 'conversation_summary', content: note.excerpt, source: 'manual',
     confidence: 0.5, importance: 0.5, createdAt: note.recordedAt, updatedAt: note.recordedAt,
@@ -126,6 +133,17 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   if (shouldUseSafetyTone(decision)) {
     return { ...result, publicContextTopic: undefined, text: renderDeterministicNexusReply(plan) };
   }
+  if (!request.privateAccessGranted && (asksForPrivateInformation(request.message)
+      || ((request.readRequested || request.recallRequested) && active.some(isPrivateMemory)))) {
+    return { ...result, text: USER_CODE_REQUIRED, requiresUserCode: true, publicContextTopic: undefined };
+  }
+  const words = normalizeWakePhrase(stripWakePrefix(request.message, { allowFullNameWake: true }));
+  if (/^(?:qu est ce que|c est quoi|definis|explique|decris) (?:ta |la |ton )?(?:memoire (?:interne|locale)|apprentissage|entrainement)$/.test(words)
+      || /^(?:comment (?:tu apprends|apprends tu)|comment fonctionne ta memoire)$/.test(words)) {
+    return { ...result, text: 'Ma mémoire interne est ma bibliothèque locale chiffrée : tes notes, leurs sources et leurs anciennes versions. Je consolide les informations enregistrées en un index et je vérifie des questions de rappel pour mieux les retrouver. Je garde les contradictions et les incertitudes visibles. Le contexte de conversation est temporaire. Cet apprentissage local ne réentraîne pas un modèle de langage ; Internet reste une source optionnelle. Sans code utilisateur, seuls ton prénom et ta ville sont accessibles parmi tes informations personnelles.', publicContextTopic: undefined };
+  }
+  const personal = answerPublicPersonal(request.message, active);
+  if (personal && !request.readRequested && !request.recallRequested) return { ...result, ...personal, publicContextTopic: undefined };
   if (request.readRequested) {
     const selected = notes[0];
     return {
@@ -168,10 +186,14 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
   const smallTalk = renderLocalSmallTalk(request.message);
   if (smallTalk) return { ...result, text: smallTalk };
   if (plan.responseMode === 'supportive') return { ...result, text: renderDeterministicNexusReply(plan) };
-  const grounded = answerFromNotes(request.message, notes);
-  if (grounded) return { ...result, ...grounded };
   const practical = renderPracticalLanguageReply(request.message);
   if (practical) return { ...result, text: practical };
+  const grounded = answerFromNotes(request.message, notes);
+  if (grounded) return { ...result, ...grounded };
+  if (/^(?:la |une |lis (?:la |ma )?|decris (?:la |ma )?|explique (?:la |ma )?)note\b/.test(words)) {
+    const titles = notes.filter((note) => !isPrivateMemory(note)).slice(0, 3).map((note) => `« ${note.title} »`);
+    return { ...result, text: `Je ne retrouve pas exactement cette note. Précise le titre de la note${titles.length ? ` ; je peux proposer ${titles.join(', ')}` : ' ou ouvre « Mes notes »'}.`, publicContextTopic: undefined };
+  }
   if (plan.responseMode === 'normal' || question.question) {
     const support = renderLocalSupportReply(request.message);
     if (support) return { ...result, text: support };
@@ -201,6 +223,14 @@ export const createNativeTurn = (input: unknown): NativeTurnReply => {
 export const handleNativeRetrievalJson = (input: string): string => {
   if (typeof input !== 'string' || input.length > capacity.MAX_MESSAGE_CHARS) throw new Error('Invalid retrieval request');
   return JSON.stringify({ terms: nativeRetrievalTerms(stripWakePrefix(input, { allowFullNameWake: true })) });
+};
+
+/** One bounded source per learning step. No external text is executed or marked verified. */
+export const handleNativeLearningJson = (input: string): string => {
+  if (typeof input !== 'string' || input.length > capacity.MAX_REQUEST_CHARS) throw new Error('Invalid learning request');
+  const request = validateRequest(JSON.parse(input));
+  if (request.notes.length !== 1) throw new Error('One learning source required');
+  return JSON.stringify(consolidateNote(request.notes[0]));
 };
 
 /** User commands only. No note or external article can request a body action. */

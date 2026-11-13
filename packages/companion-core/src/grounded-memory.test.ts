@@ -4,7 +4,7 @@ import { createNativeTurn, handleNativeRetrievalJson, type NativeNote } from './
 const note = (excerpt: string, title = 'Repère', id = 'n1'): NativeNote => ({
   id, title, excerpt, source: 'user:manual', recordedAt: 100, expiresAt: null, verified: false
 });
-const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000 });
+const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000, privateAccessGranted: true });
 
 describe('grounded conversational memory', () => {
   it('does not rewrite complete statements or inherited object property names', () => {
@@ -54,7 +54,7 @@ describe('grounded conversational memory', () => {
   });
 
   it.each([
-    ['Quel est mon prénom ?', 'Le créateur est Amine.', 'Tu es Amine'],
+    ['Quel est mon prénom ?', 'Le créateur est Amine.', 'Ton prénom est Amine'],
     ['Quel est mon métier ?', 'Je travaille comme technicien informatique.', 'Tu travailles comme technicien'],
     ['Quelle boisson je préfère ?', 'Je préfère le thé vert.', 'Tu préfères le thé vert']
   ])('answers ordinary personal questions from saved evidence: %s', (question, evidence, expected) => {

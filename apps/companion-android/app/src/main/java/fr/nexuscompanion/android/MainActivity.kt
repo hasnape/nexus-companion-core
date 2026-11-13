@@ -21,6 +21,7 @@ import android.text.style.URLSpan
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
@@ -108,12 +109,35 @@ open class MainActivity : Activity() {
     private val voicePreferences by lazy { getSharedPreferences("nexus_voice_preferences", MODE_PRIVATE) }
     private val onlinePreferences by lazy { getSharedPreferences("nexus_online_preferences", MODE_PRIVATE) }
     private val audioRequestCode = 410
+    private var privateDisplayed = false
+    private var awaitingUserAccess: (() -> Unit)? = null
+    private var sessionWasOpen = false
+    private val accessTick = object : Runnable {
+        override fun run() {
+            if (!foreground || destroyed) return
+            if (sessionWasOpen && !privateAccessAllowed()) lockPrivateViews()
+            main.postDelayed(this, 1_000)
+        }
+    }
+    private val learningIdle = object : Runnable {
+        override fun run() {
+            if (!foreground || destroyed) return
+            if (!busy && !speaking && dialogDepth == 0 && LocalLearningJobService.enabled(this@MainActivity)) {
+                worker.execute {
+                    if (foreground && LocalLearningJobService.enabled(this@MainActivity)) {
+                        try { brain.consolidate(foreground = true) } catch (_: Exception) { /* Retry later without altering notes. */ }
+                    }
+                }
+            }
+            main.postDelayed(this, 30_000)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         volumeControlStream = AudioManager.STREAM_MUSIC
         library = createKnowledgeLibrary()
-        brain = NativeBrainService(applicationContext, library)
+        brain = NativeBrainService(applicationContext, library, privateAccess = ::privateAccessAllowed)
         autoListenEnabled = voicePreferences.getBoolean("auto_listen_enabled", true)
         val spokenRepliesEnabled = voicePreferences.getBoolean(SPOKEN_REPLIES_KEY, autoListenEnabled)
         if (!voicePreferences.contains(SPOKEN_REPLIES_KEY)) {
@@ -178,6 +202,7 @@ open class MainActivity : Activity() {
 
     internal open fun createVoiceInput(): VoiceInput = defaultVoiceInput(applicationContext)
     internal open fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext)
+    internal open fun privateAccessAllowed(): Boolean = UserAccessSession.allowed()
     internal open fun launchExternalApp(request: ExternalAppPolicy.Request): ExternalAppPolicy.LaunchResult = ExternalAppPolicy.launch(this, request)
 
     private fun buildScreen(spokenRepliesEnabled: Boolean) {
@@ -275,6 +300,9 @@ open class MainActivity : Activity() {
             if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
         bindButton(R.id.home_notes) { showNotes() }
+        bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
+        bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
+        bindButton(R.id.home_learning) { showLearning() }
         bindButton(R.id.home_voice_settings) { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
         findViewById<Switch>(R.id.home_chrome_auto_read).apply {
             isChecked = onlinePreferences.getBoolean(CHROME_READING_KEY, false)
@@ -484,11 +512,19 @@ open class MainActivity : Activity() {
         val axle = if (steeringAtFront) "front" else "rear"
         val generation = bodyGeneration
         var externalFeedback: String? = null
-        fun replyText(reply: NativeBrainService.Reply): String = if (reply.external != null && (!foreground || generation != bodyGeneration)) getString(R.string.external_cancelled)
+        fun replyText(reply: NativeBrainService.Reply): String = if (reply.protectedInformation && (!foreground || !privateAccessAllowed())) "Accès personnel verrouillé. Saisis le code utilisateur pour continuer."
+            else if (reply.external != null && (!foreground || generation != bodyGeneration)) getString(R.string.external_cancelled)
             else if (reply.body != null && generation != bodyGeneration) getString(R.string.body_stopped)
             else if (reply.notesAvailable) reply.text else getString(R.string.reply_with_library_warning, reply.text, getString(R.string.library_read_failed))
         runTask(R.string.thinking, R.string.brain_failed, { brain.reply(message, onlineEnabled, axle) },
             voiceReply = { if (it.external != null) externalFeedback else replyText(it) }, expectAnswer = { it.expectsAnswer }) { reply ->
+            if (reply.requiresUserCode || (reply.protectedInformation && !privateAccessAllowed())) {
+                showAnswer("Le code utilisateur est nécessaire pour consulter ces informations personnelles.")
+                if (foreground) requireUserAccess { respond(message) }
+                return@runTask
+            }
+            if (reply.protectedInformation && !foreground) return@runTask
+            privateDisplayed = reply.protectedInformation
             val text = replyText(reply)
             showAnswer(text, reply.source)
             if (reply.external != null && foreground && generation == bodyGeneration) {
@@ -590,6 +626,7 @@ open class MainActivity : Activity() {
     }
 
     private fun readCopiedText() {
+        if (!privateAccessAllowed()) { requireUserAccess { readCopiedText() }; return }
         if (busy || !foreground) return
         val text = try {
             val clipboard = getSystemService(ClipboardManager::class.java)
@@ -612,12 +649,17 @@ open class MainActivity : Activity() {
         retainButton.visibility = View.GONE
         val generation = bodyGeneration
         runTask(R.string.working, R.string.brain_failed, { brain.readBrowserResult(reading) },
-            voiceReply = { if (foreground && generation == bodyGeneration) it.text else null }, expectAnswer = { true }) { reply ->
+            voiceReply = { if (foreground && generation == bodyGeneration && (!it.protectedInformation || privateAccessAllowed())) it.text else null }, expectAnswer = { true }) { reply ->
+            if (reply.requiresUserCode || (reply.protectedInformation && !privateAccessAllowed())) {
+                if (foreground) requireUserAccess { readBrowserResult(reading) }
+                return@runTask
+            }
             if (foreground && generation == bodyGeneration) {
+                privateDisplayed = reply.protectedInformation
                 showAnswer(reply.text)
-                showBrowserSource(reading)
-                pendingBrowserReading = reading.takeIf { reply.notesAvailable }
-                retainButton.visibility = if (reply.notesAvailable) View.VISIBLE else View.GONE
+                showBrowserSource(reply.browserReading)
+                pendingBrowserReading = reply.browserReading.takeIf { reply.notesAvailable }
+                retainButton.visibility = if (pendingBrowserReading != null) View.VISIBLE else View.GONE
             }
         }
     }
@@ -697,10 +739,12 @@ open class MainActivity : Activity() {
     }
 
     private fun showNotes(page: Int = 0) {
+        if (!privateAccessAllowed()) { requireUserAccess { showNotes(page) }; return }
         val query = input.text.toString().trim()
         runTask(R.string.working, R.string.library_read_failed, {
             if (query.isBlank()) library.list().sortedByDescending { it.recordedAt } else library.search(query)
         }) { notes ->
+            if (!privateAccessAllowed()) return@runTask
             if (notes.isEmpty()) { showAnswer(R.string.library_no_results); return@runTask }
             val start = (page * 50).coerceAtMost(((notes.size - 1) / 50) * 50)
             val shown = notes.drop(start).take(50)
@@ -717,6 +761,7 @@ open class MainActivity : Activity() {
     }
 
     private fun showNote(note: LocalKnowledgeLibrary.Entry) {
+        if (!privateAccessAllowed()) { requireUserAccess { showNote(note) }; return }
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = (20 * resources.displayMetrics.density).toInt()
@@ -747,6 +792,7 @@ open class MainActivity : Activity() {
     }
 
     private fun editNote(note: LocalKnowledgeLibrary.Entry) {
+        if (!privateAccessAllowed()) { requireUserAccess { editNote(note) }; return }
         val fields = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val pad = (20 * resources.displayMetrics.density).toInt()
@@ -775,7 +821,9 @@ open class MainActivity : Activity() {
     }
 
     private fun showHistory(current: LocalKnowledgeLibrary.Entry) {
+        if (!privateAccessAllowed()) { requireUserAccess { showHistory(current) }; return }
         runTask(R.string.working, R.string.library_read_failed, { library.history(current.id) }) { versions ->
+            if (!privateAccessAllowed()) return@runTask
             if (versions.isEmpty()) { showAnswer(R.string.note_history_empty); return@runTask }
             if (foreground) showDialog(AlertDialog.Builder(this).setTitle(R.string.note_history)
                 .setItems(versions.map { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it.recordedAt)) }.toTypedArray()) { _, index ->
@@ -800,6 +848,7 @@ open class MainActivity : Activity() {
 
     /** Notes can contain private text: keep the microphone off while any dialog is visible. */
     private fun showDialog(dialog: AlertDialog) {
+        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (dialogDepth == 0) {
             stopBody()
             worker.execute { brain.clearConversation() }
@@ -819,6 +868,82 @@ open class MainActivity : Activity() {
         dialog.show()
     }
 
+    @Suppress("DEPRECATION")
+    private fun requireUserAccess(action: () -> Unit) {
+        if (!foreground || destroyed) return
+        if (privateAccessAllowed()) {
+            sessionWasOpen = true
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            action(); return
+        }
+        if (awaitingUserAccess != null) return
+        awaitingUserAccess = action
+        controller.stop()
+        startActivityForResult(Intent(this, UserCodeActivity::class.java), 423)
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 423) {
+            val action = awaitingUserAccess; awaitingUserAccess = null
+            if (resultCode == RESULT_OK && privateAccessAllowed()) main.post {
+                if (foreground && !destroyed && privateAccessAllowed()) requireUserAccess { action?.invoke() }
+            }
+        }
+    }
+
+    private fun lockPrivateViews() {
+        val wasPrivate = sessionWasOpen || privateDisplayed
+        sessionWasOpen = false
+        if (wasPrivate) {
+            dialogs.toList().forEach { it.dismiss() }
+            if (::controller.isInitialized) controller.stop()
+            if (::answer.isInitialized) {
+                showAnswer("Accès personnel verrouillé.")
+                transcript.text = ""; transcript.visibility = View.GONE; input.setText("")
+                pendingCandidate = null; pendingBrowserReading = null; retainButton.visibility = View.GONE
+            }
+            privateDisplayed = false
+            if (::brain.isInitialized && !destroyed) worker.execute { brain.clearConversation() }
+        }
+        // Keep protected content out of overview snapshots even while the app is paused.
+        if (foreground) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (wasPrivate && foreground && autoListenEnabled && dialogDepth == 0) main.post {
+            if (foreground && !destroyed && !voiceActive && dialogDepth == 0) activateVoice()
+        }
+    }
+
+    private fun showLearning() {
+        runTask(R.string.working, R.string.operation_failed, {
+            val device = DeviceResources.inspect(applicationContext)
+            DeviceResources.describe(device, DeviceResources.budget(device)) to brain.learningStatistics()
+        }) { (description, stats) ->
+            if (!foreground) return@runTask
+            val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(36, 20, 36, 12) }
+            panel.addView(TextView(this).apply {
+                textSize = 16f
+                text = getString(R.string.learning_description, description, stats.consolidated, stats.remaining, stats.passed, stats.exercises)
+            })
+            panel.addView(Switch(this).apply {
+                setText(R.string.learning_automatic); minHeight = 48
+                isChecked = LocalLearningJobService.enabled(this@MainActivity)
+                setOnCheckedChangeListener { _, enabled ->
+                    getSharedPreferences("nexus_learning_preferences", MODE_PRIVATE).edit()
+                        .putBoolean("local_consolidation_enabled", enabled).apply()
+                    LocalLearningJobService.schedule(this@MainActivity)
+                }
+            })
+            showDialog(AlertDialog.Builder(this).setTitle("Matériel et apprentissage")
+                .setView(ScrollView(this).apply { addView(panel) }).setNegativeButton(R.string.close, null)
+                .setPositiveButton("Consolider maintenant") { _, _ ->
+                    runTask(R.string.working, R.string.operation_failed, { brain.consolidate(foreground = true) }) {
+                        showAnswer("${it.consolidated} notes consolidées ; ${it.remaining} à traiter. Les travaux automatiques continuent au repos et pendant la charge, selon les ressources disponibles.")
+                    }
+                }.create())
+        }
+    }
+
     private fun toggleVoice() {
         if (voiceActive) {
             stopBody()
@@ -836,6 +961,11 @@ open class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         foreground = true
+        sessionWasOpen = privateAccessAllowed()
+        if (sessionWasOpen) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        main.removeCallbacks(accessTick); accessTick.run()
+        main.removeCallbacks(learningIdle); main.postDelayed(learningIdle, 5_000)
+        LocalLearningJobService.schedule(this)
         bodyTick.run()
         val wasReading = ChromeAiReaderService.session.pending() != null
         val chromeResult = ChromeAiReaderService.session.consume()
@@ -880,6 +1010,9 @@ open class MainActivity : Activity() {
 
     override fun onPause() {
         foreground = false
+        main.removeCallbacks(accessTick); main.removeCallbacks(learningIdle)
+        UserAccessSession.lock()
+        lockPrivateViews()
         pendingBrowserReading = null
         stopBody()
         if (::controller.isInitialized) controller.stop()
@@ -890,6 +1023,8 @@ open class MainActivity : Activity() {
     override fun onDestroy() {
         if (isFinishing) ChromeAiReaderService.cancelReading()
         destroyed = true
+        awaitingUserAccess = null
+        main.removeCallbacks(accessTick); main.removeCallbacks(learningIdle)
         stopBody()
         foreground = false
         unregisterFaceBack?.invoke()

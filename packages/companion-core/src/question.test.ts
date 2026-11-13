@@ -3,7 +3,7 @@ import { analyzeQuestion } from './question';
 import { createNativeTurn, type NativeNote } from './native-bridge';
 
 const note = (excerpt: string, title = 'Repère', id = 'n1'): NativeNote => ({ id, title, excerpt, source: 'user:manual', recordedAt: 100, expiresAt: null, verified: false });
-const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000 });
+const turn = (message: string, notes: NativeNote[] = []) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000, privateAccessGranted: true });
 
 describe('spoken questions and grounded answers', () => {
   it.each(['Peux-tu me dire mon prénom', 'Tu peux me dire mon prénom', 'Pourrais-tu me dire mon prénom', 'Dis-moi mon prénom'])('uses the saved name without learning the question: %s', (message) => {

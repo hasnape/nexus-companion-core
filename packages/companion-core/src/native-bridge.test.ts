@@ -7,7 +7,7 @@ const note = (excerpt: string, overrides: Partial<NativeNote> = {}): NativeNote 
   id: 'note-1', title: 'Mon projet', excerpt, source: 'user:manual', recordedAt: 1000,
   expiresAt: null, verified: false, ...overrides
 });
-const request = (message: string, notes: NativeNote[] = []): NativeTurnRequest => ({ protocolVersion: 1, message, notes, now });
+const request = (message: string, notes: NativeNote[] = []): NativeTurnRequest => ({ protocolVersion: 1, message, notes, now, privateAccessGranted: true });
 
 describe('native shared brain protocol', () => {
   it('reads an explicitly selected long note completely while preserving normal short recall', () => {
@@ -19,8 +19,8 @@ describe('native shared brain protocol', () => {
     expect(reply.candidate).toBeNull();
     expect(createNativeTurn(request('mes notes',notes)).text.length).toBeLessThan(500);
   });
-  it('never uses full reading to bypass expiry sensitivity or the safety decision', () => {
-    for (const notes of [[note('mon adresse exacte est privée')],[note('ancienne note',{expiresAt:now})],[]]) {
+  it('never uses full reading to bypass expiry, credentials or the safety decision, even when authorized', () => {
+    for (const notes of [[note('mon mot de passe est privé')],[note('ancienne note',{expiresAt:now})],[]]) {
       const reply=createNativeTurn({...request('Lis ma note',notes),recallRequested:true,readRequested:true});
       expect(reply.evidenceIds).toBeUndefined();
       expect(reply.text).toContain('ne retrouve pas');
@@ -107,13 +107,13 @@ describe('native shared brain protocol', () => {
     expect(saved.excerpt).toBe(original);
   });
 
-  it('keeps sensitive and expired notes out of conversational recall', () => {
+  it('keeps credentials and expired notes out of authenticated conversational recall', () => {
     const reply = createNativeTurn(request('mes notes', [
-      note('mon adresse exacte est 12 rue privée'),
+      note('mon mot de passe est privé'),
       note('je préfère le café', { id: 'expired', expiresAt: now }),
       note('Mon sujet favori est la robotique', { id: 'valid' })
     ]));
-    expect(reply.text).not.toMatch(/rue privée|café/);
+    expect(reply.text).not.toMatch(/mot de passe|café/);
     expect(reply.text).toContain('robotique');
   });
 

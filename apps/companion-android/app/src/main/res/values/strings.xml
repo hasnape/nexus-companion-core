@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="learning_and_hardware">Matériel et apprentissage</string>
+    <string name="user_code_access">Code utilisateur et accès personnel</string>
+    <string name="lock_personal_access">Verrouiller les informations personnelles</string>
     <string name="chrome_reader_title">Nexus — lecture Chrome à la demande</string>
     <string name="chrome_reader_description">Lit la partie accessible d’un Aperçu IA de Google dans Chrome après ta demande. Aucun clic ni défilement automatique. Aucun texte conservé sans confirmation. Les autres applications ne sont pas lues.</string>
     <string name="chrome_auto_read">Lire les réponses IA après une recherche Web</string>
@@ -163,4 +166,26 @@
     <string name="about_text">Nexus Companion %1$s\n\nPropriété du projet : Amine HARBI.\nÉditeur : Rép&amp;Web.\n© 2026 Amine HARBI — Rép&amp;Web. Droits réservés sur les éléments originaux propres au projet, sous réserve des droits des tiers.\n\nCompagnon personnel Android : conversation et mémoire locales, interaction vocale et accès en ligne sur demande.\n\nComposants tiers et licences\nLes composants ci-dessous conservent leurs auteurs, leurs droits et leurs licences respectives.</string>
     <string name="reply_with_library_warning">%1$s\n\n%2$s</string>
     <string name="confirm_sensitive_note_message">Cette information semble personnelle. Veux-tu la conserver uniquement dans tes notes locales ?\n\n%1$s\n\nTu pourras la supprimer dans « Mes notes ».</string>
+    <string name="code_intro">Accès personnel\n\nLe prénom et la ville restent accessibles. Les informations complètes demandent ton code utilisateur. L’accès se referme au bout de cinq minutes ou en quittant Nexus.</string>
+    <string name="code_unreadable">La protection ne peut pas être lue. Utilise la récupération avec le verrouillage Android.</string>
+    <string name="code_create">Créer mon code utilisateur</string>
+    <string name="code_choose">\n\nChoisis un code de 6 à 12 chiffres. Le code créateur est distinct.</string>
+    <string name="code_new">Nouveau code</string>
+    <string name="code_confirm">Confirme le code</string>
+    <string name="code_save">Enregistrer le code</string>
+    <string name="code_mismatch">Les deux codes doivent être identiques et contenir 6 à 12 chiffres.</string>
+    <string name="code_save_failed">Impossible d’enregistrer le code. Les données restent verrouillées.</string>
+    <string name="code_user">Code utilisateur</string>
+    <string name="code_unlock">Déverrouiller</string>
+    <string name="code_wait">Trop de tentatives. Attends une minute avant de réessayer.</string>
+    <string name="code_recovery_required">Accès bloqué après dix erreurs. Utilise la récupération Android.</string>
+    <string name="code_verify_failed">Impossible de vérifier le code. Les données restent verrouillées.</string>
+    <string name="code_wrong">Code incorrect.</string>
+    <string name="code_change">Changer ou récupérer mon code</string>
+    <string name="code_android_setup">Configure le verrouillage Android pour récupérer ton code. Tes notes sont conservées.</string>
+    <string name="code_android_confirm">Confirme ton verrouillage Android pour créer ou remplacer le code utilisateur.</string>
+    <string name="code_android_unavailable">Le verrouillage Android n’est pas disponible.</string>
+    <string name="code_android_failed">Impossible d’ouvrir la vérification Android.</string>
+    <string name="learning_automatic">Consolidation locale automatique</string>
+    <string name="learning_description">%1$s\n\nNotes consolidées : %2$d ; en attente : %3$d.\nExercices de rappel réussis : %4$d/%5$d.\n\nCes exercices mesurent le rappel des sources, pas leur vérité ni une intelligence générale. La consolidation est locale, compressée et chiffrée. Les notes d’origine restent intactes ; une modification, suppression ou expiration invalide les associations concernées. Les nouvelles sources Internet demandent toujours ton accord avant enregistrement.</string>
 </resources>

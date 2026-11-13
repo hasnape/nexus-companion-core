@@ -4,7 +4,7 @@ import { createNativeTurn, type NativeNote } from './native-bridge';
 const note = (id: string, excerpt: string, recordedAt = 100): NativeNote => ({
   id, title: 'Repère', excerpt, source: 'user:manual', recordedAt, expiresAt: null, verified: false
 });
-const answer = (question: string, notes: NativeNote[]) => createNativeTurn({ protocolVersion: 1, message: question, notes, now: 1000 });
+const answer = (question: string, notes: NativeNote[]) => createNativeTurn({ protocolVersion: 1, message: question, notes, now: 1000, privateAccessGranted: true });
 
 describe('consistency of explicit personal facts', () => {
   it.each([

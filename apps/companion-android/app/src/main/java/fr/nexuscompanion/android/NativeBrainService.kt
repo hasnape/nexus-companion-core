@@ -12,6 +12,9 @@ internal class NativeBrainService(
     private val context: Context,
     private val library: LocalKnowledgeLibrary,
     private val elapsed: () -> Long = SystemClock::elapsedRealtime,
+    private val privateAccess: () -> Boolean = { false },
+    private val resources: () -> DeviceResources.Snapshot = { DeviceResources.inspect(context) },
+    private val learning: LocalLearningIndex = LocalLearningIndex(context),
     private val search: (String) -> WikipediaKnowledgeSearch.Article? = { WikipediaKnowledgeSearch.search(context, it) }
 ) : AutoCloseable {
     data class Candidate(val content: String, val sensitive: Boolean)
@@ -25,7 +28,9 @@ internal class NativeBrainService(
         val editNote: LocalKnowledgeLibrary.Entry? = null,
         val external: ExternalAppPolicy.Request? = null,
         val publicContextTopic: String? = null,
-        val browserReading: BrowserReading? = null
+        val browserReading: BrowserReading? = null,
+        val requiresUserCode: Boolean = false,
+        val protectedInformation: Boolean = false
     )
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
@@ -39,6 +44,26 @@ internal class NativeBrainService(
     private data class Conversation(val reply: Reply, val notes: List<LocalKnowledgeLibrary.Entry>, val expires: Long)
     private var conversation: Conversation? = null
     private var turnEvidence: List<LocalKnowledgeLibrary.Entry> = emptyList()
+    private var accessOnPreviousTurn = false
+    private var budget: DeviceResources.Budget? = null
+    private fun codeRequired() = Reply("Le code utilisateur est nécessaire pour consulter ces informations personnelles. Saisis-le dans l’écran sécurisé.", null, true, requiresUserCode = true)
+
+    fun learningStatistics() = learning.statistics(library.list())
+    fun consolidate(foreground: Boolean = false): LocalLearningIndex.Statistics {
+        val raw = DeviceResources.budget(resources())
+        val selected = if (foreground) raw.copy(learningBatch = minOf(3, raw.learningBatch)) else raw
+        brain().configure(selected)
+        return learning.consolidate(library.list(), selected, { note ->
+            JSONObject(brain().learningJson(JSONObject().put("protocolVersion", 1).put("message", "consolidation")
+                .put("notes", JSONArray().put(noteJson(note))).put("now", System.currentTimeMillis()).toString()))
+        })
+    }
+    private fun noteJson(note: LocalKnowledgeLibrary.Entry) = JSONObject().apply {
+        put("id", note.id); put("title", note.title); put("excerpt", note.excerpt)
+        put("source", note.source); put("recordedAt", note.recordedAt)
+        put("expiresAt", note.expiresAt ?: JSONObject.NULL); put("verified", false)
+        put("manuallyEdited", note.manuallyEdited)
+    }
 
     /** Session context is transient and confined to the worker, never written as history. */
     fun clearConversation() { pending = null; conversation = null; turnEvidence = emptyList() }
@@ -62,6 +87,11 @@ internal class NativeBrainService(
 
     fun reply(message: String, onlineEnabled: Boolean = true, steeringAxle: String = "front"): Reply {
         require(message.isNotBlank() && message.length <= NativeCapacity.MAX_MESSAGE_CHARS)
+        val access = privateAccess()
+        if (accessOnPreviousTurn && !access) clearConversation()
+        accessOnPreviousTurn = access
+        budget = DeviceResources.budget(resources())
+        brain().configure(requireNotNull(budget))
         val instant = elapsed()
         if (conversation?.expires?.let { instant >= it } == true) conversation = null
         if (pending?.expires?.let { instant >= it } == true) pending = null
@@ -72,6 +102,7 @@ internal class NativeBrainService(
         val read = words in setOf("lis la note complete", "lis cette note", "lis moi cette note", "lis toute la note")
         val edit = words in setOf("modifie cette note", "corrige cette note", "modifier cette note")
         if (repeat || read || edit) {
+            if (!access && (edit || last?.reply?.protectedInformation == true)) { clearConversation(); return codeRequired() }
             val available = try {
                 if (last == null || last.notes.isEmpty()) true else {
                     val current = library.list().associateBy { it.id }
@@ -91,13 +122,14 @@ internal class NativeBrainService(
             val note = last?.notes?.singleOrNull()?.let { library.get(it.id) }
                 ?: return Reply("Précise le sujet de la note à utiliser. Tu peux aussi la choisir dans « Mes notes ».", null, true, expectsAnswer = true)
             turnEvidence = listOf(note)
-            val result = if (edit) Reply("Tu peux relire et modifier cette note dans l’éditeur.", null, true, editNote = note)
+            val result = (if (edit) Reply("Tu peux relire et modifier cette note dans l’éditeur.", null, true, editNote = note)
                 else answer(message, onlineEnabled, steeringAxle, note)
+                ).let { if (access) it.copy(protectedInformation = true) else it }
             rememberReply(result)
             return result
         }
         turnEvidence = emptyList()
-        val result = answer(message, onlineEnabled, steeringAxle)
+        val result = answer(message, onlineEnabled, steeringAxle).let { if (access) it.copy(protectedInformation = true) else it }
         rememberReply(result)
         return result
     }
@@ -110,13 +142,21 @@ internal class NativeBrainService(
     /** External prose is read as data; it never enters the command, body, or lookup parsers. */
     fun readBrowserResult(reading: BrowserReading): Reply {
         clearConversation()
+        accessOnPreviousTurn = privateAccess()
+        val metadata = JSONObject(brain().learningJson(JSONObject().put("protocolVersion", 1).put("message", "classification")
+            .put("now", System.currentTimeMillis()).put("notes", JSONArray().put(JSONObject()
+                .put("id", "browser-classification").put("title", reading.title).put("excerpt", reading.text)
+                .put("source", reading.source).put("recordedAt", System.currentTimeMillis())
+                .put("expiresAt", JSONObject.NULL).put("verified", false))).toString()))
+        if (metadata.getBoolean("credential")) return Reply("Ce texte contient des identifiants ou des codes. Je ne le lis pas à voix haute.", null, true)
+        if (metadata.getBoolean("private") && !privateAccess()) return codeRequired()
         val notesAvailable = try { library.list(); true } catch (_: Exception) { false }
         if (notesAvailable) pending = Pending.Save(reading.title, reading.text, reading.source, elapsed() + NativeCapacity.PENDING_CONFIRMATION_MS)
         val prefix = if (reading.source == "external:clipboard") "Je lis le texte que tu as copié, non vérifié."
             else "Je lis la partie accessible de la réponse IA dans Chrome, non vérifiée."
         val suffix = if (notesAvailable) "Veux-tu que je retienne ce texte dans mes notes locales ?" else context.getString(R.string.library_read_failed)
         val reply = Reply("$prefix\n${reading.text}\n$suffix",
-            null, notesAvailable, expectsAnswer = true, browserReading = reading)
+            null, notesAvailable, expectsAnswer = true, browserReading = reading, protectedInformation = metadata.getBoolean("private"))
         rememberReply(reply)
         return reply
     }
@@ -141,6 +181,7 @@ internal class NativeBrainService(
                     return Reply(context.getString(if (saved.created) R.string.note_saved else R.string.note_already_saved), null, true, expectsAnswer = true)
                 }
                 is Pending.OpenApp -> {
+                    if (!privateAccess()) return codeRequired()
                     if (!onlineEnabled) return Reply(context.getString(R.string.external_online_disabled), null, true)
                     val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
                         return Reply(context.getString(R.string.library_read_failed), null, false)
@@ -166,6 +207,7 @@ internal class NativeBrainService(
                 is ExternalAppPolicy.Command.Open -> return Reply(command.request.openingText(), null, true, external = command.request)
                 is ExternalAppPolicy.Command.Clarify -> return Reply(command.text, null, true, expectsAnswer = true)
                 is ExternalAppPolicy.Command.SavedPlace -> {
+                    if (!privateAccess()) return codeRequired()
                     val entries = try { library.list() } catch (_: Exception) {
                         return Reply(context.getString(R.string.library_read_failed), null, false)
                     }
@@ -186,11 +228,16 @@ internal class NativeBrainService(
         val recall = KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(message)).getJSONArray("terms")
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
-        val notes = try { focusedNote?.let(::listOf) ?: library.contextFor(message, now, recall, queryTerms) } catch (_: Exception) { null }
+        val notes = try {
+            val selected = requireNotNull(budget)
+            val preferred = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
+            focusedNote?.let(::listOf) ?: library.contextFor(message, now, recall, queryTerms, selected.contextNotes, preferred)
+        } catch (_: Exception) { null }
         val array = JSONArray()
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
+            .put("privateAccessGranted", privateAccess())
         if (focusedNote == null) {
             conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
             if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
@@ -198,14 +245,9 @@ internal class NativeBrainService(
         var requestChars = request.toString().length
         // Budget each serialized record once; never repeatedly serialize an oversized context.
         for (note in notes.orEmpty()) {
-            val item = JSONObject().apply {
-                put("id", note.id); put("title", note.title); put("excerpt", note.excerpt)
-                put("source", note.source); put("recordedAt", note.recordedAt)
-                put("expiresAt", note.expiresAt ?: JSONObject.NULL); put("verified", false)
-                put("manuallyEdited", note.manuallyEdited)
-            }
+            val item = noteJson(note)
             val added = item.toString().length + if (array.length() > 0) 1 else 0
-            if (requestChars + added > SharedBrainRuntime.MAX_REQUEST_CHARS) break
+            if (requestChars + added > minOf(SharedBrainRuntime.MAX_REQUEST_CHARS, budget?.requestChars ?: SharedBrainRuntime.MAX_REQUEST_CHARS)) break
             array.put(item); requestChars += added
         }
         val result = JSONObject(brain().replyJson(request.toString()))
@@ -229,7 +271,9 @@ internal class NativeBrainService(
         } }
         val publicTopic = result.optString("publicContextTopic").takeIf { it.isNotBlank() }
         check(publicTopic == null || publicTopic.length <= 180)
-        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true, publicContextTopic = publicTopic)
+        val local = Reply(text, candidate, notes != null, recalledSource, expectsAnswer = true, publicContextTopic = publicTopic,
+            requiresUserCode = result.optBoolean("requiresUserCode"))
+        if (local.requiresUserCode) return local
         val needsTopic = result.optString("lookupNeedsTopic")
         if (needsTopic.isNotEmpty()) {
             check(needsTopic in setOf("web", "wikipedia") && candidate == null)

@@ -102,6 +102,9 @@ var NexusNativeBrain = function () {
     },
     handleNativeTurnJson: function handleNativeTurnJson() {
       return _handleNativeTurnJson;
+    },
+    handleNativeUnderstandingJson: function handleNativeUnderstandingJson() {
+      return _handleNativeUnderstandingJson;
     }
   });
   var WAKE_PREFIX_PATTERNS = [/^(?:hey\b[\s,;:!?.-]*nexus\b)/i, /^(?:ok\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b[\s,;:!?.-]*r[ée]veille(?:[\s'’-]*toi)\b)/i, /^(?:r[ée]veille(?:[\s'’-]*toi)\b[\s,;:!?.-]*nexus\b)/i, /^(?:nexus\b)/i];
@@ -222,7 +225,7 @@ var NexusNativeBrain = function () {
   var unwrapPoliteRequest = function unwrapPoliteRequest(message) {
     return stripWakePrefix(message, {
       allowFullNameWake: true
-    }).trim().replace(/^(?:(?:est[- ]ce que\s+)?(?:tu peux|vous pouvez|peux[- ]tu|pouvez[- ]vous|pourrais[- ]tu|pourriez[- ]vous)|je (?:voudrais|veux) savoir)\s+/i, "").replace(/^(?:me\s+|m['’])(?=(?:dire|expliquer|rappeler|apprendre|donner|parler)\b)/i, "").replace(/^(?:dire|expliquer|apprendre(?!\s+que\b))\s+/i, "");
+    }).trim().replace(/^(?:(?:est[- ]ce que\s+)?(?:tu peux|vous pouvez|peux[- ]tu|pouvez[- ]vous|pourrais[- ]tu|pourriez[- ]vous)|je (?:voudrais|veux) savoir)\s+/i, "").replace(/^(?:me\s+|m['’])(?=(?:dire|expliquer|rappeler|apprendre|donner|parler|r[ée]sumer)\b)/i, "").replace(/^(?:dire|expliquer|apprendre(?!\s+que\b))\s+/i, "");
   };
   var isExplicitMemoryRequest = function isExplicitMemoryRequest(message) {
     return /^(?:retiens|retenir|souviens[- ]toi|m[ée]morise|m[ée]moriser|garde en m[ée]moire|garder en m[ée]moire|apprends que|apprendre que|remember that)\b/i.test(unwrapPoliteRequest(message));
@@ -263,12 +266,12 @@ var NexusNativeBrain = function () {
     var followUp = (_a = normalizeWakePhrase(literal).match(/^et(?: pour)? (.+)$/)) == null ? void 0 : _a[1];
     var raw = followUp && personalFollowUps.get(followUp) || literal;
     var unwrapped = unwrapPoliteRequest(raw);
-    var content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "");
+    var content = unwrapped.replace(/^(?:explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|(?:d[ée]cris|d[ée]crire|d[ée]finis|d[ée]finir)(?:[- ]moi)?\s+)/i, "");
     var normalized = normalizeWakePhrase(content);
     var style = /^(?:parle[- ]moi de mani[èe]re|sois plus|garde un style)\b/i.test(raw);
-    var question = !isExplicitMemoryRequest(raw) && !style && (raw.includes("?") || content !== raw || /^(?:que|quoi)\s+(?:faire|dire|r[ée]pondre|choisir|utiliser)\b/i.test(raw) || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|dans quelle\b)/i.test(raw));
-    var kind = /^(?:ou\b|dans quelle (?:ville|entreprise|region)|a quel endroit)/.test(normalized) ? "where" : /^pourquoi\b/.test(normalized) ? "why" : /^quand\b|^a quelle (?:date|heure)\b/.test(normalized) ? "when" : "general";
-    var subject = content.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|d[ée]cris(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
+    var question = !isExplicitMemoryRequest(raw) && !style && (raw.includes("?") || content !== raw || /^(?:que|quoi)\s+(?:faire|dire|r[ée]pondre|choisir|utiliser)\b/i.test(raw) || /^(?:quels?\b|quelles?\b|qu['’ ]est|c['’ ]est quoi\b|comment\b|combien\b|pourquoi\b|qui\b|o[ùu](?=\s|$)|quand\b|est[- ]ce\b|explique\b|dis[- ]moi\b|parle[- ]moi\b|d[ée]cris\b|d[ée]crire\b|d[ée]finis\b|r[ée]sume\b|[àa] quelle?\b|dans quelle\b)/i.test(raw));
+    var kind = /^(?:ou\b|dans quelle (?:ville|entreprise|region)|a quel endroit)/.test(normalized) ? "where" : /^pourquoi\b/.test(normalized) ? "why" : /^quand\b|^a quelle (?:date|heure)\b/.test(normalized) ? "when" : /^(?:combien|quel est le nombre|quel nombre)\b/.test(normalized) ? "quantity" : "general";
+    var subject = content.replace(/^(?:qu['’ ]est[- ]ce qu(?:e\s+|['’])|c['’ ]est quoi\s+|explique(?:[- ]moi)?\s+|dis[- ]moi\s+|parle[- ]moi de\s+|(?:d[ée]cris|d[ée]crire|d[ée]finis|d[ée]finir)(?:[- ]moi)?\s+)/i, "").replace(/[.!?]+$/, "").trim();
     return {
       question: question,
       content: content,
@@ -752,51 +755,67 @@ var NexusNativeBrain = function () {
       createdAt: Date.now()
     });
   };
-  var normalize = function normalize(text) {
+  var normalizeRetrieval = function normalizeRetrieval(text) {
     return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   };
-  var stop = new Set("a au aux ca ce ces de des du en et est il je la le les ma me mes mon ne nos notre on ou par pas pour que quel quelle quelles quels qui sa se ses son sur ta te tes toi ton tu un une vous votre vos comment pourquoi quand peux peut pourrais dire dis explique expliquer parle parler moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens".split(" "));
-  var families = [["prenom", "nom", "appelle"], ["ville", "habite", "habites", "vis", "vit", "residence"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "preferes", "preferee", "preferees", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["age", "ans"], ["projet", "projets"], ["objectif", "objectifs"]];
+  var stop = new Set("a au aux ca ce cela ceci ces de des du en et est il je la le les ma me mes mon ne nos notre on ou par pas pour que quel quelle quelles quels qui sa se ses son sur ta te tes toi ton tu un une vous votre vos comment combien nombre pourquoi quand peux peut pourrais dire dis explique expliquer parle parler moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens resume resumer recapitule synthese lis lire".split(" "));
+  var families = [["prenom", "nom", "appelle"], ["ville", "habite", "habites", "vis", "vit", "residence"], ["metier", "profession", "travaille", "travail", "emploi", "poste"], ["preference", "preferences", "prefere", "preferes", "preferee", "preferees", "aime", "aimes"], ["voiture", "vehicule", "automobile"], ["boisson", "the", "cafe", "jus"], ["couleur", "coloris"], ["age", "ans"], ["projet", "projets"], ["objectif", "objectifs"], ["memoire", "memoires", "souvenir", "souvenirs", "memorisation"], ["apprentissage", "apprendre", "apprend", "apprends", "consolidation", "consolider"], ["sauvegarde", "sauvegardes", "sauvegarder", "backup"], ["redemarrage", "redemarrer", "redemarre"], ["reinitialisation", "reinitialiser", "reinitialise", "reset"], ["imprimante", "imprimantes", "imprimer"], ["roue", "roues"], ["batterie", "batteries"], ["salutation", "salutations", "saluer"], ["robot", "robots"], ["chiffrement", "chiffrer", "chiffree", "chiffrees"]];
   var vocabulary = new Map(families.flatMap(function (family) {
     return family.map(function (word2) {
       return [word2, family[0]];
     });
   }));
-  var words = function words(text) {
-    return normalize(text).split(" ").filter(function (word2) {
+  var retrievalWords = function retrievalWords(text) {
+    return normalizeRetrieval(text).split(" ").filter(function (word2) {
       return word2.length > 1 && !stop.has(word2);
     });
   };
-  var canonical = function canonical(word2) {
+  var expandRetrievalTerm = function expandRetrievalTerm(word2) {
     var _a;
-    return (_a = vocabulary.get(word2)) != null ? _a : word2;
+    return (_a = families.find(function (family) {
+      return family.includes(word2);
+    })) != null ? _a : [word2];
   };
-  var keys = function keys(text) {
-    var result = words(text).map(canonical);
-    if (/^(?:le createur est|je m appelle|mon prenom est|mon nom est)\b/.test(normalize(text))) result.push("prenom");
+  var evidenceKeys = function evidenceKeys(text) {
+    var result = retrievalWords(text).map(function (word2) {
+      var _a;
+      return (_a = vocabulary.get(word2)) != null ? _a : word2;
+    });
+    if (/^(?:le createur est|je m appelle|mon prenom est|mon nom est)\b/.test(normalizeRetrieval(text))) result.push("prenom");
     return Array.from(new Set(result));
   };
-  var nativeRetrievalTerms = function nativeRetrievalTerms(message) {
-    var terms = words(analyzeQuestion(message).content).slice(0, 12);
-    var expanded = terms.flatMap(function (word2) {
-      var _a;
-      return (_a = families.find(function (family) {
-        return family.includes(word2);
-      })) != null ? _a : [word2];
+  var evidenceSentences = function evidenceSentences(text) {
+    return text.replace(/([.!?])\s+/g, "$1\n").split(/\n+/).map(function (part) {
+      return part.trim();
+    }).filter(Boolean);
+  };
+  var sourceIntroduction = function sourceIntroduction(note) {
+    if (note.manuallyEdited) return note.source.startsWith("https://fr.wikipedia.org/") ? "D’après ta note modifiée, dont la source d’origine est Wikipédia" : "D’après ta note modifiée";
+    if (note.source.startsWith("https://fr.wikipedia.org/")) return "D’après une note issue de Wikipédia";
+    if (note.source === "external:clipboard") return "D’après le texte copié, non vérifié";
+    if (/^https:\/\/(?:www\.)?google\./.test(note.source)) return "D’après le résultat lu dans Chrome, non vérifié";
+    return ["user:manual", "manual"].includes(note.source) ? "D’après ce que tu m’as confié" : "D’après la source enregistrée, non vérifiée";
+  };
+  var addressOwner = function addressOwner(text) {
+    return text.split(/(«[^»]*»|"[^"]*")/).map(function (part, index) {
+      return index % 2 ? part : part.replace(/\bje m['’]appelle\s+/gi, "tu t’appelles ").replace(/\bmon pr[ée]nom est\s+/gi, "ton prénom est ").replace(/\bmon nom est\s+/gi, "ton nom est ").replace(/\bmon m[ée]tier est\s+/gi, "ton métier est ").replace(/\bje pr[ée]f[èe]re\s+/gi, "tu préfères ").replace(/\bj['’]aime\s+/gi, "tu aimes ").replace(/\bje travaille\s+/gi, "tu travailles ").replace(/\bje vis\s+/gi, "tu vis ").replace(/\bj['’]habite\s+/gi, "tu habites ").replace(/\bje suis\s+/gi, "tu es ").replace(/\bj['’]ai\s+/gi, "tu as ").replace(/^le cr[ée]ateur est\s+/i, "tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "tu préfères ").replace(/\bma\s+/gi, "ta ").replace(/\bmes\s+/gi, "tes ").replace(/\bmon\s+/gi, "ton ");
+    }).join("").replace(/^[a-zàâçéèêëîïôûùü]/, function (letter) {
+      return letter.toUpperCase();
     });
+  };
+  var nativeRetrievalTerms = function nativeRetrievalTerms(message) {
+    var terms = retrievalWords(analyzeQuestion(message).content).slice(0, 12);
+    var expanded = terms.flatMap(expandRetrievalTerm);
     if (terms.some(function (word2) {
-      return families[0].includes(word2);
+      return ["prenom", "nom", "appelle"].includes(word2);
     })) expanded.push("le createur est");
     if (terms.includes("createur")) expanded.push("le createur est", "prenom");
     return Array.from(new Set(expanded)).slice(0, 64);
   };
-  var toSecondPerson = function toSecondPerson(text) {
-    return text.replace(/^ma\s+/i, "Ta ").replace(/^mes\s+/i, "Tes ").replace(/^mon\s+(?!pr[ée]nom\b|nom\b|m[ée]tier\b)/i, "Ton ").replace(/^le cr[ée]ateur est\s+/i, "Tu es ").replace(/^le cr[ée]ateur pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^je m['’]appelle\s+/i, "Tu t’appelles ").replace(/^mon pr[ée]nom est\s+/i, "Ton prénom est ").replace(/^mon nom est\s+/i, "Ton nom est ").replace(/^je pr[ée]f[èe]re\s+/i, "Tu préfères ").replace(/^j['’]aime\s+/i, "Tu aimes ").replace(/^je travaille\s+/i, "Tu travailles ").replace(/^je vis\s+/i, "Tu vis ").replace(/^j['’]habite\s+/i, "Tu habites ").replace(/^mon m[ée]tier est\s+/i, "Ton métier est ");
-  };
   var explicitFactPrefixes = [["prenom", /^(?:mon prenom est|mon nom est|je m appelle|le createur est) (.+)$/], ["metier", /^(?:mon metier est|ma profession est|je travaille comme|je travaille en tant que) (.+)$/], ["boisson", /^(?:ma boisson preferee est|je prefere) (.+)$/], ["couleur", /^(?:ma couleur preferee est|je prefere) (.+)$/]];
   var factKey = function factKey(sentence, query) {
     var _a;
-    var literal = normalize(sentence);
+    var literal = normalizeRetrieval(sentence);
     for (var _i4 = 0, _explicitFactPrefixes = explicitFactPrefixes; _i4 < _explicitFactPrefixes.length; _i4++) {
       var _explicitFactPrefixes2 = _slicedToArray(_explicitFactPrefixes[_i4], 2),
         attribute = _explicitFactPrefixes2[0],
@@ -833,28 +852,27 @@ var NexusNativeBrain = function () {
   };
   var answerSingleFromNotes = function answerSingleFromNotes(question, notes) {
     var request = analyzeQuestion(question);
-    var query = keys(request.content);
+    var query = evidenceKeys(request.subject);
     if (!query.length) return null;
     var anchors = query.filter(function (key) {
       return key !== "preference";
     });
     var candidates = notes.flatMap(function (note) {
-      var titleKeys = keys(note.title);
-      var sentences = note.excerpt.replace(/([.!?])\s+/g, "$1\n").split(/\n+/).map(function (text) {
-        return text.trim();
-      }).filter(Boolean);
-      var labeledValue = sentences.length === 1 && note.excerpt.length <= 160 && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalize(note.excerpt));
-      return sentences.map(function (sentence) {
+      var titleKeys = evidenceKeys(note.title);
+      var sentences = evidenceSentences(note.excerpt);
+      var labeledValue = sentences.length === 1 && note.excerpt.length <= 160 && !/\b(?:je|tu|il|elle|nous|vous|ils|elles|on|est|sont|a|ai|as|ont|fait|font|travaille|prefere|avance|reste)\b/.test(normalizeRetrieval(note.excerpt));
+      return sentences.map(function (sentence, sentenceIndex) {
         var _a, _b, _c;
-        var normalized = normalize(sentence);
-        var relative = (_c = (_a = normalized.match(/^(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _a[1]) != null ? _c : !/^(?:je |j |mon (?:prenom|nom|metier) |ma profession |le createur )/.test(normalized) ? (_b = normalize(note.title).match(/\b(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _b[1] : void 0;
+        var normalized = normalizeRetrieval(sentence);
+        var relative = (_c = (_a = normalized.match(/^(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _a[1]) != null ? _c : !/^(?:je |j |mon (?:prenom|nom|metier) |ma profession |le createur )/.test(normalized) ? (_b = normalizeRetrieval(note.title).match(/\b(?:ma|mon|mes) (fille|fils|enfant|fiancee|conjoint|conjointe|femme|mari|ami|amie|chien|chat)\b/)) == null ? void 0 : _b[1] : void 0;
         if (request.personal && relative && !query.includes(relative)) return {
           note: note,
           sentence: sentence,
           score: 0
         };
-        var slotMatches = request.kind === "where" ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized) : request.kind === "why" ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized) : request.kind === "when" ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : true;
-        var evidence = keys(sentence);
+        var slotMatches = request.kind === "where" ? /\b(?:a|au|aux|chez|dans|situe|situee)\b/.test(normalized) : request.kind === "why" ? /\b(?:parce que|car|puisque|en raison|a cause|grace a|pour son|pour sa|pour ses)\b/.test(normalized) : request.kind === "when" ? /\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre|depuis|demain|hier|[0-9]+)\b/.test(normalized) : request.kind === "quantity" ? /\b(?:[0-9]+|zero|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|douze|vingt|trente|cent|mille)\b|\b(?:a|possede|contient|avec|comprend|utilise) (?:un|une)\b/.test(normalized) : true;
+        var antecedent = sentenceIndex > 0 && /^(?:il|elle|ils|elles|cela|ceci)\b/.test(normalized) ? evidenceKeys(sentences[sentenceIndex - 1]) : [];
+        var evidence = Array.from(new Set([].concat(_toConsumableArray(evidenceKeys(sentence)), _toConsumableArray(antecedent))));
         var matches = query.filter(function (key) {
           return evidence.includes(key) || titleKeys.includes(key);
         });
@@ -874,9 +892,13 @@ var NexusNativeBrain = function () {
         }).every(function (key) {
           return evidence.includes(key) || labeledValue && titleKeys.includes(key);
         });
+        var subject = evidenceKeys(normalized.split(/\b(?:est|sont|designe|designent|signifie|correspond|permet|contient|conserve|utilise|fonctionne|doit|a|ont|sert|peut)\b/)[0]);
+        var focused = !request.personal && request.kind === "general" && anchors.length > 0 && subject[0] === anchors[0] && anchors.every(function (key) {
+          return subject.includes(key);
+        });
         var score = slotMatches && relativeMatches && attributeMatches && anchored && sentenceAnchor && matches.length / query.length >= 0.5 ? matches.length * 10 + matches.filter(function (key) {
           return evidence.includes(key);
-        }).length : 0;
+        }).length + (focused ? 4 : 0) : 0;
         return {
           note: note,
           sentence: labeledValue && !query.some(function (key) {
@@ -904,9 +926,16 @@ var NexusNativeBrain = function () {
       text: "J\u2019ai deux informations dans tes notes : \xAB ".concat(best.sentence.slice(0, 200), " \xBB et \xAB ").concat(conflicting.sentence.slice(0, 200), " \xBB. Laquelle est \xE0 jour ?"),
       evidenceIds: Array.from(new Set([best.note.id, conflicting.note.id]))
     };
+    var alternative = !personal && request.question && candidates.find(function (item) {
+      return item.note.id !== best.note.id && item.score === best.score && normalizeRetrieval(item.sentence) !== normalizeRetrieval(best.sentence);
+    });
+    if (alternative) return {
+      text: "Plusieurs notes r\xE9pondent \xE0 ce sujet : \xAB ".concat(best.note.title, " \xBB et \xAB ").concat(alternative.note.title, " \xBB. Pr\xE9cise le sujet ou la note \xE0 utiliser."),
+      evidenceIds: [best.note.id, alternative.note.id]
+    };
     var excerpt = best.sentence.length > 480 ? "".concat(best.sentence.slice(0, 477), "\u2026") : best.sentence;
-    var spoken = personal ? toSecondPerson(excerpt) : excerpt;
-    var prefix2 = best.note.manuallyEdited ? best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après ta note modifiée, dont la source d’origine est Wikipédia" : "D’après ta note modifiée" : best.note.source.startsWith("https://fr.wikipedia.org/") ? "D’après une note issue de Wikipédia" : "D’après ce que tu m’as confié";
+    var spoken = personal && ["user:manual", "manual"].includes(best.note.source) ? addressOwner(excerpt) : excerpt;
+    var prefix2 = sourceIntroduction(best.note);
     return {
       text: "".concat(prefix2, " : ").concat(spoken),
       evidenceIds: [best.note.id]
@@ -1828,19 +1857,19 @@ var NexusNativeBrain = function () {
     MAX_LIBRARY_RECORDS: 4e4
   };
   var USER_CODE_REQUIRED = "Le code utilisateur est nécessaire pour consulter ces informations personnelles. Saisis-le dans l’écran sécurisé.";
-  var normalize2 = function normalize2(text) {
+  var normalize = function normalize(text) {
     return normalizeWakePhrase(text);
   };
   var secret = /\b(?:mot de passe|password|code (?:pin|utilisateur|createur|de validation)|cle api|jeton d acces|iban|carte bancaire)\b/;
   var containsCredential = function containsCredential(text) {
-    return secret.test(normalize2(text));
+    return secret.test(normalize(text));
   };
   var isPrivateMemory = function isPrivateMemory(note) {
-    var text = normalize2("".concat(note.title, " ").concat(note.excerpt));
+    var text = normalize("".concat(note.title, " ").concat(note.excerpt));
     var explicit = containsCredential(text) || /\b(?:je|j|mon|ma|mes|moi|notre|nos|createur|proprietaire|utilisateur)\b/.test(text) || /\b(?:identite|profil|prenom|nom complet|nom de famille|adresse|domicile|telephone|portable|courriel|email|e mail|salaire|revenu|sante|maladie|diagnostic|religion|famille|fiancee|fille|fils|naissance|nationalite|gps|latitude|longitude)\b/.test(text) || /@|\+?\d[\d .()-]{7,}\d/.test("".concat(note.title, " ").concat(note.excerpt));
     if (explicit || note.source === "external:clipboard") return true;
     if (note.source === "user:manual" || note.source === "manual") {
-      var abstractDefinition = /^(?:un|une|le|la|les|l) [a-z -]{2,70} (?:est|sont) (?:un|une|des|l) (?:maniere|ensemble|science|discipline|phenomene|objet|action|pratique|mesure|forme|methode|systeme|processus|technique|formule|regle)\b/.test(normalize2(note.excerpt));
+      var abstractDefinition = /^(?:un|une|le|la|les|l) [a-z -]{2,70} (?:est|sont) (?:un|une|des|l) (?:maniere|ensemble|science|discipline|phenomene|objet|action|pratique|mesure|forme|methode|systeme|processus|technique|formule|regle)\b/.test(normalize(note.excerpt));
       return !abstractDefinition;
     }
     return false;
@@ -1875,7 +1904,7 @@ var NexusNativeBrain = function () {
         var residence = (_b = sentence.match(/^(?:(?:je vis|j['’]habite)\s+[àa]\s+|(?:ma ville est|ma ville de r[ée]sidence est)\s+)(.+)$/i)) == null ? void 0 : _b[1];
         if (residence) {
           var city = cleanValue(residence.split(/\s+(?:depuis|avec|chez|mais|et|au|en|dans|pr[èe]s|[àa] c[ôo]t[ée])\b|[,;:]/i)[0]);
-          if (city.length <= 70 && word.test(city) && city.split(/\s+/).length <= 6 && !/\b(?:rue|route|chemin|allee|avenue|boulevard|impasse|numero|appartement|residence|adresse|domicile|villa|immeuble|maison|etage|batiment|code|retiens|ignore|secret)\b/.test(normalize2(city))) {
+          if (city.length <= 70 && word.test(city) && city.split(/\s+/).length <= 6 && !/\b(?:rue|route|chemin|allee|avenue|boulevard|impasse|numero|appartement|residence|adresse|domicile|villa|immeuble|maison|etage|batiment|code|retiens|ignore|secret)\b/.test(normalize(city))) {
             facts.push({
               slot: "city",
               value: city,
@@ -1892,7 +1921,7 @@ var NexusNativeBrain = function () {
     return facts;
   };
   var publicPersonalSlots = function publicPersonalSlots(message) {
-    var text = normalize2(unwrapPoliteRequest(message));
+    var text = normalize(unwrapPoliteRequest(message));
     if (/^(?:comment (?:je m appelle|m appelle je)|quel est mon (?:prenom|nom)|c est quoi mon prenom|(?:dis moi )?mon prenom|et (?:pour )?mon (?:prenom|nom)|qui est (?:le|ton) createur)$/.test(text)) return ["firstName"];
     if (/^(?:ou (?:est ce que )?(?:je vis|j habite)|(?:dans )?quelle (?:est ma ville|ville (?:je vis|j habite|est ce que j habite))|quelle est ma ville de residence|et (?:pour )?ma ville|ma ville)$/.test(text)) return ["city"];
     if (/^(?:(?:quel est|quels sont|dis moi|c est quoi) )?mon prenom et ma ville(?: de residence)?$/.test(text) || /^comment je m appelle et (?:ou (?:est ce que )?(?:je vis|j habite)|j habite)$/.test(text)) return ["firstName", "city"];
@@ -1900,7 +1929,7 @@ var NexusNativeBrain = function () {
   };
   var asksForPrivateInformation = function asksForPrivateInformation(message) {
     if (isExplicitMemoryRequest(message) || publicPersonalSlots(message)) return false;
-    var text = normalize2(unwrapPoliteRequest(message));
+    var text = normalize(unwrapPoliteRequest(message));
     return analyzeQuestion(message).question && analyzeQuestion(message).personal || /\b(?:nom complet|informations? personnelles?|profil (?:complet|personnel)|tout (?:de|sur) moi|mes (?:notes|preferences|donnees)|adresse (?:domicile|travail)|mon domicile|mon travail)\b/.test(text) || /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise))\b/.test(text);
   };
   var answerPublicPersonal = function answerPublicPersonal(message, notes) {
@@ -1921,7 +1950,7 @@ var NexusNativeBrain = function () {
         })) == null ? void 0 : _c.recordedAt) != null ? _d : 0);
       });
       var values = Array.from(new Set(choices.map(function (fact) {
-        return normalize2(fact.value);
+        return normalize(fact.value);
       })));
       evidenceIds.push.apply(evidenceIds, _toConsumableArray((values.length > 1 ? choices : choices.slice(0, 1)).map(function (fact) {
         return fact.evidenceId;
@@ -1968,6 +1997,20 @@ var NexusNativeBrain = function () {
     var normalized = normalizeWakePhrase(note.excerpt);
     if (/^(?:mon metier est|ma profession est|je travaille comme|je travaille en tant que)\b/.test(normalized)) questions.push("Quel est mon métier ?");
     if (/^(?:le createur prefere|je prefere)\b/.test(normalized)) questions.push("Quelles sont mes préférences ?");
+    var sentences = evidenceSentences(note.excerpt);
+    var bodyTerms = sentences.map(retrievalWords);
+    var contentKeys = Array.from(new Set(bodyTerms.flat().map(function (word2) {
+      return evidenceKeys(word2)[0];
+    }).filter(Boolean)));
+    var subject = contentKeys.slice(0, 3).join(" ");
+    if (subject && !containsCredential(note.excerpt)) questions.push("Explique ".concat(subject));
+    var causal = sentences.find(function (sentence) {
+      return /\b(?:parce que|en raison|grace a|a cause)\b/.test(normalizeWakePhrase(sentence));
+    });
+    if (causal) {
+      var clause = causal.split(/\s+(?:parce que|en raison|gr[âa]ce [àa]|[àa] cause)/i)[0];
+      if (clause.length <= 160) questions.push("Pourquoi ".concat(clause));
+    }
     var unique = Array.from(new Set(questions)).slice(0, 6);
     var successfulChecks = unique.filter(function (question) {
       var _a, _b;
@@ -1975,12 +2018,152 @@ var NexusNativeBrain = function () {
       return ((_b = reply == null ? void 0 : reply.evidenceIds) == null ? void 0 : _b.includes(note.id)) && !reply.text.startsWith("Je ne retrouve pas");
     }).length;
     return {
-      terms: Array.from(new Set([].concat(_toConsumableArray(nativeRetrievalTerms(title)), _toConsumableArray(unique.flatMap(nativeRetrievalTerms))))).slice(0, 64),
+      terms: containsCredential("".concat(note.title, " ").concat(note.excerpt)) ? [] : Array.from(new Set([].concat(_toConsumableArray(nativeRetrievalTerms(title)), _toConsumableArray(unique.flatMap(nativeRetrievalTerms)), _toConsumableArray(Array.from({
+        length: 8
+      }, function (_, column) {
+        return bodyTerms.map(function (terms) {
+          return terms[column];
+        }).filter(Boolean);
+      }).flat().flatMap(expandRetrievalTerm))))).slice(0, 64),
       exercises: unique.length,
       successfulChecks: successfulChecks,
-      concepts: facts.length + (unique.length > facts.length ? 1 : 0),
+      concepts: facts.length + contentKeys.length,
       private: isPrivateMemory(note),
       credential: containsCredential("".concat(note.title, " ").concat(note.excerpt))
+    };
+  };
+  var understandRequest = function understandRequest(message, context) {
+    var raw = stripWakePrefix(message, {
+      allowFullNameWake: true
+    }).trim();
+    var text = normalizeWakePhrase(raw).replace(/^(?:(?:est ce que )?(?:tu peux|vous pouvez|peux tu|pouvez vous|pourrais tu|pourriez vous)) /, "").replace(/^(?:me |m )(?=(?:expliquer|resumer|dire|donner)\b)/, "").replace(/^expliquer\b/, "explique").replace(/^resumer\b/, "resume");
+    var mode = "answer";
+    if (/^(?:resume|resumer|recapitule|synthetise|fais (?:moi )?un resume)\b/.test(text)) mode = "summary";
+    if (/^(?:explique (?:moi )?(?:plus simplement|avec des mots simples)|plus simplement|simplifie)\b/.test(text) || /^explique .+ (?:plus simplement|avec des mots simples)$/.test(text)) mode = "simple";
+    if (/^(?:quelles sont les etapes|donne (?:moi )?les etapes|et les etapes)\b/.test(text)) mode = "steps";
+    if (/^(?:quelle est (?:la|ta) source|quelles sont (?:les|tes) sources|d ou vient (?:cette|ta) (?:information|reponse)|et la source)\b/.test(text)) mode = "source";
+    var reason = /^(?:et )?pourquoi(?: (?:ca|cela|ceci))?$/.test(text);
+    var method = /^(?:et )?comment(?: (?:ca|cela) (?:fonctionne|marche))?$/.test(text);
+    var references = /^(?:(?:resume|resumer|recapitule|synthetise|simplifie)(?: (?:moi|ca|cela|ceci|le|la|ce resultat|ces resultats|cette reponse|ta reponse|cette note|ces notes|ce texte|le resultat|la reponse))?|fais (?:moi )?un resume(?: de (?:ce resultat|ces resultats|ta reponse|cette note|ce texte))?|explique (?:moi )?(?:plus simplement|avec des mots simples)(?: (?:ce resultat|ta reponse|ce texte))?|explique (?:moi )?(?:ce resultat|ces resultats|cette reponse|ce texte)|plus simplement|quelles sont les etapes|donne (?:moi )?les etapes|et les etapes|quelle est (?:la|ta) source|quelles sont (?:les|tes) sources|et la source|d ou vient (?:cette|ta) (?:information|reponse))$/;
+    if (reason || method || references.test(text)) {
+      if (!context || !context.evidenceIds.length || (reason || method) && context.evidenceIds.length > 1) {
+        return {
+          query: raw,
+          mode: mode,
+          contextual: true,
+          needsContext: true
+        };
+      }
+      return {
+        query: reason ? "Pourquoi ".concat(context.question) : method ? "Comment ".concat(context.question) : context.question,
+        mode: mode === "answer" && (method || /^(?:explique|plus simplement)/.test(text)) ? "simple" : mode,
+        contextual: true,
+        needsContext: false
+      };
+    }
+    if (mode !== "answer") {
+      var topic = unwrapPoliteRequest(raw).replace(/^(?:r[ée]sume(?:r)?|r[ée]capitule|synth[ée]tise|simplifie|fais(?:[- ]moi)? un r[ée]sum[ée](?: de)?|quelles sont les [ée]tapes(?: pour)?|donne(?:[- ]moi)? les [ée]tapes(?: pour)?|quelle est la source de)\s+/i, "").replace(/^(?:explique(?:[- ]moi)?\s+)?(?:plus simplement|avec des mots simples)\s+/i, "").replace(/\s+(?:plus simplement|avec des mots simples)[.!?]*$/i, "").replace(/^(?:(?:ma|la|mes|les|tes) notes? (?:sur|concernant)|ce que tu sais sur)\s+/i, "").trim();
+      return {
+        query: "Explique ".concat(topic),
+        mode: mode,
+        contextual: false,
+        needsContext: false
+      };
+    }
+    return {
+      query: raw,
+      mode: mode,
+      contextual: false,
+      needsContext: false
+    };
+  };
+  var composeEvidence = function composeEvidence(understanding, notes) {
+    if (understanding.mode === "answer") return null;
+    var question = analyzeQuestion(understanding.query);
+    if (question.personal) {
+      var check = answerFromNotes(understanding.query, notes);
+      if (check == null ? void 0 : check.text.startsWith("J’ai deux informations dans tes notes")) return check;
+    }
+    var query = evidenceKeys(question.content);
+    var rows = notes.flatMap(function (note) {
+      var precedingMatch = false;
+      return evidenceSentences(note.excerpt).map(function (text, index) {
+        var keys = evidenceKeys(text);
+        var hits = query.filter(function (key) {
+          return keys.includes(key);
+        }).length;
+        var continuation = precedingMatch && /^(?:il |elle |ils |elles |cela |ceci |ce |cette |ces |ensuite|puis|enfin|d abord|pour cela|parce que|car |[1-9] )/.test(normalizeRetrieval(text));
+        var matches = query.length > 0 && (hits / query.length >= 0.5 || continuation);
+        precedingMatch = matches;
+        return {
+          note: note,
+          text: text,
+          index: index,
+          score: hits,
+          matches: matches
+        };
+      });
+    }).filter(function (row) {
+      return row.matches;
+    });
+    if (!rows.length) return null;
+    var selected = rows.filter(function (row) {
+      return understanding.mode !== "steps" || /^(?:[1-9] |d abord|ensuite|puis|enfin)|\b(?:etape|ouvrir|ouvre|cliquer|clique|appuie|selectionne|verifie|brancher|branche|redemarrer|redemarre)\b/.test(normalizeRetrieval(row.text));
+    });
+    if (!selected.length) return {
+      text: "Les notes retrouvées ne décrivent pas les étapes à suivre. Précise la procédure recherchée.",
+      evidenceIds: Array.from(new Set(rows.map(function (row) {
+        return row.note.id;
+      })))
+    };
+    if (understanding.mode === "source") {
+      var sources = Array.from(new Map(selected.map(function (row) {
+        return [row.note.id, row.note];
+      })).values()).slice(0, 4);
+      return {
+        text: "Je m\u2019appuie sur ces sources enregistr\xE9es, non v\xE9rifi\xE9es :\n".concat(sources.map(function (note) {
+          return "\u2022 \xAB ".concat(note.title, " \xBB \u2014 ").concat(note.source);
+        }).join("\n")),
+        evidenceIds: sources.map(function (note) {
+          return note.id;
+        })
+      };
+    }
+    var ranked = _toConsumableArray(selected).sort(function (a, b) {
+      return b.score - a.score;
+    }).slice(0, understanding.mode === "simple" ? 2 : 4);
+    ranked.sort(function (a, b) {
+      return notes.indexOf(a.note) - notes.indexOf(b.note) || a.index - b.index;
+    });
+    var seen = new Set();
+    var chars = 0;
+    var accepted = ranked.filter(function (row) {
+      var key = normalizeRetrieval(row.text);
+      if (seen.has(key) || chars + row.text.length > 1600) return false;
+      seen.add(key);
+      chars += row.text.length;
+      return true;
+    });
+    if (!accepted.length) return {
+      text: "Le passage retrouvé est trop long pour une synthèse fidèle. Tu peux demander la lecture de la note complète.",
+      evidenceIds: Array.from(new Set(selected.map(function (row) {
+        return row.note.id;
+      })))
+    };
+    var clipped = accepted.length < selected.length;
+    var lead = understanding.mode === "steps" ? "Voici ".concat(clipped ? "un extrait des" : "les", " \xE9tapes pr\xE9sentes dans les notes") : "Voici les points essentiels présents dans les notes";
+    var multiple = new Set(accepted.map(function (row) {
+      return row.note.id;
+    })).size > 1;
+    var body = accepted.map(function (row, index) {
+      var own = question.personal && ["user:manual", "manual"].includes(row.note.source);
+      return "".concat(understanding.mode === "steps" ? "".concat(index + 1, ".") : "•", " ").concat(multiple ? "\xAB ".concat(row.note.title, " \xBB : ") : "").concat(own ? addressOwner(row.text) : row.text);
+    }).join("\n");
+    return {
+      text: "".concat(multiple ? "D’après les sources enregistrées, non vérifiées" : sourceIntroduction(accepted[0].note), ". ").concat(lead, " :\n").concat(body),
+      evidenceIds: Array.from(new Set(accepted.map(function (row) {
+        return row.note.id;
+      })))
     };
   };
   var MAX_INPUT_CHARS = native_capacity_default.MAX_REQUEST_CHARS;
@@ -1989,6 +2172,16 @@ var NexusNativeBrain = function () {
   };
   var boundedText = function boundedText(value, max) {
     return typeof value === "string" && value.trim().length > 0 && value.length <= max;
+  };
+  var validateEvidenceContext = function validateEvidenceContext(value) {
+    if (value === void 0) return void 0;
+    if (!record(value) || !boundedText(value.question, 600) || !Array.isArray(value.evidenceIds) || value.evidenceIds.length > native_capacity_default.MAX_CONTEXT_NOTES || !value.evidenceIds.every(function (id) {
+      return boundedText(id, 64);
+    })) throw new Error("Invalid evidence context");
+    return {
+      question: value.question,
+      evidenceIds: Array.from(new Set(value.evidenceIds))
+    };
   };
   var validateRequest = function validateRequest(value) {
     if (!record(value) || value.protocolVersion !== 1 || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS) || !Number.isSafeInteger(value.now) || value.now < 0 || value.recallRequested !== void 0 && typeof value.recallRequested !== "boolean" || value.readRequested !== void 0 && typeof value.readRequested !== "boolean" || value.privateAccessGranted !== void 0 && typeof value.privateAccessGranted !== "boolean" || value.readRequested === true && value.recallRequested === false || value.publicContextTopic !== void 0 && (typeof value.publicContextTopic !== "string" || !isPublicTopic(value.publicContextTopic)) || value.awaitingLookupTarget !== void 0 && !["web", "wikipedia"].includes(value.awaitingLookupTarget) || !Array.isArray(value.notes) || value.notes.length > native_capacity_default.MAX_CONTEXT_NOTES) {
@@ -2015,6 +2208,7 @@ var NexusNativeBrain = function () {
       recallRequested: value.recallRequested,
       readRequested: value.readRequested,
       privateAccessGranted: value.privateAccessGranted === true,
+      evidenceContext: validateEvidenceContext(value.evidenceContext),
       publicContextTopic: value.publicContextTopic,
       awaitingLookupTarget: value.awaitingLookupTarget
     };
@@ -2028,13 +2222,18 @@ var NexusNativeBrain = function () {
   var _createNativeTurn = function _createNativeTurn(input) {
     var _a;
     var request = validateRequest(input);
+    var understanding = understandRequest(request.message, request.evidenceContext);
     var active = request.notes.filter(function (note) {
       return (note.expiresAt === null || note.expiresAt > request.now) && !containsCredential("".concat(note.title, " ").concat(note.excerpt));
     });
-    var notes = request.privateAccessGranted ? active : active.flatMap(function (note) {
+    var permitted = request.privateAccessGranted ? active : active.flatMap(function (note) {
       var projected = publicProjection(note);
       return projected ? [projected] : [];
     });
+    var notes = understanding.contextual && !understanding.needsContext ? permitted.filter(function (note) {
+      var _a2;
+      return (_a2 = request.evidenceContext) == null ? void 0 : _a2.evidenceIds.includes(note.id);
+    }) : permitted;
     var memories = notes.map(function (note) {
       return {
         id: note.id,
@@ -2066,14 +2265,14 @@ var NexusNativeBrain = function () {
       context: context,
       decision: decision
     });
-    var question = analyzeQuestion(request.message);
+    var question = analyzeQuestion(understanding.query);
     var result = __spreadValues({
       protocolVersion: 1,
       engine: "nexus-core-rules-v1",
       text: "",
       intent: decision.intent,
       candidate: null
-    }, question.question && !question.personal && isPublicTopic(question.content) && isPublicTopic(question.subject) ? {
+    }, !understanding.contextual && question.question && !question.personal && isPublicTopic(question.content) && isPublicTopic(question.subject) ? {
       publicContextTopic: question.subject
     } : {});
     if (shouldUseSafetyTone(decision)) {
@@ -2082,17 +2281,21 @@ var NexusNativeBrain = function () {
         text: renderDeterministicNexusReply(plan)
       });
     }
-    if (!request.privateAccessGranted && (asksForPrivateInformation(request.message) || (request.readRequested || request.recallRequested) && active.some(isPrivateMemory))) {
+    if (!request.privateAccessGranted && (asksForPrivateInformation(request.message) || asksForPrivateInformation(understanding.query) || (request.readRequested || request.recallRequested) && active.some(isPrivateMemory))) {
       return __spreadProps(__spreadValues({}, result), {
         text: USER_CODE_REQUIRED,
         requiresUserCode: true,
         publicContextTopic: void 0
       });
     }
-    var words2 = normalizeWakePhrase(stripWakePrefix(request.message, {
+    if (understanding.needsContext || understanding.contextual && notes.length === 0) return __spreadProps(__spreadValues({}, result), {
+      text: "Précise la question, le résultat ou la note à expliquer : je n’ai pas de contexte unique et actuel pour cette relance.",
+      publicContextTopic: void 0
+    });
+    var words = normalizeWakePhrase(stripWakePrefix(request.message, {
       allowFullNameWake: true
     }));
-    if (/^(?:qu est ce que|c est quoi|definis|explique|decris) (?:ta |la |ton )?(?:memoire (?:interne|locale)|apprentissage|entrainement)$/.test(words2) || /^(?:comment (?:tu apprends|apprends tu)|comment fonctionne ta memoire)$/.test(words2)) {
+    if (/^(?:qu est ce que|c est quoi|definis|explique|decris) (?:ta |la |ton )?(?:memoire (?:interne|locale)|apprentissage|entrainement)$/.test(words) || /^(?:comment (?:tu apprends|apprends tu)|comment fonctionne ta memoire)$/.test(words)) {
       return __spreadProps(__spreadValues({}, result), {
         text: "Ma mémoire interne est ma bibliothèque locale chiffrée : tes notes, leurs sources et leurs anciennes versions. Je consolide les informations enregistrées en un index et je vérifie des questions de rappel pour mieux les retrouver. Je garde les contradictions et les incertitudes visibles. Le contexte de conversation est temporaire. Cet apprentissage local ne réentraîne pas un modèle de langage ; Internet reste une source optionnelle. Sans code utilisateur, seuls ton prénom et ta ville sont accessibles parmi tes informations personnelles.",
         publicContextTopic: void 0
@@ -2158,9 +2361,17 @@ var NexusNativeBrain = function () {
     if (practical) return __spreadProps(__spreadValues({}, result), {
       text: practical
     });
-    var grounded = answerFromNotes(request.message, notes);
+    var composed = composeEvidence(understanding, notes);
+    if (composed) return __spreadProps(__spreadValues(__spreadValues({}, result), composed), {
+      publicContextTopic: void 0
+    });
+    var grounded = answerFromNotes(understanding.query, notes);
     if (grounded) return __spreadValues(__spreadValues({}, result), grounded);
-    if (/^(?:la |une |lis (?:la |ma )?|decris (?:la |ma )?|explique (?:la |ma )?)note\b/.test(words2)) {
+    if (understanding.contextual) return __spreadProps(__spreadValues({}, result), {
+      text: question.kind === "why" ? "La source utilisée ne précise pas cette raison. Je ne peux pas la déduire avec certitude." : "La source utilisée ne précise pas ce point. Précise ce que tu souhaites comprendre.",
+      publicContextTopic: void 0
+    });
+    if (/^(?:la |une |lis (?:la |ma )?|decris (?:la |ma )?|explique (?:la |ma )?)note\b/.test(words)) {
       var titles = notes.filter(function (note) {
         return !isPrivateMemory(note);
       }).slice(0, 3).map(function (note) {
@@ -2202,6 +2413,12 @@ var NexusNativeBrain = function () {
       }))
     });
   };
+  var _handleNativeUnderstandingJson = function _handleNativeUnderstandingJson(input) {
+    if (typeof input !== "string" || input.length > native_capacity_default.MAX_REQUEST_CHARS) throw new Error("Invalid understanding request");
+    var value = JSON.parse(input);
+    if (!record(value) || !boundedText(value.message, native_capacity_default.MAX_MESSAGE_CHARS)) throw new Error("Invalid understanding request");
+    return JSON.stringify(understandRequest(value.message, validateEvidenceContext(value.evidenceContext)));
+  };
   var _handleNativeLearningJson = function _handleNativeLearningJson(input) {
     if (typeof input !== "string" || input.length > native_capacity_default.MAX_REQUEST_CHARS) throw new Error("Invalid learning request");
     var request = validateRequest(JSON.parse(input));
@@ -2217,8 +2434,28 @@ var NexusNativeBrain = function () {
     }), value.steeringAxle));
   };
   var _handleNativeTurnJson = function _handleNativeTurnJson(input) {
+    var _a;
     if (typeof input !== "string" || input.length > MAX_INPUT_CHARS) throw new Error("Native input too large");
-    return JSON.stringify(_createNativeTurn(JSON.parse(input)));
+    var value = JSON.parse(input);
+    var reply = _createNativeTurn(value);
+    var request = value;
+    if (((_a = reply.evidenceIds) == null ? void 0 : _a.length) && !reply.requiresUserCode) {
+      var selected = new Set(reply.evidenceIds);
+      var visibleSources = request.notes.filter(function (note) {
+        return selected.has(note.id) && (note.expiresAt === null || note.expiresAt > request.now) && !containsCredential("".concat(note.title, " ").concat(note.excerpt));
+      }).flatMap(function (note) {
+        var visible = request.privateAccessGranted === true ? note : publicProjection(note);
+        return visible ? [{
+          id: visible.id,
+          title: visible.title,
+          source: visible.source
+        }] : [];
+      });
+      reply.evidenceSources = Array.from(new Map(visibleSources.map(function (source) {
+        return [source.id, source];
+      })).values()).slice(0, 4);
+    }
+    return JSON.stringify(reply);
   };
   return __toCommonJS(native_bridge_exports);
 }();

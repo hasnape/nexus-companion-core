@@ -15,7 +15,7 @@ internal object NativeCapacity {
     const val COMMAND_WAIT_MS = 30000
     const val SPEECH_SECONDS = 178
     const val RECOGNITION_TIMEOUT_MS = 180000
-    const val RESPONSE_TIMEOUT_MS = 15000
+    const val RESPONSE_TIMEOUT_MS = 45000
     const val PENDING_CONFIRMATION_MS = 300000
     const val BRAIN_INSTRUCTIONS = 800000000
     const val BRAIN_TIME_MS = 8000

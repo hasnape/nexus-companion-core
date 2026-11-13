@@ -192,9 +192,9 @@ internal class VoiceSession(
                             showTranscript(text, true)
                             acceptTranscript(text)
                         } else if ((awaitingCommand || hypotheses.firstOrNull()?.text?.let(VoiceTranscriptPolicy::parse)?.hasWake == true)
-                            && VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull())) {
+                            && (VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull()) || VoiceTranscriptPolicy.uncertainUtterance(hypotheses.firstOrNull()) || VoiceTranscriptPolicy.ambiguousAction(hypotheses))) {
                             commandTimerPending = true
-                            playReply("Je n’ai pas bien entendu ta confirmation. Peux-tu répéter ?", expectAnswer = true)
+                            playReply(if (VoiceTranscriptPolicy.uncertainConfirmation(hypotheses.firstOrNull())) "Je n’ai pas bien entendu ta confirmation. Peux-tu répéter ?" else "Je n’ai pas compris la phrase avec assez de certitude. Peux-tu répéter ou l’écrire ?", expectAnswer = true)
                         }
                         if (awaitingCommand && utterance == null && capturing && !commandTimerPending) armCommandTimeout()
                         if (utterance == null) scheduleRestart(delayMs = nextTurnDelay)

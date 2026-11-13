@@ -26,6 +26,23 @@ for (const [filename, content] of Object.entries(generated)) {
     if (await readFile(path.join(root, filename), 'utf8') !== content) throw new Error(`Stale capacity contract: ${filename}`);
   } else await writeFile(path.join(root, filename), content);
 }
+const recoveredRoot = path.join(root, 'packages/companion-core/recovered-native/0.4.25');
+if (!process.argv.includes('--from-typescript')) {
+  const script = await readFile(path.join(recoveredRoot, 'nexus-brain.js'));
+  if (createHash('sha256').update(script).digest('hex') !== '48da6489e14dd595c48706c0d65f9d3e3c72b83d3d062b22636968bf4deaf779') throw new Error('Recovered 0.4.25 source changed');
+  const filenames = ['packages/companion-core/recovered-native/0.4.25/nexus-brain.js', 'packages/companion-core/recovered-native/0.4.25/manifest.json', ...Object.keys(generated), 'scripts/build-native-brain.mjs'];
+  const sources = Object.fromEntries(await Promise.all(filenames.map(async filename => [filename, createHash('sha256').update(await readFile(path.join(root, filename))).digest('hex')])));
+  const metadata = JSON.stringify({protocolVersion: 1, engine: 'nexus-core-rules-v1', recoveredFrom: 'signed-android-0.4.25', sha256: createHash('sha256').update(script).digest('hex'), sources}, null, 2) + '\n';
+  if (check) {
+    if (!(await readFile(path.join(destination, 'nexus-brain.js'))).equals(script) || await readFile(path.join(destination, 'manifest.json'), 'utf8') !== metadata) throw new Error('Recovered native brain is stale');
+    console.log('Android brain exactly preserves the delivered 0.4.25 runtime.');
+  } else {
+    await mkdir(destination, {recursive: true});
+    await writeFile(path.join(destination, 'nexus-brain.js'), script);
+    await writeFile(path.join(destination, 'manifest.json'), metadata);
+  }
+  process.exit(0);
+}
 const result = await build({
   entryPoints: [path.join(root, 'packages/companion-core/src/native-bridge.ts')],
   absWorkingDir: root, metafile: true,

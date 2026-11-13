@@ -12,6 +12,17 @@ internal class KnowledgeSearchIndex(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<String>, List<LocalKnowledgeLibrary.Entry>>?) = size > 8
     }
 
+    private val passages = LocalPassageRetrieval()
+    private data class ConversationRanking(val active: List<LocalKnowledgeLibrary.Entry>, val ranked: List<LocalKnowledgeLibrary.Entry>)
+    private val conversationResults = object : LinkedHashMap<List<String>, ConversationRanking>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<String>, ConversationRanking>?) = size > 8
+    }
+    fun rankForConversation(terms: List<String>, now: Long): List<LocalKnowledgeLibrary.Entry> {
+        val active = rank(terms).filterNot { KnowledgePolicy.isExpired(it.expiresAt, now) }
+        conversationResults[terms]?.takeIf { it.active == active }?.let { return it.ranked }
+        return passages.rerank(terms, active).also { conversationResults[terms.toList()] = ConversationRanking(active, it) }
+    }
+
     fun rank(terms: List<String>): List<LocalKnowledgeLibrary.Entry> {
         if (terms.isEmpty()) return emptyList()
         results[terms]?.let { return it }

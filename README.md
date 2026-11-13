@@ -1,5 +1,7 @@
 # Nexus Companion Face (V1)
 
+Android **0.4.27** : notes personnelles accessibles au LLM sur activation explicite, citations contrôlées et sauvegarde chiffrée des notes avec restauration réversible. [Installation, portée et preuves](docs/releases/ANDROID-0.4.27-2026-11-13.md) · [Étapes de finalisation](docs/implementation/ANDROID-FINALISATION-PAR-ETAPES-2026-11-13.md).
+
 Compagnon IA **local-first** avec visage animé 2D, voix (fallback silencieux), écoute micro (Web Speech API), mémoire utile locale, moteur d'état interne et micro-décisions sociales.
 
 ## Objectif
@@ -92,4 +94,4 @@ Le cœur décisionnel reste basé sur **actions abstraites** pour réutilisation
 
 ## Application Android native
 
-Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.4.22 ajoute une lecture à la demande des Aperçus IA de Google affichés dans Chrome, après activation explicite d’un accès Android dédié. Une recherche Web peut revenir lire son résultat accessible ; un texte copié peut aussi être relu après aperçu. L’enregistrement en mémoire reste confirmé et conserve la provenance non vérifiée. Le moteur local, le modèle français, la mémoire chiffrée et les modes visage/corps sont conservés. Voir le [rapport de validation](docs/releases/ANDROID-0.4.22-2026-11-12.md) pour les contrôles et les limites sur appareil. Les [mentions de propriété](OWNERSHIP.md) restent distinctes des licences des composants tiers.
+Le projet Android se trouve dans [`apps/companion-android`](apps/companion-android/README.md). La version 0.4.27 relie les notes autorisées au modèle LFM2.5 installé séparément et permet de sauvegarder toutes les notes et leurs anciennes versions dans une archive portable chiffrée. Les commandes, confirmations et droits restent gérés par le moteur central. L’écoute reste au premier plan ; la précision acoustique, l’audibilité et l’autonomie demandent des essais sur téléphone. La vision, la reconnaissance du locuteur, le choix entre plusieurs compagnons et le pilotage matériel restent à réaliser. Voir le [rapport de validation](docs/releases/ANDROID-0.4.27-2026-11-13.md). Les [mentions de propriété](OWNERSHIP.md) restent distinctes des licences des composants tiers.

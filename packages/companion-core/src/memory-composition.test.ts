@@ -4,7 +4,7 @@ import { createNativeTurn, type NativeNote } from './native-bridge';
 const saved = (id: string, excerpt: string, title = 'Repère'): NativeNote => ({
   id, title, excerpt, source: 'user:manual', recordedAt: 100, expiresAt: null, verified: false
 });
-const answer = (message: string, notes: NativeNote[]) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000 });
+const answer = (message: string, notes: NativeNote[]) => createNativeTurn({ protocolVersion: 1, message, notes, now: 1000, privateAccessGranted: true });
 
 describe('composing personal answers from separate saved facts', () => {
   it('joins distinct facts without requiring them to occur in one sentence or note', () => {

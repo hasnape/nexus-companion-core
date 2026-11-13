@@ -14,6 +14,7 @@ const stop = new Set(('a au aux ca ce ces de des du en et est il je la le les ma
   'moi qu ai as fait ce c d l s t j n y propos sujet sais savoir encore note notes rappelle souviens').split(' '));
 const families = [
   ['prenom', 'nom', 'appelle'],
+  ['ville', 'habite', 'habites', 'vis', 'vit', 'residence'],
   ['metier', 'profession', 'travaille', 'travail', 'emploi', 'poste'],
   ['preference', 'preferences', 'prefere', 'preferes', 'preferee', 'preferees', 'aime', 'aimes'],
   ['voiture', 'vehicule', 'automobile'],
@@ -37,7 +38,8 @@ export const nativeRetrievalTerms = (message: string): string[] => {
   const terms = words(analyzeQuestion(message).content).slice(0, 12);
   const expanded = terms.flatMap((word) => families.find((family) => family.includes(word)) ?? [word]);
   if (terms.some((word) => families[0].includes(word))) expanded.push('le createur est');
-  return Array.from(new Set(expanded)).slice(0, 36);
+  if (terms.includes('createur')) expanded.push('le createur est', 'prenom');
+  return Array.from(new Set(expanded)).slice(0, 64);
 };
 
 const toSecondPerson = (text: string): string => text
@@ -50,6 +52,8 @@ const toSecondPerson = (text: string): string => text
   .replace(/^je pr[ée]f[èe]re\s+/i, 'Tu préfères ')
   .replace(/^j['’]aime\s+/i, 'Tu aimes ')
   .replace(/^je travaille\s+/i, 'Tu travailles ')
+  .replace(/^je vis\s+/i, 'Tu vis ')
+  .replace(/^j['’]habite\s+/i, 'Tu habites ')
   .replace(/^mon m[ée]tier est\s+/i, 'Ton métier est ');
 
 type GroundedAnswer = { text: string; evidenceIds: string[] };

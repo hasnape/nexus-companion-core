@@ -37,7 +37,7 @@ import org.robolectric.Shadows.shadowOf
 import java.io.File
 import java.util.Locale
 
-class MainActivityWithAndroidVoice : MainActivity() {
+open class MainActivityWithAndroidVoice : MainActivity() {
     var chromeReady = false
     var chromeLaunches = 0
     override fun beginChromeReading(expectedQuery: String?): Boolean {
@@ -52,6 +52,7 @@ class MainActivityWithAndroidVoice : MainActivity() {
         externalRequests.add(request)
         return externalResult ?: super.launchExternalApp(request)
     }
+    override fun privateAccessAllowed(): Boolean = true
     override fun createVoiceInput(): VoiceInput = AndroidVoiceInput(applicationContext)
     override fun createKnowledgeLibrary(): LocalKnowledgeLibrary = LocalKnowledgeLibrary(applicationContext,
         "nexus-default", LocalKnowledgeLibraryTest.JvmCipher("nexus-default"))

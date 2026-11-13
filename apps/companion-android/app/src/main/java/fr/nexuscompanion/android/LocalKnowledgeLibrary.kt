@@ -207,7 +207,9 @@ internal class LocalKnowledgeLibrary(
         query: String,
         now: Long = System.currentTimeMillis(),
         recall: KnowledgePolicy.Recall? = KnowledgePolicy.recallFor(query),
-        queryTerms: List<String> = KnowledgePolicy.queryTerms(query)
+        queryTerms: List<String> = KnowledgePolicy.queryTerms(query),
+        maxNotes: Int = NativeCapacity.MAX_CONTEXT_NOTES,
+        preferredIds: List<String> = emptyList()
     ): List<Entry> = synchronized(storeLock) {
         val entries = readEntries().filter { it.supersededBy == null && !KnowledgePolicy.isExpired(it.expiresAt, now) }
         val terms = when (recall) {
@@ -220,7 +222,12 @@ internal class LocalKnowledgeLibrary(
         val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic && recall !is KnowledgePolicy.Recall.Read) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
-        ranked.distinctBy { it.title to it.excerpt }.take(NativeCapacity.MAX_CONTEXT_NOTES)
+        // Learned associations never override an explicit full-note selection or an expired source.
+        val byId = if (preferredIds.isNotEmpty()) entries.associateBy { it.id } else emptyMap()
+        val learned = if (recall == null) preferredIds.take(NativeCapacity.MAX_CONTEXT_NOTES).mapNotNull(byId::get) else emptyList()
+        // Preserve exact search matches. Learned associations fill the remaining context;
+        // they may replace the recent-note fallback, never crowd out a direct match.
+        (matches + learned + ranked).distinctBy { it.title to it.excerpt }.take(maxNotes.coerceIn(1, NativeCapacity.MAX_CONTEXT_NOTES))
     }
 
     private fun matchingEntries(tokens: List<String>, now: Long): List<Entry> {

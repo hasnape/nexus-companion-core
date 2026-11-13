@@ -372,6 +372,30 @@
                 android:text="@string/updates" />
 
             <Button
+                android:id="@+id/home_learning"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/learning_and_hardware" />
+
+            <Button
+                android:id="@+id/home_user_access"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/user_code_access" />
+
+            <Button
+                android:id="@+id/home_lock_access"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/lock_personal_access" />
+
+            <Button
                 android:id="@+id/home_about"
                 style="@style/HomeAction"
                 android:layout_width="match_parent"

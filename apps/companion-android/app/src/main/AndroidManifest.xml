@@ -18,6 +18,9 @@
    <meta-data android:name="android.accessibilityservice" android:resource="@xml/chrome_reader_service" />
   </service>
   <activity android:name=".VoiceSettingsActivity" android:exported="false" />
+  <activity android:name=".UserCodeActivity" android:exported="false" android:excludeFromRecents="true"
+   android:theme="@style/NexusHomeTheme" android:windowSoftInputMode="adjustResize" />
+  <service android:name=".LocalLearningJobService" android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE" />
   <activity android:name=".UpdateActivity" android:exported="false" />
   <provider android:name=".UpdateFileProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true">
    <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />

@@ -22,8 +22,8 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 28
-  versionName = "0.4.22-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 29
+  versionName = "0.4.23-native-alpha" + if (nexusPreview) "-preview" else ""
   ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) }
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())
   buildConfigField("String", "FRENCH_MODEL_ID", "\"$frenchModelId\"")
@@ -126,6 +126,7 @@ val prepareFrenchRecognitionModel by tasks.registering {
 
 tasks.withType<Test>().configureEach {
  systemProperty("nexus.brain.asset", layout.projectDirectory.file("src/main/assets/brain/nexus-brain.js").asFile.absolutePath)
+ systemProperty("nexus.acceptance.reportDir", layout.buildDirectory.dir("reports/acceptance").get().asFile.absolutePath)
  systemProperty("robolectric.dependency.repo.url", System.getProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2"))
  listOf("http.proxyHost", "http.proxyPort", "https.proxyHost", "https.proxyPort", "javax.net.ssl.trustStore").forEach { key ->
   System.getProperty(key)?.let { systemProperty(key, it) }

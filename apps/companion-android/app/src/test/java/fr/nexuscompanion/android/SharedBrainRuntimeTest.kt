@@ -5,6 +5,16 @@ import org.junit.Test
 import java.io.File
 
 class SharedBrainRuntimeTest {
+    @Test fun theExtendedProfileCanUseTheHundredAndTwentyEighthSource() {
+        val notes = (0 until NativeCapacity.MAX_CONTEXT_NOTES).joinToString(",", "[", "]") { i ->
+            val excerpt = if (i == NativeCapacity.MAX_CONTEXT_NOTES - 1) "Je préfère le thé vert." else "Une observation documentaire générale."
+            """{"id":"note-$i","title":"Dossier $i","excerpt":"$excerpt","source":"user:manual","recordedAt":$i,"expiresAt":null,"verified":false}"""
+        }
+        runtime().use { brain ->
+            val reply = brain.replyJson(request("Quelle boisson je préfère ?", notes))
+            assertTrue(reply, reply.contains("thé vert")); assertTrue(reply, reply.contains("note-127"))
+        }
+    }
     @Test fun findsTheThirtySecondNoteInTheExpandedRealInterpreterContext() {
         val notes = (0 until 32).joinToString(",", "[", "]") { i ->
             val excerpt = "Observation documentaire. ".repeat(400) + if (i == 31) "Je préfère le thé vert." else "Une information générale."
@@ -34,7 +44,7 @@ class SharedBrainRuntimeTest {
     private fun runtime() = SharedBrainRuntime(File(requireNotNull(System.getProperty("nexus.brain.asset"))).readText())
     private fun request(message: String, notes: String = "[]"): String {
         val escaped = message.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
-        return """{"protocolVersion":1,"message":"$escaped","notes":$notes,"now":1000000}"""
+        return """{"protocolVersion":1,"message":"$escaped","notes":$notes,"now":1000000,"privateAccessGranted":true}"""
     }
 
     @Test fun executesTheActualPackagedSharedBrain() {
@@ -58,16 +68,16 @@ class SharedBrainRuntimeTest {
         }
     }
 
-    @Test fun recallsOnlyUnexpiredNonSensitiveNotes() {
+    @Test fun recallsOnlyUnexpiredNotesWithoutCredentialsWhenAuthorized() {
         val notes = """[
           {"id":"safe","title":"Thé","excerpt":"Je préfère le thé vert","source":"user:manual","recordedAt":10,"expiresAt":null,"verified":false},
-          {"id":"private","title":"Adresse","excerpt":"mon adresse exacte est privée","source":"user:manual","recordedAt":10,"expiresAt":null,"verified":false},
+          {"id":"private","title":"Code","excerpt":"mon mot de passe est privé","source":"user:manual","recordedAt":10,"expiresAt":null,"verified":false},
           {"id":"old","title":"Ancienne note","excerpt":"ancienne préférence café","source":"user:manual","recordedAt":10,"expiresAt":999999,"verified":false}
         ]"""
         runtime().use { brain ->
             val output = brain.replyJson(request("de quoi te souviens-tu ?", notes))
             assertTrue(output.contains("thé vert"))
-            assertFalse(output.contains("exacte est privée"))
+            assertFalse(output.contains("mot de passe est privé"))
             assertFalse(output.contains("préférence café"))
         }
     }

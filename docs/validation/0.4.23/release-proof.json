@@ -1,0 +1,59 @@
+{
+  "base": "be8aba57b45e79f5b390c164071bdc1d239a157f",
+  "compiledTree": "7206f72e20926f334567ca4e23ea7d031268ac57",
+  "newCertificateSha256": "01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1",
+  "oldCertificateSha256": "01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1",
+  "zipalign16k": true,
+  "package": "fr.nexuscompanion.android",
+  "version": "0.4.23-native-alpha",
+  "versionCode": 29,
+  "minSdk": 31,
+  "targetSdk": 35,
+  "bytes": 62662983,
+  "apkSha256": "178a6dc87633bde0c90bf70f9762f362f62bbc4d230dbcabf9ed0ad2f7622f34",
+  "unchangedNativeLibraries": 8,
+  "abis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "unchangedSpeechModelSha256": "cabf6180e177eb9b3a9a9d43a437bd5e549f3a7d09525e5d69a3fed787be12ad",
+  "unchangedNoticesBytes": 33305,
+  "brainSha256": "24baf77d88ed99e323d1c80ca40036db02810d72f765f785b9b7cc2806329d2b",
+  "brainBytes": 147835,
+  "brainSources": 24,
+  "testsDebug": {
+    "tests": 349,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintDebug": [],
+  "acceptanceDebug": {
+    "total": 35,
+    "passed": 35
+  },
+  "testsRelease": {
+    "tests": 349,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "lintRelease": [],
+  "acceptanceRelease": {
+    "total": 35,
+    "passed": 35
+  },
+  "newDangerousPermissions": [],
+  "ownershipPreserved": true,
+  "typescriptTests": {
+    "suites": 51,
+    "tests": 438,
+    "failures": 0
+  },
+  "typecheck": true,
+  "eslint": true,
+  "webBuild": true,
+  "nativeBundleCheck": true
+}

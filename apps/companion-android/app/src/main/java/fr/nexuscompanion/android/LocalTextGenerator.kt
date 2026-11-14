@@ -93,11 +93,24 @@ internal object NativeLocalLlm {
 }
 
 internal object LocalDraftPolicy {
-    fun permitted(snapshot: DeviceResources.Snapshot): Boolean =
-        snapshot.abis.any { it == "arm64-v8a" || it == "x86_64" } && !snapshot.lowMemory &&
-        snapshot.availableRam >= LocalModelSpec.MIN_AVAILABLE_RAM && !snapshot.powerSave &&
-        snapshot.thermalStatus < PowerManager.THERMAL_STATUS_MODERATE &&
-        (snapshot.charging || snapshot.batteryPercent?.let { it > 15 } == true)
+    /** Reasons are checked in the same order by the UI and the generator. A check is not a RAM reservation. */
+    fun blockReason(snapshot: DeviceResources.Snapshot): String? = when {
+        snapshot.abis.none { it == "arm64-v8a" || it == "x86_64" } ->
+            "Architecture 64 bits non disponible."
+        snapshot.lowMemory ->
+            "Android signale une pression mémoire : génération suspendue."
+        snapshot.availableRam < LocalModelSpec.MIN_AVAILABLE_RAM ->
+            "RAM disponible insuffisante : ${snapshot.availableRam / (1024 * 1024)} Mio ; minimum ${LocalModelSpec.MIN_AVAILABLE_RAM / (1024 * 1024)} Mio pour lancer ce modèle."
+        snapshot.powerSave ->
+            "Mode économie d’énergie actif : génération suspendue."
+        snapshot.thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE ->
+            "Appareil trop chaud : génération suspendue."
+        !snapshot.charging && (snapshot.batteryPercent == null || snapshot.batteryPercent <= 15) ->
+            "Batterie trop faible ou niveau inconnu : brancher le téléphone."
+        else -> null
+    }
+
+    fun permitted(snapshot: DeviceResources.Snapshot): Boolean = blockReason(snapshot) == null
 
     fun clean(text: String): String? {
         val cleaned = text.trim()

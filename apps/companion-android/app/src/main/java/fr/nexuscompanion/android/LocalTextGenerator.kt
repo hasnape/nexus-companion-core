@@ -7,6 +7,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** The core authorizes the public question or a small set of current note excerpts. */
@@ -93,11 +94,24 @@ internal object NativeLocalLlm {
 }
 
 internal object LocalDraftPolicy {
-    fun permitted(snapshot: DeviceResources.Snapshot): Boolean =
-        snapshot.abis.any { it == "arm64-v8a" || it == "x86_64" } && !snapshot.lowMemory &&
-        snapshot.availableRam >= LocalModelSpec.MIN_AVAILABLE_RAM && !snapshot.powerSave &&
-        snapshot.thermalStatus < PowerManager.THERMAL_STATUS_MODERATE &&
-        (snapshot.charging || snapshot.batteryPercent?.let { it > 15 } == true)
+    /** Reasons are checked in the same order by the UI and the generator. A check is not a RAM reservation. */
+    fun blockReason(snapshot: DeviceResources.Snapshot): String? = when {
+        snapshot.abis.none { it == "arm64-v8a" || it == "x86_64" } ->
+            "Architecture 64 bits non disponible."
+        snapshot.lowMemory ->
+            "Android signale une pression mémoire : génération suspendue."
+        snapshot.availableRam < LocalModelSpec.MIN_AVAILABLE_RAM ->
+            "RAM disponible insuffisante : ${snapshot.availableRam / (1024 * 1024)} Mio ; minimum ${LocalModelSpec.MIN_AVAILABLE_RAM / (1024 * 1024)} Mio pour lancer ce modèle."
+        snapshot.powerSave ->
+            "Mode économie d’énergie actif : génération suspendue."
+        snapshot.thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE ->
+            "Appareil trop chaud : génération suspendue."
+        !snapshot.charging && (snapshot.batteryPercent == null || snapshot.batteryPercent <= 15) ->
+            "Batterie trop faible ou niveau inconnu : brancher le téléphone."
+        else -> null
+    }
+
+    fun permitted(snapshot: DeviceResources.Snapshot): Boolean = blockReason(snapshot) == null
 
     fun clean(text: String): String? {
         val cleaned = text.trim()
@@ -111,6 +125,13 @@ internal object LocalDraftPolicy {
     }
 }
 
+/** Guards native model/context allocation against overlapping requests. */
+internal class NativeGenerationGate {
+    private val busy = AtomicBoolean(false)
+    fun tryEnter(): Boolean = busy.compareAndSet(false, true)
+    fun leave() { busy.set(false) }
+}
+
 internal class LocalTextGenerator(
     private val context: Context,
     private val store: LocalModelStore = LocalModelStore(context),
@@ -119,14 +140,20 @@ internal class LocalTextGenerator(
     override val usesNotes: Boolean get() = store.enabled && store.notesEnabled
     private val epoch = AtomicLong()
     private val active = AtomicLong()
+    // Only one GGUF model/context may be loaded at a time in this process.
+    // A second request must not double native RAM use or overwrite the cancellable handle.
+    private val generating = NativeGenerationGate()
     @Volatile private var closed = false
     override fun generate(request: LocalDraftRequest): String? {
         val token = epoch.get()
         if (closed || !android.os.Process.is64Bit() || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled) || !store.installed() || !LocalDraftPolicy.permitted(resources()) || !NativeLocalLlm.available) return null
-        val handle = try { NativeLocalLlm.create() } catch (_: LinkageError) { return null }
-        if (handle == 0L) return null
-        active.set(handle)
+        if (!generating.tryEnter()) return null
+        var handle = 0L
         return try {
+            if (closed || epoch.get() != token || !LocalDraftPolicy.permitted(resources())) return null
+            handle = NativeLocalLlm.create()
+            if (handle == 0L) return null
+            active.set(handle)
             if (closed || epoch.get() != token) return null
             val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
             val raw = if (request.evidence.isEmpty()) NativeLocalLlm.generate(handle, store.file.absolutePath, request.question, threads, 20_000)
@@ -134,7 +161,13 @@ internal class LocalTextGenerator(
             if (closed || epoch.get() != token || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled)) null
                 else if (request.evidence.isEmpty()) LocalDraftPolicy.clean(raw) else raw.takeIf { GroundedNotes.validate(it, request.evidence) != null }
         } catch (_: Exception) { null } catch (_: LinkageError) { null }
-        finally { active.compareAndSet(handle, 0); NativeLocalLlm.release(handle) }
+        finally {
+            if (handle != 0L) {
+                active.compareAndSet(handle, 0)
+                try { NativeLocalLlm.release(handle) } catch (_: LinkageError) { /* Native library unavailable. */ }
+            }
+            generating.leave()
+        }
     }
     override fun cancel() {
         epoch.incrementAndGet()

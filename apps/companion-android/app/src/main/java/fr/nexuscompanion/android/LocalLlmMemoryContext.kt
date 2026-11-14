@@ -8,7 +8,20 @@ internal object LocalLlmMemoryContext {
     )
     data class Prompt(val system: String, val user: String, val evidenceIds: List<String>)
 
-    fun prepare(message: String, notes: List<Evidence>, privateAccessGranted: Boolean, companionName: String = "Nexus"): Prompt {
+    /** Limits may grow on future devices, without changing the memory format. */
+    data class Limits(
+        val maxNotes: Int = 3,
+        val maxExcerptChars: Int = 500,
+        val maxContextChars: Int = 2100
+    ) {
+        init {
+            require(maxNotes in 1..8)
+            require(maxExcerptChars in 128..1000)
+            require(maxContextChars in 800..9000)
+        }
+    }
+
+    fun prepare(message: String, notes: List<Evidence>, privateAccessGranted: Boolean, companionName: String = "Nexus", limits: Limits = Limits()): Prompt {
         require(message.isNotBlank() && message.length <= 800)
         require(companionName.isNotBlank() && companionName.length <= 64)
         val blocks = mutableListOf<String>()
@@ -16,9 +29,9 @@ internal object LocalLlmMemoryContext {
         var used = 0
         for (note in notes.asSequence().filter { !it.expired && (!it.sensitive || privateAccessGranted) }
             .filter { it.id.isNotBlank() && it.title.isNotBlank() && it.excerpt.isNotBlank() }
-            .distinctBy { it.id }.take(3)) {
-            val block = "[NOTE ${ids.size + 1}]\nTitre : ${clean(note.title).take(100)}\nContenu : ${clean(note.excerpt).take(500)}\n[/NOTE]"
-            if (used + block.length > 2100) break
+            .distinctBy { it.id }.take(limits.maxNotes)) {
+            val block = "[NOTE ${ids.size + 1}]\nTitre : ${clean(note.title).take(100)}\nContenu : ${clean(note.excerpt).take(limits.maxExcerptChars)}\n[/NOTE]"
+            if (used + block.length > limits.maxContextChars) break
             blocks.add(block)
             ids.add(note.id)
             used += block.length

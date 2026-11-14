@@ -207,6 +207,9 @@ internal class NativeBrainService(
             val history = if (stats.archivedNotes == 0) "" else " Je conserve aussi ${stats.archivedNotes} ${if (stats.archivedNotes == 1) "ancienne version" else "anciennes versions"}."
             return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.$history", null, true, expectsAnswer = true)
         }
+        // Pure public arithmetic is answered offline, even when the optional GGUF model
+        // cannot be loaded. This path never reads or exposes personal notes.
+        OfflineArithmetic.answer(message)?.let { return Reply(it, null, true, expectsAnswer = true) }
         val body = JSONObject(brain().bodyJson(JSONObject().put("message", message).put("steeringAxle", steeringAxle).toString()))
         if (body.getBoolean("handled")) return Reply(body.getString("text"), null, true, expectsAnswer = true,
             body = body.optJSONObject("plan")?.let(RollingBodyState.Plan::read))

@@ -1,7 +1,7 @@
 {
   "protocolVersion": 1,
   "engine": "nexus-core-rules-v1",
-  "sha256": "24baf77d88ed99e323d1c80ca40036db02810d72f765f785b9b7cc2806329d2b",
+  "sha256": "6dcf24b3acac0a81613d857725a4e48a83c8c0ad10e2219ef42a86f1377075f6",
   "sources": {
     "apps/companion-android/app/src/main/java/fr/nexuscompanion/android/NativeCapacity.kt": "00169b86f5b8dddbf84232779135f25c3aaa5cc61aef03440e61207c00739d51",
     "apps/companion-android/app/src/main/res/values/native_capacity.xml": "674f4603dd82f001e3fd3221510ee8b1aaa674b12ddc757f1e289473c067f8f7",
@@ -10,6 +10,7 @@
     "packages/companion-core/src/cognitive.ts": "64409784fbdded8a35dbd11477d23bceb5dc636bc7e07643c9ccd6f9b5a82e17",
     "packages/companion-core/src/context.ts": "a0a8a7b3f4fc7944e2fb2c9bd5ea1ea00e0711437a092b083cce9e527f91e194",
     "packages/companion-core/src/decision.ts": "9a40574f97ca500ba8482cf8fa945f92af3f30b6a7e273a353862a8e6f4b24f3",
+    "packages/companion-core/src/dialogues-fr.ts": "393b87c3142721da5a420155f9c8e1dd9bb53f3fdad948d8fa33917d8e2e1e39",
     "packages/companion-core/src/grounded-memory.ts": "2dc4e19a2778ee2e7fd95162c269fe3fa736fc03de13152f2fb8823bbc0a96a3",
     "packages/companion-core/src/local-learning.ts": "5d3f357746cdcfcd8c01a6d18c58debdd6dc9315e8dec08a23bd07a5df08c31c",
     "packages/companion-core/src/memory-access.ts": "e1e053c28938ce1ca5def074eeca1cd0f0faead9bebfc2ed6cca79e02e3beb30",
@@ -21,7 +22,7 @@
     "packages/companion-core/src/profile.ts": "cca2fd991d1032b3e8ffe6c8c37c1c197b6547bba70462eb7539c9cea1f9db22",
     "packages/companion-core/src/public-lookup.ts": "644ef53b731a74a395a0e036b6b13e9b4f18d2d3b25a43041fef7db959ba767d",
     "packages/companion-core/src/question.ts": "a63d71500c9e59f723d349aed31d7321830fb0ec114385061335914cde5937f8",
-    "packages/companion-core/src/response.ts": "e55db3383bd5cb9fb408d77cc99243f7dc1c865f4cb089ad753780a8d85eabec",
+    "packages/companion-core/src/response.ts": "b5efba17cef9d1ddafbfc085971edc3bca817242369c060add7d38a83d0a4fd9",
     "packages/companion-core/src/support-knowledge.ts": "96227720ed72b84e1de6447d0a7502769439cd5638b99b3c7dbc6912d200ca2b",
     "packages/companion-core/src/wake.ts": "65f01dca410445c8999b5a954a1499ae060cda3ed859f02dc230298c42a450c0",
     "packages/shared/src/robot-capabilities.ts": "fe7ce27ae9e3cec1e7ff190ee43a6e178da5de1ca99f8cf46490b8491f0afbeb",

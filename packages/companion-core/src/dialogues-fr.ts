@@ -10,6 +10,11 @@ export const frenchDialogues: readonly FrenchDialogue[] = [
   { id: 'apology', patterns: ['pardon', 'excuse moi', 'desole', 'je suis desole'], replies: ['Aucun souci, je t’écoute.'] },
   { id: 'goodbye', patterns: ['au revoir', 'a bientot', 'a demain', 'bonne nuit'], replies: ['À bientôt !', 'Bonne nuit, repose-toi bien.'] },
   { id: 'status', patterns: ['comment ca va', 'comment vas tu', 'ca va', 'tu vas bien'], replies: ['Je suis disponible pour discuter. Et toi, comment vas-tu ?'] },
+  { id: 'please', patterns: ['s il te plait', 's il vous plait'], replies: ['Bien sûr. Que souhaites-tu ?'] },
+  { id: 'acknowledgement', patterns: ['d accord', 'ok', 'compris'], replies: ['Très bien.'] },
+  { id: 'uncertainty', patterns: ['je ne sais pas'], replies: ['On peut chercher ensemble si tu veux.'] },
+  { id: 'fatigue', patterns: ['je suis fatigue', 'je suis fatiguee'], replies: ['Tu veux faire une pause ?'] },
+  { id: 'stress', patterns: ['je suis stresse', 'je suis stressee'], replies: ['Tu veux m’expliquer ce qui te préoccupe ?'] },
   { id: 'presence', patterns: ['tu es la', 'tu m entends'], replies: ['Oui, je suis là et je t’écoute.'] },
   { id: 'joy', patterns: ['je suis heureux', 'je suis content', 'j ai reussi'], replies: ['Quelle bonne nouvelle ! Tu veux me raconter ?'] },
   { id: 'sadness', patterns: ['je suis triste', 'je me sens seul', 'je suis decu'], replies: ['Je suis là pour t’écouter si tu veux en parler.'] }

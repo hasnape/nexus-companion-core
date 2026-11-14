@@ -7,7 +7,7 @@ export interface FrenchDialogue {
 export const frenchDialogues: readonly FrenchDialogue[] = [
   { id: 'greeting', patterns: ['bonjour', 'salut', 'coucou', 'bonsoir', 'hello'], replies: ['Bonjour ! Je t’écoute. Comment vas-tu ?', 'Salut ! Comment vas-tu ?'] },
   { id: 'thanks', patterns: ['merci', 'merci beaucoup', 'je te remercie'], replies: ['Avec plaisir !', 'Je t’en prie !'] },
-  { id: 'apology', patterns: ['pardon', 'excuse moi', 'desole'], replies: ['Aucun souci, je t’écoute.'] },
+  { id: 'apology', patterns: ['pardon', 'excuse moi', 'desole', 'je suis desole'], replies: ['Aucun souci, je t’écoute.'] },
   { id: 'goodbye', patterns: ['au revoir', 'a bientot', 'a demain', 'bonne nuit'], replies: ['À bientôt !', 'Bonne nuit, repose-toi bien.'] },
   { id: 'status', patterns: ['comment ca va', 'comment vas tu', 'ca va', 'tu vas bien'], replies: ['Je suis disponible pour discuter. Et toi, comment vas-tu ?'] },
   { id: 'presence', patterns: ['tu es la', 'tu m entends'], replies: ['Oui, je suis là et je t’écoute.'] },

@@ -125,6 +125,13 @@ internal object LocalDraftPolicy {
     }
 }
 
+/** Guards native model/context allocation against overlapping requests. */
+internal class NativeGenerationGate {
+    private val busy = AtomicBoolean(false)
+    fun tryEnter(): Boolean = busy.compareAndSet(false, true)
+    fun leave() { busy.set(false) }
+}
+
 internal class LocalTextGenerator(
     private val context: Context,
     private val store: LocalModelStore = LocalModelStore(context),
@@ -135,12 +142,12 @@ internal class LocalTextGenerator(
     private val active = AtomicLong()
     // Only one GGUF model/context may be loaded at a time in this process.
     // A second request must not double native RAM use or overwrite the cancellable handle.
-    private val generating = AtomicBoolean(false)
+    private val generating = NativeGenerationGate()
     @Volatile private var closed = false
     override fun generate(request: LocalDraftRequest): String? {
         val token = epoch.get()
         if (closed || !android.os.Process.is64Bit() || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled) || !store.installed() || !LocalDraftPolicy.permitted(resources()) || !NativeLocalLlm.available) return null
-        if (!generating.compareAndSet(false, true)) return null
+        if (!generating.tryEnter()) return null
         var handle = 0L
         return try {
             if (closed || epoch.get() != token || !LocalDraftPolicy.permitted(resources())) return null
@@ -159,7 +166,7 @@ internal class LocalTextGenerator(
                 active.compareAndSet(handle, 0)
                 try { NativeLocalLlm.release(handle) } catch (_: LinkageError) { /* Native library unavailable. */ }
             }
-            generating.set(false)
+            generating.leave()
         }
     }
     override fun cancel() {

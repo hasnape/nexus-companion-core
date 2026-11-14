@@ -2,7 +2,7 @@
 
 ## Source et périmètre
 - `packages/companion-core/src/dialogues-fr.ts` est la bibliothèque exécutable partagée (règles courtes, non personnelles).
-- `apps/face-web/src/data/dialogues.fr.json` est un jeu de données initial non encore branché. Il ne faut pas le considérer comme source unique ni promettre que toutes ses entrées sont actives.
+- Les données communes restent exclusivement dans le paquet partagé; l'ancien JSON de démonstration non branché a été supprimé pour éviter deux sources divergentes.
 - `renderLocalSmallTalk` dans `packages/companion-core/src/response.ts` conserve les règles historiques prioritaires, puis utilise la bibliothèque en repli.
 - Les expressions ne sont reconnues que comme énoncés complets ; une question métier, une demande de mémorisation ou un sujet sensible doit rester traité par le moteur actuel.
 

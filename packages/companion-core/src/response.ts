@@ -330,8 +330,7 @@ export const renderLocalSmallTalk = (input: string): string | null => {
 };
 
 const renderNormalReply = (plan: NexusResponsePlan): string => {
-  const smallTalk = renderLocalSmallTalk(plan.userMessage);
-  if (smallTalk) return smallTalk;
+  // An explicit clarification decision has priority over small-talk acknowledgements.
   if (plan.shouldAskClarifyingQuestion) {
     if (isIncompleteMemoryCommand(plan.userMessage)) {
       return 'D’accord. Que veux-tu que je retienne exactement ?';
@@ -341,6 +340,8 @@ const renderNormalReply = (plan: NexusResponsePlan): string => {
     }
     return 'Pour bien vous aider, pouvez-vous préciser votre besoin en une phrase ?';
   }
+  const smallTalk = renderLocalSmallTalk(plan.userMessage);
+  if (smallTalk) return smallTalk;
 
   const base = `Je réponds à votre demande: "${plan.userMessage}".`;
   const projectHint = plan.activeProject ? `Projet actif pris en compte: ${plan.activeProject}.` : '';

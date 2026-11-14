@@ -255,6 +255,8 @@ const renderProjectReply = (plan: NexusResponsePlan): string => {
 };
 
 const renderSupportiveReply = (plan: NexusResponsePlan): string => {
+  const shortReply = replyToFrenchDialogue(plan.userMessage);
+  if (shortReply && /^(?:je suis triste|je me sens seul|je suis decu|je suis stresse|je suis stressee|je suis fatigue|je suis fatiguee)$/u.test(plan.userMessage.toLocaleLowerCase('fr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, ' ').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim())) return shortReply;
   const trustedAdult = plan.audienceMode === 'child_safe' || plan.audienceMode === 'family'
     ? 'Si la situation devient lourde, parle vite à un adulte de confiance.'
     : 'Si la détresse devient forte, parler à une personne de confiance peut vraiment aider.';

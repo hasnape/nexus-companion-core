@@ -22,8 +22,8 @@ android {
   applicationId = if (nexusPreview) "fr.nexuscompanion.android.preview" else "fr.nexuscompanion.android"
   minSdk = 31
   targetSdk = 35
-  versionCode = 33
-  versionName = "0.4.27-native-alpha" + if (nexusPreview) "-preview" else ""
+  versionCode = 34
+  versionName = "0.4.28-native-alpha" + if (nexusPreview) "-preview" else ""
   externalNativeBuild { cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release"); targets += "nexus_llm" } }
   ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")) }
   buildConfigField("boolean", "IS_PREVIEW", nexusPreview.toString())

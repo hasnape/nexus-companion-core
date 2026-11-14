@@ -1,3 +1,4 @@
+import { replyToFrenchDialogue } from './dialogues-fr';
 import {
   buildPersonalityGuidance,
   createDefaultNexusPersonalityProfile,
@@ -323,7 +324,7 @@ export const renderLocalSmallTalk = (input: string): string | null => {
   if (/^(?:au revoir|a bientot|bonne nuit|a plus)(?:\s+nexus)?$/.test(normalized)) {
     return 'À bientôt !';
   }
-  return null;
+  return replyToFrenchDialogue(input);
 };
 
 const renderNormalReply = (plan: NexusResponsePlan): string => {

@@ -77,6 +77,31 @@ class LocalGenerationTest {
         assertFalse(LocalDraftPolicy.permitted(ready.copy(powerSave = true)))
         assertFalse(LocalDraftPolicy.permitted(ready.copy(abis = listOf("armeabi-v7a"))))
     }
+    @Test fun memoryAdmissionReportsBlockersAndDoesNotConfuseJavaHeapWithNativeRam() {
+        val mib = 1024L * 1024L
+        val ready = balancedTestDevice.copy(
+            availableRam = 2L * 1024 * mib, heapBytes = 256L * mib,
+            lowMemory = false, powerSave = false, thermalStatus = 0,
+            charging = true, abis = listOf("arm64-v8a")
+        )
+        assertNull(LocalDraftPolicy.blockReason(ready))
+        assertTrue(LocalDraftPolicy.permitted(ready))
+
+        // The 256 MiB Java heap is not the native GGUF process memory budget.
+        val pressured = ready.copy(availableRam = 700L * mib)
+        val reason = LocalDraftPolicy.blockReason(pressured)
+        assertNotNull(reason)
+        assertTrue(reason!!.contains("700 Mio"))
+        assertTrue(reason.contains("1536 Mio"))
+        assertFalse(LocalDraftPolicy.permitted(pressured))
+
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(lowMemory = true))!!.contains("pression mémoire"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(powerSave = true))!!.contains("économie"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(thermalStatus = 2))!!.contains("chaud"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(charging = false, batteryPercent = null))!!.contains("Batterie"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(abis = listOf("armeabi-v7a")))!!.contains("64 bits"))
+    }
+
     @Test fun badOrCancelledImportPreservesThePreviousFile() {
         val context = RuntimeEnvironment.getApplication(); val store = LocalModelStore(context, availableBytes = { 2L shl 30 })
         store.file.writeText("previous")

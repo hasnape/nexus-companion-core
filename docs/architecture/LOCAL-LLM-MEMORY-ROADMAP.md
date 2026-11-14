@@ -47,3 +47,20 @@ Ce sont des **candidats**, non des modèles livrés ni des performances garantie
 5. Les résultats de `LocalLlmResourcePolicy` ne doivent jamais être présentés comme une garantie de mémoire, de latence ou de compatibilité avant les benchmarks sur l'appareil cible
 
 **État :** politique et limites dynamiques ajoutées sur branche de développement ; aucun moteur d'inférence, chargement de modèle, bascule runtime ni réglage utilisateur n'est encore branché.
+
+
+## Audit de l'APK v0.4.27 et du moteur déjà existant (14/11/2026)
+
+L'APK de référence fournie par le créateur contient `lib/arm64-v8a/libnexus_llm.so`, ainsi que les binaires x86_64, x86 et armeabi-v7a (les variantes 32 bits peuvent être des stubs), et les notices `LLAMA_CPP_LICENSE.txt` et `LFM2_5_LICENSE.txt`. **Aucun poids GGUF de 731 Mo n'est embarqué dans cette APK.**
+
+La branche source `feat/local-llm-voice-20261113` contient **déjà** un chemin d'inférence local opérationnel dans le code :
+- `LocalTextGenerator.kt` : `NativeLocalLlm`, `LocalModelStore`, `LocalModelSpec`, `LocalDraftPolicy`
+- `nexus_llm.cpp` : liaison JNI et inférence llama.cpp, annulation, timeout, échantillonnage et citations contraintes
+- `NativeBrainService.kt` : recherche de notes, vérification des autorisations, `GroundedNotes.prepare/validate`, revalidation des notes après génération et fallback déterministe
+- `LocalModelActivity.kt` : installation/import GGUF, activation du modèle et consentement distinct pour les notes personnelles
+
+**Conséquence architecturale : ne pas développer un deuxième moteur LLM.** Les classes `LocalLlmMemoryContext` et `LocalLlmResourcePolicy` de cette PR doivent être rapprochées du chemin `LocalTextGenerator` existant, après résolution de la divergence des branches, en préservant le filtrage et les citations exactes. En particulier, les paliers indicatifs 0,5B/1,5B/3B/7B ne sont pas des modèles pris en charge par le `LocalModelStore` actuel, qui n'autorise qu'un GGUF Liquid AI précisément épinglé et vérifié. Ne jamais supprimer la vérification d'empreinte pour activer les paliers.
+
+La politique actuelle `LocalDraftPolicy` exige **au moins 1,5 Gio de RAM disponible**, un processus Android 64 bits, une batterie au-dessus de 15 % (ou en charge), pas de mode économie d'énergie et pas de chauffe modérée. Sur un Galaxy A17 à 4 Go, l'inférence peut donc être refusée même si le modèle est installé. Une adaptation de seuils nécessite des mesures de consommation maximale réelle, pas seulement la sélection d'un palier théorique.
+
+L'APK seule ne constitue pas un dépôt source modifiable ; elle doit servir de **référence de vérification**. Éviter toute régression de signature, de mémoire ou de moteur vocal. Les essais réels sur le téléphone, l'installation du modèle, et la fusion de code restent à effectuer.

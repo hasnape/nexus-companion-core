@@ -54,6 +54,18 @@ internal class NativeBrainService(
     private var budget: DeviceResources.Budget? = null
     private fun codeRequired() = Reply("Le code utilisateur est nécessaire pour consulter ces informations personnelles. Saisis-le dans l’écran sécurisé.", null, true, requiresUserCode = true)
 
+    /** Personal questions and known local facts cannot be answered by an ungrounded public LLM. */
+    private fun publicModelMustNotAnswer(message: String): Boolean {
+        if (message.length > 600) return true
+        val words = VoiceTranscriptPolicy.commandWords(message)
+        if (Regex("(?:^|\\s)(?:mon|ma|mes|moi|je|nous|notre|nos|my|mine|our|ours)(?:\\s|$)").containsMatchIn(words)) return true
+        // Do not reveal via public-model availability whether a locked note exists.
+        if (!privateAccess()) return false
+        // A saved topic needs quoted evidence; missing attributes must not be invented.
+        return try { library.search(message).isNotEmpty() } catch (_: Exception) { true }
+    }
+
+
     fun learningStatistics() = learning.statistics(library.list())
     fun consolidate(foreground: Boolean = false): LocalLearningIndex.Statistics {
         val raw = DeviceResources.budget(resources())
@@ -337,6 +349,10 @@ internal class NativeBrainService(
         val offer = result.optString("publicLookupOffer")
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
+            // A missing personal fact is unknown; never turn it into a general-model guess.
+            if (publicModelMustNotAnswer(message)) return local.copy(
+                text = "Je ne retrouve pas cette information dans les notes personnelles enregistrées.",
+                publicContextTopic = null)
             // Only this core-validated public fallback may enter the language model.
             if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null && turnEvidence.isEmpty()) {
                 generator.generate(LocalDraftRequest(message, offer))?.let { draft ->

@@ -13,6 +13,16 @@ import java.io.IOException
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class NativeBrainServiceTest {
+    @Test fun frenchDialogueLibraryFlowsThroughNativeBrainOffline() {
+        val context = RuntimeEnvironment.getApplication()
+        val library = LocalKnowledgeLibrary(context, "dialogue-v1", LocalKnowledgeLibraryTest.JvmCipher("dialogue-v1"))
+        authorizedBrain(context, library).use { brain ->
+            assertTrue(brain.reply("Nexus, je suis fatigué").text.contains("pause"))
+            assertTrue(brain.reply("Nexus, je suis stressé").text.contains("préoccupe"))
+            assertTrue(brain.reply("Nexus, s'il te plaît").text.contains("souhaites"))
+            assertFalse(brain.reply("Bonjour, comment réparer mon PC ?").text.startsWith("Bonjour !"))
+        }
+    }
     @Test fun longPlaybackRenewsAReadOnlyResponseButCannotReviveConsent() {
         val context=RuntimeEnvironment.getApplication()
         val library=LocalKnowledgeLibrary(context,"played",LocalKnowledgeLibraryTest.JvmCipher("played"))

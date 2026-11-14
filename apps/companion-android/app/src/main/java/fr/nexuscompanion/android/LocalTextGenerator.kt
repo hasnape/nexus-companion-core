@@ -7,6 +7,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** The core authorizes the public question or a small set of current note excerpts. */
@@ -132,14 +133,20 @@ internal class LocalTextGenerator(
     override val usesNotes: Boolean get() = store.enabled && store.notesEnabled
     private val epoch = AtomicLong()
     private val active = AtomicLong()
+    // Only one GGUF model/context may be loaded at a time in this process.
+    // A second request must not double native RAM use or overwrite the cancellable handle.
+    private val generating = AtomicBoolean(false)
     @Volatile private var closed = false
     override fun generate(request: LocalDraftRequest): String? {
         val token = epoch.get()
         if (closed || !android.os.Process.is64Bit() || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled) || !store.installed() || !LocalDraftPolicy.permitted(resources()) || !NativeLocalLlm.available) return null
-        val handle = try { NativeLocalLlm.create() } catch (_: LinkageError) { return null }
-        if (handle == 0L) return null
-        active.set(handle)
+        if (!generating.compareAndSet(false, true)) return null
+        var handle = 0L
         return try {
+            if (closed || epoch.get() != token || !LocalDraftPolicy.permitted(resources())) return null
+            handle = NativeLocalLlm.create()
+            if (handle == 0L) return null
+            active.set(handle)
             if (closed || epoch.get() != token) return null
             val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
             val raw = if (request.evidence.isEmpty()) NativeLocalLlm.generate(handle, store.file.absolutePath, request.question, threads, 20_000)
@@ -147,7 +154,13 @@ internal class LocalTextGenerator(
             if (closed || epoch.get() != token || !store.enabled || (request.evidence.isNotEmpty() && !store.notesEnabled)) null
                 else if (request.evidence.isEmpty()) LocalDraftPolicy.clean(raw) else raw.takeIf { GroundedNotes.validate(it, request.evidence) != null }
         } catch (_: Exception) { null } catch (_: LinkageError) { null }
-        finally { active.compareAndSet(handle, 0); NativeLocalLlm.release(handle) }
+        finally {
+            if (handle != 0L) {
+                active.compareAndSet(handle, 0)
+                try { NativeLocalLlm.release(handle) } catch (_: LinkageError) { /* Native library unavailable. */ }
+            }
+            generating.set(false)
+        }
     }
     override fun cancel() {
         epoch.incrementAndGet()

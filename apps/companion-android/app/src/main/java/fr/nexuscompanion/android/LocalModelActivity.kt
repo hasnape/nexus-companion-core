@@ -85,9 +85,9 @@ class LocalModelActivity : Activity() {
         }
         val mib = 1024L * 1024L
         diagnostics.text = "RAM disponible maintenant : ${snapshot.availableRam / mib} Mio" +
-            " ; minimum pour ce modèle : ${LocalModelSpec.MIN_AVAILABLE_RAM / mib} Mio.\\n" +
-            "Tas Java autorisé : ${snapshot.heapBytes / mib} Mio (ce n’est pas la limite du moteur natif).\\n" +
-            "État des ressources : ${reason ?: "admissible pour un essai de génération"}.\\n" +
+            " ; minimum pour ce modèle : ${LocalModelSpec.MIN_AVAILABLE_RAM / mib} Mio.\n" +
+            "Tas Java autorisé : ${snapshot.heapBytes / mib} Mio (ce n’est pas la limite du moteur natif).\n" +
+            "État des ressources : ${reason ?: "admissible pour un essai de génération"}.\n" +
             "Aucune RAM n’est réservée ou garantie : Android peut la réattribuer."
         val base = if (busy) "Opération en cours…" else if (installed) "Modèle vérifié et installé." else "Modèle non installé. Les notes restent accessibles."
         val runtime = when {
@@ -96,7 +96,7 @@ class LocalModelActivity : Activity() {
             reason != null -> "LLM temporairement indisponible : $reason"
             else -> "Pré-vérification réussie. La génération reste à tester sur le téléphone."
         }
-        status.text = listOfNotNull(message, base, runtime).joinToString("\\n")
+        status.text = listOfNotNull(message, base, runtime).joinToString("\n")
         toggle.isEnabled = !busy && installed
         toggle.isChecked = store.enabled
         notesToggle.isEnabled = !busy && installed && store.enabled

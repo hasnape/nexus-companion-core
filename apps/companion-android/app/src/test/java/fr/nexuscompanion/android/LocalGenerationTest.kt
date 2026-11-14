@@ -77,6 +77,15 @@ class LocalGenerationTest {
         assertFalse(LocalDraftPolicy.permitted(ready.copy(powerSave = true)))
         assertFalse(LocalDraftPolicy.permitted(ready.copy(abis = listOf("armeabi-v7a"))))
     }
+    @Test fun singleFlightGuardPreventsSimultaneousNativeModelAllocations() {
+        val gate = NativeGenerationGate()
+        assertTrue(gate.tryEnter())
+        assertFalse("A second generation must not allocate another GGUF context", gate.tryEnter())
+        gate.leave()
+        assertTrue("A cancelled or completed request frees the slot", gate.tryEnter())
+        gate.leave()
+    }
+
     @Test fun memoryAdmissionReportsBlockersAndDoesNotConfuseJavaHeapWithNativeRam() {
         val mib = 1024L * 1024L
         val ready = balancedTestDevice.copy(

@@ -25,3 +25,5 @@ export * from './companion-memory-session';
 export * from './encrypted-companion-backup';
 export * from './backup-migration-gate';
 export * from './legacy-migration-copy';
+
+export * from './dialogues-fr';

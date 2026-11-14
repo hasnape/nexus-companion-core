@@ -75,6 +75,8 @@ class PixelMemoryScenarioTest {
             generator = model).use { nexus ->
             val reply = nexus.reply("Quelle est la date de naissance de Pixel ?", onlineEnabled = false)
             assertFalse(reply.text.contains("14 février"))
+            assertTrue(reply.text.contains("notes personnelles"))
+            assertFalse(reply.generatedLocally)
             assertEquals(1, notes.list().size)
             assertTrue(notes.list().single().excerpt.contains("fraises"))
         }

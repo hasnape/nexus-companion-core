@@ -38,8 +38,10 @@ if (( present == 4 )); then
   # would require uninstalling Nexus and could erase local companion memory.
   expected_cert="01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1"
   cert_report="$("$TOOLS/apksigner" verify --verbose --print-certs "$RELEASE_APK")"
-  printf '%s\n' "$cert_report" | grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' || {
-    echo 'Release APK is missing APK Signature Scheme v2.' >&2; exit 1;
+  # Android minSdk 31 accepts APK Signature Scheme v2 or v3.
+  # apksigner from build-tools 35 may emit v3-only release signatures.
+  printf '%s\n' "$cert_report" | grep -Eq 'Verified using v[23] scheme \(APK Signature Scheme v[23]\): true' || {
+    echo 'Release APK is missing a valid APK Signature Scheme v2/v3 signature.' >&2; exit 1;
   }
   actual_cert="$(printf '%s\n' "$cert_report" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
   [[ "$actual_cert" == "$expected_cert" ]] || {

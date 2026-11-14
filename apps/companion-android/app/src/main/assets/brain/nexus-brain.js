@@ -1465,6 +1465,79 @@ var NexusNativeBrain = function () {
       allowedCapabilities: ["chat", "memory", "voice", "project_assistance", "safety_refusal"]
     };
   };
+  var frenchDialogues = [{
+    id: "greeting",
+    patterns: ["bonjour", "salut", "coucou", "bonsoir", "hello"],
+    replies: ["Bonjour ! Je t’écoute. Comment vas-tu ?", "Salut ! Comment vas-tu ?"]
+  }, {
+    id: "thanks",
+    patterns: ["merci", "merci beaucoup", "je te remercie"],
+    replies: ["Avec plaisir !", "Je t’en prie !"]
+  }, {
+    id: "apology",
+    patterns: ["pardon", "excuse moi", "desole", "je suis desole"],
+    replies: ["Aucun souci, je t’écoute."]
+  }, {
+    id: "goodbye",
+    patterns: ["au revoir", "a bientot", "a demain", "bonne nuit"],
+    replies: ["À bientôt !", "Bonne nuit, repose-toi bien."]
+  }, {
+    id: "status",
+    patterns: ["comment ca va", "comment vas tu", "ca va", "tu vas bien"],
+    replies: ["Je suis disponible pour discuter. Et toi, comment vas-tu ?"]
+  }, {
+    id: "please",
+    patterns: ["s il te plait", "s il vous plait"],
+    replies: ["Bien sûr. Que souhaites-tu ?"]
+  }, {
+    id: "acknowledgement",
+    patterns: ["d accord", "ok", "compris"],
+    replies: ["Très bien."]
+  }, {
+    id: "uncertainty",
+    patterns: ["je ne sais pas"],
+    replies: ["On peut chercher ensemble si tu veux."]
+  }, {
+    id: "fatigue",
+    patterns: ["je suis fatigue", "je suis fatiguee"],
+    replies: ["Tu veux faire une pause ?"]
+  }, {
+    id: "stress",
+    patterns: ["je suis stresse", "je suis stressee"],
+    replies: ["Tu veux m’expliquer ce qui te préoccupe ?"]
+  }, {
+    id: "presence",
+    patterns: ["tu es la", "tu m entends"],
+    replies: ["Oui, je suis là et je t’écoute."]
+  }, {
+    id: "joy",
+    patterns: ["je suis heureux", "je suis content", "j ai reussi"],
+    replies: ["Quelle bonne nouvelle ! Tu veux me raconter ?"]
+  }, {
+    id: "sadness",
+    patterns: ["je suis triste", "je me sens seul", "je suis decu"],
+    replies: ["Je suis là pour t’écouter si tu veux en parler."]
+  }];
+  var normalize2 = function normalize2(value) {
+    return value.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’']/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  };
+  function findFrenchDialogue(input) {
+    var _a;
+    var text = normalize2(input).replace(/^nexus(?: companion)? /, "").replace(/ nexus$/, "");
+    if (!text || text.length > 100) return null;
+    return (_a = frenchDialogues.find(function (dialogue) {
+      return dialogue.patterns.some(function (pattern) {
+        return normalize2(pattern) === text;
+      });
+    })) != null ? _a : null;
+  }
+  function replyToFrenchDialogue(input) {
+    var _a;
+    var dialogue = findFrenchDialogue(input);
+    if (!dialogue) return null;
+    var replies = dialogue.replies;
+    return (_a = replies[normalize2(input).length % replies.length]) != null ? _a : null;
+  }
   var containsChildSignal = function containsChildSignal(text) {
     return /enfant|child|mineur|parent|famille|family|école|school|fils|fille|ado|teen|devoirs|homework|coucher|bedtime/i.test(text);
   };
@@ -1665,6 +1738,8 @@ var NexusNativeBrain = function () {
     return [projectLine, "Votre demande: \"".concat(plan.userMessage, "\"."), "Prochaines étapes recommandées:", "1) Clarifier le résultat attendu et les contraintes de sécurité.", "2) Découper en tâches maintenables avec critères de validation.", "3) Lancer une première itération locale, puis ajuster avec retour rapide."].join("\n");
   };
   var renderSupportiveReply = function renderSupportiveReply(plan) {
+    var shortReply = replyToFrenchDialogue(plan.userMessage);
+    if (shortReply && /^(?:je suis triste|je me sens seul|je suis decu|je suis stresse|je suis stressee|je suis fatigue|je suis fatiguee)$/.test(plan.userMessage.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[’']/g, " ").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim())) return shortReply;
     var trustedAdult = plan.audienceMode === "child_safe" || plan.audienceMode === "family" ? "Si la situation devient lourde, parle vite à un adulte de confiance." : "Si la détresse devient forte, parler à une personne de confiance peut vraiment aider.";
     return ["Merci de me l’avoir confié.", "On avance calmement: une respiration lente, puis une petite action faisable maintenant.", trustedAdult].join(" ");
   };
@@ -1709,11 +1784,9 @@ var NexusNativeBrain = function () {
     if (/^(?:au revoir|a bientot|bonne nuit|a plus)(?:\s+nexus)?$/.test(normalized)) {
       return "À bientôt !";
     }
-    return null;
+    return replyToFrenchDialogue(input);
   };
   var renderNormalReply = function renderNormalReply(plan) {
-    var smallTalk = renderLocalSmallTalk(plan.userMessage);
-    if (smallTalk) return smallTalk;
     if (plan.shouldAskClarifyingQuestion) {
       if (isIncompleteMemoryCommand(plan.userMessage)) {
         return "D’accord. Que veux-tu que je retienne exactement ?";
@@ -1723,6 +1796,8 @@ var NexusNativeBrain = function () {
       }
       return "Pour bien vous aider, pouvez-vous préciser votre besoin en une phrase ?";
     }
+    var smallTalk = renderLocalSmallTalk(plan.userMessage);
+    if (smallTalk) return smallTalk;
     var base = "Je r\xE9ponds \xE0 votre demande: \"".concat(plan.userMessage, "\".");
     var projectHint = plan.activeProject ? "Projet actif pris en compte: ".concat(plan.activeProject, ".") : "";
     var memoryHint = plan.relevantMemoryHints[0] ? "Contexte utile: ".concat(plan.relevantMemoryHints[0], ".") : "";
@@ -1828,19 +1903,19 @@ var NexusNativeBrain = function () {
     MAX_LIBRARY_RECORDS: 4e4
   };
   var USER_CODE_REQUIRED = "Le code utilisateur est nécessaire pour consulter ces informations personnelles. Saisis-le dans l’écran sécurisé.";
-  var normalize2 = function normalize2(text) {
+  var normalize3 = function normalize3(text) {
     return normalizeWakePhrase(text);
   };
   var secret = /\b(?:mot de passe|password|code (?:pin|utilisateur|createur|de validation)|cle api|jeton d acces|iban|carte bancaire)\b/;
   var containsCredential = function containsCredential(text) {
-    return secret.test(normalize2(text));
+    return secret.test(normalize3(text));
   };
   var isPrivateMemory = function isPrivateMemory(note) {
-    var text = normalize2("".concat(note.title, " ").concat(note.excerpt));
+    var text = normalize3("".concat(note.title, " ").concat(note.excerpt));
     var explicit = containsCredential(text) || /\b(?:je|j|mon|ma|mes|moi|notre|nos|createur|proprietaire|utilisateur)\b/.test(text) || /\b(?:identite|profil|prenom|nom complet|nom de famille|adresse|domicile|telephone|portable|courriel|email|e mail|salaire|revenu|sante|maladie|diagnostic|religion|famille|fiancee|fille|fils|naissance|nationalite|gps|latitude|longitude)\b/.test(text) || /@|\+?\d[\d .()-]{7,}\d/.test("".concat(note.title, " ").concat(note.excerpt));
     if (explicit || note.source === "external:clipboard") return true;
     if (note.source === "user:manual" || note.source === "manual") {
-      var abstractDefinition = /^(?:un|une|le|la|les|l) [a-z -]{2,70} (?:est|sont) (?:un|une|des|l) (?:maniere|ensemble|science|discipline|phenomene|objet|action|pratique|mesure|forme|methode|systeme|processus|technique|formule|regle)\b/.test(normalize2(note.excerpt));
+      var abstractDefinition = /^(?:un|une|le|la|les|l) [a-z -]{2,70} (?:est|sont) (?:un|une|des|l) (?:maniere|ensemble|science|discipline|phenomene|objet|action|pratique|mesure|forme|methode|systeme|processus|technique|formule|regle)\b/.test(normalize3(note.excerpt));
       return !abstractDefinition;
     }
     return false;
@@ -1875,7 +1950,7 @@ var NexusNativeBrain = function () {
         var residence = (_b = sentence.match(/^(?:(?:je vis|j['’]habite)\s+[àa]\s+|(?:ma ville est|ma ville de r[ée]sidence est)\s+)(.+)$/i)) == null ? void 0 : _b[1];
         if (residence) {
           var city = cleanValue(residence.split(/\s+(?:depuis|avec|chez|mais|et|au|en|dans|pr[èe]s|[àa] c[ôo]t[ée])\b|[,;:]/i)[0]);
-          if (city.length <= 70 && word.test(city) && city.split(/\s+/).length <= 6 && !/\b(?:rue|route|chemin|allee|avenue|boulevard|impasse|numero|appartement|residence|adresse|domicile|villa|immeuble|maison|etage|batiment|code|retiens|ignore|secret)\b/.test(normalize2(city))) {
+          if (city.length <= 70 && word.test(city) && city.split(/\s+/).length <= 6 && !/\b(?:rue|route|chemin|allee|avenue|boulevard|impasse|numero|appartement|residence|adresse|domicile|villa|immeuble|maison|etage|batiment|code|retiens|ignore|secret)\b/.test(normalize3(city))) {
             facts.push({
               slot: "city",
               value: city,
@@ -1892,7 +1967,7 @@ var NexusNativeBrain = function () {
     return facts;
   };
   var publicPersonalSlots = function publicPersonalSlots(message) {
-    var text = normalize2(unwrapPoliteRequest(message));
+    var text = normalize3(unwrapPoliteRequest(message));
     if (/^(?:comment (?:je m appelle|m appelle je)|quel est mon (?:prenom|nom)|c est quoi mon prenom|(?:dis moi )?mon prenom|et (?:pour )?mon (?:prenom|nom)|qui est (?:le|ton) createur)$/.test(text)) return ["firstName"];
     if (/^(?:ou (?:est ce que )?(?:je vis|j habite)|(?:dans )?quelle (?:est ma ville|ville (?:je vis|j habite|est ce que j habite))|quelle est ma ville de residence|et (?:pour )?ma ville|ma ville)$/.test(text)) return ["city"];
     if (/^(?:(?:quel est|quels sont|dis moi|c est quoi) )?mon prenom et ma ville(?: de residence)?$/.test(text) || /^comment je m appelle et (?:ou (?:est ce que )?(?:je vis|j habite)|j habite)$/.test(text)) return ["firstName", "city"];
@@ -1900,7 +1975,7 @@ var NexusNativeBrain = function () {
   };
   var asksForPrivateInformation = function asksForPrivateInformation(message) {
     if (isExplicitMemoryRequest(message) || publicPersonalSlots(message)) return false;
-    var text = normalize2(unwrapPoliteRequest(message));
+    var text = normalize3(unwrapPoliteRequest(message));
     return analyzeQuestion(message).question && analyzeQuestion(message).personal || /\b(?:nom complet|informations? personnelles?|profil (?:complet|personnel)|tout (?:de|sur) moi|mes (?:notes|preferences|donnees)|adresse (?:domicile|travail)|mon domicile|mon travail)\b/.test(text) || /^(?:que sais tu de moi|de quoi te souviens tu|qu as tu (?:retenu|memorise))\b/.test(text);
   };
   var answerPublicPersonal = function answerPublicPersonal(message, notes) {
@@ -1921,7 +1996,7 @@ var NexusNativeBrain = function () {
         })) == null ? void 0 : _c.recordedAt) != null ? _d : 0);
       });
       var values = Array.from(new Set(choices.map(function (fact) {
-        return normalize2(fact.value);
+        return normalize3(fact.value);
       })));
       evidenceIds.push.apply(evidenceIds, _toConsumableArray((values.length > 1 ? choices : choices.slice(0, 1)).map(function (fact) {
         return fact.evidenceId;

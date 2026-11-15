@@ -55,12 +55,42 @@ class LocalGenerationTest {
             generator = generator).use { brain ->
             val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
             assertTrue(reply.text, reply.text.contains("mémoire chiffrée"))
-            assertTrue(reply.text.contains("non vérifiée"))
+            assertTrue(reply.text, reply.text.contains("D’après"))
             assertFalse(reply.generatedLocally)
             assertTrue(reply.protectedInformation)
             assertEquals(note.id, reply.evidenceSources.single().id)
             assertEquals(1, notes.list().size)
         }
+    }
+
+    @Test fun deterministicEvidenceSelectionNeverTreatsRecentUnrelatedMemoryAsAnAnswer() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("old", "Projet Ganymède",
+                "Ganymède conserve les connaissances dans une bibliothèque chiffrée.", "user:manual", 10, null, false),
+            LocalKnowledgeLibrary.Entry("new", "Loisir",
+                "Je préfère marcher au bord du fleuve.", "user:manual", 100, null, false)
+        )
+        val relevant = OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Parle-moi du projet Ganymède"), notes)
+        assertEquals("old", relevant?.note?.id)
+        assertTrue(relevant!!.sentence.contains("bibliothèque chiffrée"))
+        val unrelated = OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Qu’est-ce qu’un volcan ?"), notes)
+        assertNull("A non-matching recent note is not source evidence", unrelated)
+        assertNull(OfflineMemoryEvidence.select(emptyList(), notes))
+    }
+
+    @Test fun offlineEvidenceRejectsUnquotableSentencesAndRequiresStrongMatching() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("bad", "Projet Ganymède",
+                "A".repeat(400), "user:manual", 1, null, false),
+            LocalKnowledgeLibrary.Entry("generic", "Information",
+                "Le sujet de cette information est ordinaire.", "user:manual", 2, null, false)
+        )
+        assertNull(OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Parle-moi du projet Ganymède"), notes))
+        assertNull(OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Pourquoi les océans sont salés ?"), notes))
     }
 
     @Test fun unavailableModelNeverReadsLockedPrivateMemoryAsPublicEvidence() {

@@ -367,7 +367,13 @@ internal class NativeBrainService(
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
             // Only this core-validated public fallback may enter the language model.
-            if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null && turnEvidence.isEmpty()) {
+            // Do not replace a locally matching saved source with an ungrounded public model answer.
+            // Unrelated personal notes must not block ordinary public questions.
+            val savedEvidenceMatches = notes.orEmpty().any { note ->
+                KnowledgePolicy.score(queryTerms, note.title, note.excerpt) > 0
+            }
+            if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null &&
+                turnEvidence.isEmpty() && !savedEvidenceMatches) {
                 generator.generate(LocalDraftRequest(message, offer))?.let { draft ->
                     return local.copy(text = draft, generatedLocally = true, publicContextTopic = null)
                 }

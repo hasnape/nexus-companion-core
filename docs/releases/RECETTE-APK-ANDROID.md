@@ -216,3 +216,12 @@ Le script `scripts/sign-nexus-companion-windows.ps1` a été ajouté pour un pos
 ```
 
 Ce script est enregistré mais **n'a pas encore été exécuté sur un vrai poste Windows ni sur la clé privée locale de ce poste**. Son exécution et les essais sur téléphone sont nécessaires avant de déclarer la release livrée.
+
+
+### Contrôle final des scripts — 15/11/2026
+
+La recette d'origine a été retrouvée **dans la bibliothèque personnelle**, mais le nom de fichier de sortie `v0.2.0` doit être considéré comme **obsolète**. Les scripts de substitution Linux et Windows (`scripts/sign-nexus-companion.sh` et `scripts/sign-nexus-companion-windows.ps1`) demandent désormais `zipalign -P 16` avant signature, puis `zipalign -c -P 16` après signature. Cette option respecte la recommandation Android officielle pour les bibliothèques natives sur pages mémoire 16 Kio (source : https://developer.android.com/tools/zipalign).
+
+**Limite de la session :** l'APK originale reste accessible dans le Blob mais n'est pas téléchargeable dans l'environnement de calcul local utilisé pour héberger la clé ; la conversion temporaire du fichier en texte dans un sandbox n'a pas débloqué cet accès. Le sandbox temporaire a été supprimé. Aucun fichier APK v0.4.29 signé ni test sur téléphone n'a été produit par cette tentative.
+
+**Ne pas demander au propriétaire de transmettre de nouveau l'APK ou les clés :** elles sont déjà localisées dans les environnements respectifs. Pour terminer, il faut réunir l'APK seule et le matériel de signature sur un **poste de confiance** avec les outils du SDK, lancer le script puis vérifier le certificat avant installation. Garder l'APK actuelle du téléphone et ses données.

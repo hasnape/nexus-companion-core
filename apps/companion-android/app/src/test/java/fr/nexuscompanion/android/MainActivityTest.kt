@@ -696,6 +696,24 @@ class MainActivityTest {
         assertEquals(2, library.list().count { it.source == "user:manual" })
     }
 
+    @Test fun quickNavigationKeepsHomeControlsAndPrivacyIntact() {
+        val home = activity.findViewById<ScrollView>(R.id.home_scroll)
+        val voice = activity.findViewById<View>(R.id.home_section_voice)
+        val chat = activity.findViewById<View>(R.id.home_section_chat)
+        val memory = activity.findViewById<View>(R.id.home_section_memory)
+        assertTrue(home.isShown)
+        assertTrue(voice.isAttachedToWindow)
+        assertTrue(chat.isAttachedToWindow)
+        assertTrue(memory.isAttachedToWindow)
+        for (id in listOf(R.id.home_jump_voice, R.id.home_jump_chat, R.id.home_jump_memory)) {
+            activity.findViewById<Button>(id).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(home.isShown)
+            assertTrue(activity.findViewById<View>(R.id.home_input).isShown)
+        }
+        assertFalse(UserAccessSession.allowed())
+    }
+
     @Test fun emptyNotesRemainAnHonestEmptyState() {
         button(R.string.my_notes).performClick()
         await { hasText(activity.getString(R.string.library_no_results)) }

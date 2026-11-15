@@ -157,7 +157,7 @@ class PrivateLearningTest {
         val context = RuntimeEnvironment.getApplication(); val library = library("learn-source"); val learning = learning("learn-source")
         val city = library.addUserNote("Lieu de résidence", "Je vis à Lyon.").entry
         val before = File(context.filesDir, "knowledge-learn-source.json").readBytes()
-        NativeBrainService(context, library, resources = { balancedTestDevice }, learning = learning).use { brain ->
+        NativeBrainService(context, library, privateAccess = { true }, resources = { balancedTestDevice }, learning = learning).use { brain ->
             val stats = brain.consolidate()
             assertEquals(1, stats.consolidated); assertEquals(0, stats.remaining)
             assertEquals(stats.exercises, stats.passed); assertTrue(stats.passed > 0)

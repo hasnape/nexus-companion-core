@@ -35,6 +35,6 @@ class CompanionDialogueTest {
         assertNotNull(dialogue.answer("Je suis triste"))
         assertNotNull(dialogue.answer("Je suis en danger"))
         assertNotNull(dialogue.answer("Je veux me faire du mal"))
-        assertEquals("Compris, je me tais.", dialogue.answer("Silence"))
+        assertNull(dialogue.answer("Silence"))
     }
 }

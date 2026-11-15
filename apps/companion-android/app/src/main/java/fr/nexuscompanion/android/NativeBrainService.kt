@@ -277,7 +277,9 @@ internal class NativeBrainService(
                 clearConversation(); return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
             }
         }
-        val resolvedQuery = understanding.getString("query")
+        // If the new message explicitly names another note, ignore any
+        // query rewritten using the old topic by the dialogue classifier.
+        val resolvedQuery = if (explicitlyDifferentSource) message else understanding.getString("query")
         turnQuestion = resolvedQuery.takeIf { it.length <= 600 }
         val recall = if (contextual) null else KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(resolvedQuery)).getJSONArray("terms")

@@ -20,6 +20,10 @@ internal object SelectiveMemoryAccess {
         val unsafe = listOf(
             Regex("(?i)\\b(?:mot de passe|password|code secret|code pin|identifiant|token|api.key|cle privee|secret|iban|bic|carte bancaire|cvv|sante|medical|diagnostic|adresse personnelle|domicile)\\b"),
             Regex("[0-9]{4,}"),
+            // French phone numbers are often written as five two-digit groups.
+            // The four-consecutive-digits rule above does not catch those.
+            // Include Unicode spaces (notably the narrow no-break space on Android).
+            Regex("""(?<!\d)(?:0[1-9]|\+33[\s\p{Zs}.-]?[1-9]|0033[\s\p{Zs}.-]?[1-9])(?:[\s\p{Zs}.-]?\d{2}){4}(?!\d)"""),
             Regex("[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}"),
             Regex("(?i)https?://"),
             Regex("(?i)\\b(?:rue|avenue|boulevard|impasse|allee|chemin)\\b")

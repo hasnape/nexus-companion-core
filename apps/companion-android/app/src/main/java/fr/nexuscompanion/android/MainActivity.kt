@@ -301,7 +301,6 @@ open class MainActivity : Activity() {
             if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
         bindButton(R.id.home_notes) { showNotes() }
-        // Privacy batch mode is available from the notes list after opening it.
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
         bindButton(R.id.home_learning) { showLearning() }
@@ -790,8 +789,10 @@ open class MainActivity : Activity() {
 
     private fun selectMemoryPrivacy() {
         if (!privateAccessAllowed()) { requireUserAccess { selectMemoryPrivacy() }; return }
+        val query = input.text.toString().trim()
         runTask(R.string.working, R.string.library_read_failed, {
-            library.list().filter { it.source == "user:manual" ||
+            val all = if (query.isBlank()) library.list() else library.search(query)
+            all.filter { it.source == "user:manual" ||
                 it.source == SelectiveMemoryAccess.SHARED_SOURCE }.sortedBy { it.title }
         }) { notes ->
             if (!privateAccessAllowed() || !foreground) return@runTask
@@ -799,16 +800,21 @@ open class MainActivity : Activity() {
                 showAnswer("Aucun souvenir créé manuellement ne peut être sélectionné.")
                 return@runTask
             }
-            val selected = BooleanArray(notes.size)
-            val labels = notes.map { note ->
+            // Android's multi-choice dialog is not virtualized: limit its size and
+            // let the owner narrow the selection using the existing notes search.
+            val choices = notes.take(50)
+            val selected = BooleanArray(choices.size)
+            val labels = choices.map { note ->
                 (if (note.source == SelectiveMemoryAccess.SHARED_SOURCE) "🔓 " else "🔒 ") + note.title
             }.toTypedArray()
             showDialog(AlertDialog.Builder(this)
-                .setTitle("Choisir les souvenirs à protéger")
+                .setTitle(if (notes.size > choices.size)
+                    "Sélection : 50 premiers souvenirs (affine la recherche)"
+                    else "Choisir les souvenirs à protéger")
                 .setMultiChoiceItems(labels, selected) { _, index, checked -> selected[index] = checked }
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton("Continuer") { _, _ ->
-                    val chosen = notes.filterIndexed { index, _ -> selected[index] }
+                    val chosen = choices.filterIndexed { index, _ -> selected[index] }
                     if (chosen.isEmpty()) { showAnswer("Aucun souvenir sélectionné."); return@setPositiveButton }
                     val choices = arrayOf("🔒 Privé · code requis", "🔓 Sans code · conversation")
                     showDialog(AlertDialog.Builder(this)

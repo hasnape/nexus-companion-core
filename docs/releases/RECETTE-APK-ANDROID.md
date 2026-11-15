@@ -243,3 +243,30 @@ L'APK source **non signée** et un artefact de sortie **signé** sont désormais
 **Étape de validation obligatoire avant publication :** exécuter `apksigner verify --verbose --print-certs` sur l'APK de sortie et comparer le certificat au SHA-256 de production `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1` ; vérifier `fr.nexuscompanion.android`, `versionCode=35`, puis tester l'installation **par-dessus** l'APK existante, sans effacement des données. Vérifier la mémoire, la voix et le mode avion. Conserver les clés exclusivement dans le coffre privé.
 
 **Distribution :** fichier présent dans les artefacts de la conversation, **pas de lien public Vercel Blob confirmé** pour cette version signée. Ne pas indiquer « publiée » ni « testée sur téléphone ».
+
+
+## Annexe E — diagnostic du refus Android et réparation structurelle de la v0.4.29 (15/11/2026)
+
+**Symptôme confirmé par le propriétaire :** la v0.4.28 est installée ; Android reconnaît la v0.4.29 comme mise à jour, puis affiche **« Application non installée »**. Le rejet provient du fichier v0.4.29 précédemment livré, pas d'une opération de l'utilisateur.
+
+**Cause racine trouvée par lecture comparative du bloc de signature APK v2 (v0.4.27 de référence et v0.4.29 livrée) :** il manquait le **préfixe de longueur uint32 de l'élément `signer`**, entre la séquence `signers` et le champ `signedData`. La structure réellement livrée était `signers → signedData → signatures → publicKey`, au lieu de `signers → signer → signedData → signatures → publicKey`. Le contenu cryptographique (signature RSA, certificat et digest signé) était correct mais **l'encapsulation v2 était malformée**. Les vérifications précédentes avaient commis l'erreur de ne pas valider tous les champs de longueur imbriqués.
+
+**Réparation effectuée sur une copie de l'APK signée existante :** insertion des 4 octets de longueur du `signer` manquant ; mise à jour de la longueur de `signers`, du bloc de signature et du décalage ZIP Central Directory dans l'EOCD. **Aucun changement du contenu signé, aucun nouvel usage de la clé privée.** Une vérification indépendante a reconstruit le digest SHA-256 de tout le contenu de l'APK selon la spécification Android v2 et vérifié la signature RSA PKCS#1 v1.5 sur `signedData` à l'aide de la clé publique du certificat X.509.
+
+| Donnée | Ancien fichier défectueux | Fichier corrigé |
+| --- | --- | --- |
+| Nom | `nexus-companion-v0.4.29-native-alpha-release.apk` | `nexus-companion-v0.4.29-native-alpha-release-corrected.apk` |
+| Taille | 68 009 634 octets | **68 009 638 octets** |
+| SHA-256 | `392b08d4e4be6372ca19675a43fc5c917f0778731a043887022bba38ed5b48b8` | **`11f0304d976302e5ddca8e6efc5ad1473885b00d632830f2319b6764934e7114`** |
+| Signers v2 | **Structure malformée** | **Longueurs imbriquées cohérentes** |
+| Certificat SHA-256 | `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1` | Identique |
+| Signature RSA | Signature valide sur des données qui ne pouvaient pas être lues correctement | Signature vérifiée après réparation de l'encapsulation |
+| Digest intégral v2 | Valeur interne correcte, mais encapsulation invalide | Recalculé et identique à la valeur signée |
+| Métadonnées manifest | — | `fr.nexuscompanion.android`, versionCode `35`, versionName `0.4.29-native-alpha`, min SDK `31`, target SDK `35` |
+| ZIP | Lisible | 105 entrées, test d'intégrité réussi |
+
+**Limite actuelle :** le nouveau fichier est produit et vérifié par un contrôleur cryptographique indépendant basé sur la spécification Android v2, **mais il n'a pas été contrôlé avec le binaire officiel `apksigner` ni installé sur le téléphone**. Il ne faut pas inventer ces validations.
+
+**Règle permanente de prévention :** ne jamais considérer une signature APK valide sur la seule base de la présence du bloc, de la correspondance du certificat ou du succès de la vérification RSA. Exiger une validation structurelle des préfixes de longueur **à chaque niveau**, la vérification de l'empreinte *entière* du contenu, puis `apksigner verify --verbose --print-certs` dans une chaîne de build disposant du SDK. **Pour les futures versions, utiliser le véritable `apksigner` des Android Build Tools et non un encodeur de bloc APK fait maison.** Tester toujours l'installation sur la version installée, sans désinstallation ni effacement de la mémoire locale.
+
+**Statut de la v0.4.29 corrigée :** nouveau fichier disponible dans les artefacts de conversation, corrigé et vérifié localement au niveau structurel et cryptographique ; **validation officielle et essai physique en attente**. L'ancien lien vers `native-alpha-release.apk` est obsolète et ne doit plus être proposé.

@@ -18,6 +18,22 @@ internal object MemoryRecallScope {
         data object Ambiguous : Decision
     }
 
+    /** A new explicitly named subject overrides the previous turn's focus. */
+    fun refersToDifferentTitle(
+        message: String,
+        previous: List<LocalKnowledgeLibrary.Entry>,
+        currentlyAccessible: List<LocalKnowledgeLibrary.Entry>
+    ): Boolean {
+        if (previous.isEmpty()) return false
+        val terms = KnowledgePolicy.queryTerms(message).filter { it.length >= 4 }
+        if (terms.isEmpty()) return false
+        val previousIds = previous.map { it.id }.toSet()
+        val oldScore = previous.maxOfOrNull { KnowledgePolicy.score(terms, it.title, "") } ?: 0
+        val newScore = currentlyAccessible.asSequence().filter { it.id !in previousIds }
+            .map { KnowledgePolicy.score(terms, it.title, "") }.maxOrNull() ?: 0
+        return newScore > oldScore && newScore > 0
+    }
+
     fun forFact(
         terms: List<String>,
         accessibleNotes: List<LocalKnowledgeLibrary.Entry>,

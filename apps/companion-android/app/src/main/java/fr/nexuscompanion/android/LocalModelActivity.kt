@@ -38,7 +38,7 @@ class LocalModelActivity : Activity() {
             setPadding(dp(20), dp(24), dp(20), dp(24))
         }
         setContentView(ScrollView(this).apply {
-            fillViewport = true
+            isFillViewport = true
             setBackgroundColor(getColor(R.color.home_background))
             addView(panel)
         })

@@ -169,7 +169,7 @@ Taille : **68 007 585 octets**. **Non signée — ne pas installer ni communique
 
 ### Script historique et remplacement maintenable
 
-Les conversations antérieures citaient `sign-nexus-companion.sh` mais **ce fichier d'origine n'est pas présent dans la branche GitHub actuelle**. Son contenu exact n'a donc **pas été récupéré** ; ne pas prétendre le contraire.
+Le **script historique exact** a été retrouvé dans la bibliothèque du projet sous le nom `sign-nexus-companion(2).sh`, ainsi que sa copie `sign-nexus-companion(1).sh` (datées du 3 novembre 2026). Il n'est **pas présent dans la branche GitHub actuelle**. Il compilait et signait via Gradle avec les quatre variables `NEXUS_ANDROID_*`, puis exécutait `apksigner verify`. Il comporte toutefois un **nom de sortie figé à `nexus-companion-v0.2.0-release.apk`**, donc n'est pas une procédure de publication fiable pour la v0.4.29 sans adaptation. Le script `scripts/sign-nexus-companion.sh` versionné ultérieurement est une **réécriture** qui signe une APK existante et contrôle le certificat ; ce n'est pas le même script.
 
 Un **nouveau script de remplacement**, sans secrets, est maintenant versionné ici :
 `scripts/sign-nexus-companion.sh`

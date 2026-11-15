@@ -35,6 +35,22 @@ class SelectiveMemoryAccessTest {
         assertTrue(SelectiveMemoryAccess.safeToShare("Préférence", "J'aime les promenades."))
     }
 
+    @Test fun spacedPhoneNumbersCannotBeDeclassifiedWithoutCode() {
+        val numbers = listOf(
+            "06 12 34 56 78",
+            "06-12-34-56-78",
+            "06.12.34.56.78",
+            "+33 6 12 34 56 78",
+            "0033 6 12 34 56 78",
+            "06\u202f12\u202f34\u202f56\u202f78"
+        )
+        for (number in numbers) {
+            assertFalse("Contact $number should remain protected",
+                SelectiveMemoryAccess.safeToShare("Contact", "Appelle-moi au $number."))
+        }
+        assertTrue(SelectiveMemoryAccess.safeToShare("Cours", "J'ai terminé 12 modules et 3 exercices."))
+    }
+
     @Test fun sourcePrefixCannotAccidentallyDeclassify() {
         assertFalse(SelectiveMemoryAccess.canRead(note("user:conversation-shared:fake"), false))
         assertFalse(SelectiveMemoryAccess.canRead(note("user:conversation"), false))

@@ -659,6 +659,21 @@ class MainActivityTest {
         assertFalse(libraryFile().exists())
     }
 
+    @Test fun noteListDisplaysExplicitPrivacyStatusAndSharingRequiresConfirmation() {
+        val library = localLibrary()
+        val personal = library.addUserNote("Préférence", "J'aime les promenades.").entry
+        library.addUserNote("Secret", "Information confidentielle.")
+        val shared = library.setConversationSharing(personal, true).entry
+        input().setText("")
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 2 }
+        val list = ShadowAlertDialog.getLatestAlertDialog()
+        val labels = (0 until 2).map { list.listView.adapter.getItem(it).toString() }
+        assertTrue(labels.any { it.contains("🔓 Sans code") && it.contains("Préférence") })
+        assertTrue(labels.any { it.contains("🔒 Privé") && it.contains("Secret") })
+        assertEquals(SelectiveMemoryAccess.SHARED_SOURCE, library.get(shared.id)?.source)
+    }
+
     @Test fun emptyNotesRemainAnHonestEmptyState() {
         button(R.string.my_notes).performClick()
         await { hasText(activity.getString(R.string.library_no_results)) }
@@ -677,7 +692,7 @@ class MainActivityTest {
         val second = ShadowAlertDialog.getLatestAlertDialog()
         assertEquals(11, second.listView.adapter.count)
         reachable.addAll((0 until 11).map { second.listView.adapter.getItem(it).toString() })
-        assertEquals((0 until 61).map { "Note $it" }.toSet(), reachable)
+        assertEquals((0 until 61).map { "🔒 Privé · code requis  ·  Note $it" }.toSet(), reachable)
         second.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
         await { ShadowAlertDialog.getLatestAlertDialog() !== second }
         assertEquals(50, ShadowAlertDialog.getLatestAlertDialog().listView.adapter.count)

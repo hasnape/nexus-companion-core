@@ -45,6 +45,69 @@ class LocalGenerationTest {
             assertTrue(generator.requests.isEmpty())
         }
     }
+    @Test fun unavailableModelCanQuoteAnAuthorizedStoredFactOfflineWithoutFabrication() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-quotation")
+        val note = notes.addUserNote("Projet Ganymède", "Ganymède utilise une mémoire chiffrée sur le téléphone.").entry
+        val generator = FakeGenerator(null)
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = generator).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("mémoire chiffrée"))
+            assertTrue(reply.text.contains("non vérifiée"))
+            assertFalse(reply.generatedLocally)
+            assertTrue(reply.protectedInformation)
+            assertEquals(note.id, reply.evidenceSources.single().id)
+            assertEquals(1, notes.list().size)
+        }
+    }
+
+    @Test fun unavailableModelNeverReadsLockedPrivateMemoryAsPublicEvidence() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-locked")
+        notes.addUserNote("Projet Ganymède", "Ganymède utilise un stockage secret local.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertFalse(reply.text.contains("stockage secret"))
+            assertTrue(reply.evidenceSources.isEmpty())
+        }
+        assertEquals(1, notes.list().size)
+    }
+
+    @Test fun unavailableModelQuotesOnlyExplicitlySharedNotesWhileLocked() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-shared")
+        val original = notes.addUserNote("Projet Ganymède", "Ganymède conserve les repères dans une bibliothèque locale.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        notes.addUserNote("Données privées", "La clé secrète est ORION.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("bibliothèque locale"))
+            assertFalse(reply.text.contains("ORION"))
+            assertFalse(reply.protectedInformation)
+            assertEquals(shared.id, reply.evidenceSources.single().id)
+        }
+        assertEquals(2, notes.list().size)
+    }
+
+    @Test fun unrelatedRecentMemoryCannotBeInventedAsAnOfflineAnswer() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-unrelated")
+        notes.addUserNote("Projet Ganymède", "Ganymède utilise une bibliothèque locale.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { null },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Qu’est-ce qu’un volcan ?", onlineEnabled = false)
+            assertFalse(reply.text.contains("Ganymède"))
+            assertTrue(reply.evidenceSources.isEmpty())
+        }
+    }
+
     @Test fun unavailableModelKeepsTheExistingFallbackAndConfirmation() {
         val context = RuntimeEnvironment.getApplication(); val generator = FakeGenerator(null)
         NativeBrainService(context, library("draft-fallback"), privateAccess = { false }, resources = { balancedTestDevice }, search = { null }, generator = generator).use { brain ->

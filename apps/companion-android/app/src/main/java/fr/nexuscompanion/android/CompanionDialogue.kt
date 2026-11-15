@@ -16,11 +16,11 @@ internal class CompanionDialogue(
 
     private fun normalize(value: String) = Normalizer.normalize(value, Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "").lowercase(Locale.FRANCE)
-        .replace('’', '\'').replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
+        .replace('’', ' ').replace('\'', ' ').replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
 
     private data class Rule(val key: String, val variants: Set<String>, val responses: List<String>)
     private val rules = listOf(
-        Rule("bonjour", setOf("bonjour", "salut", "coucou", "hello"), listOf("Bonjour ! Je t'écoute.", "Salut ! Que souhaites-tu faire ?", "Bonjour, de quoi aimerais-tu parler ?")),
+        Rule("bonjour", setOf("salut", "coucou", "hello"), listOf("Bonjour ! Je t'écoute.", "Salut ! Que souhaites-tu faire ?", "Bonjour, de quoi aimerais-tu parler ?")),
         Rule("bonsoir", setOf("bonsoir"), listOf("Bonsoir ! Comment s'est passée ta journée ?", "Bonsoir, je t'écoute.")),
         Rule("depart", setOf("au revoir", "a bientot", "a plus", "a demain"), listOf("À bientôt !", "Passe une bonne journée !")),
         Rule("nuit", setOf("bonne nuit", "je vais dormir"), listOf("Bonne nuit, repose-toi bien.", "Fais de beaux rêves !")),

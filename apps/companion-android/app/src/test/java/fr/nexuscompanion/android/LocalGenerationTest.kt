@@ -161,6 +161,51 @@ class LocalGenerationTest {
             MemoryRecallScope.forFact(KnowledgePolicy.queryTerms("Quel est le projet courrier ?"), notes))
     }
 
+    @Test fun explicitlyNamedNewProjectBreaksAnUnrelatedPreviousContext() {
+        val orion = LocalKnowledgeLibrary.Entry("orion", "Projet Orion",
+            "Le projet Orion appartient à Clara.", "user:manual", 10, null, false)
+        val vega = LocalKnowledgeLibrary.Entry("vega", "Projet Vega",
+            "Le projet Vega appartient à Léa.", "user:manual", 20, null, false)
+        assertTrue(MemoryRecallScope.refersToDifferentTitle(
+            "Et le projet Vega ?", listOf(orion), listOf(orion, vega)))
+        assertFalse(MemoryRecallScope.refersToDifferentTitle(
+            "Et pourquoi ?", listOf(orion), listOf(orion, vega)))
+        assertFalse(MemoryRecallScope.refersToDifferentTitle(
+            "Et le projet Orion ?", listOf(orion), listOf(orion, vega)))
+    }
+
+    @Test fun multiNoteOverviewKeepsEachFactUnderItsOriginalTitle() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("overview-isolates-notes")
+        notes.addUserNote("Projet Orion", "Le projet Orion appartient à Clara.")
+        notes.addUserNote("Projet Vega", "Le projet Vega appartient à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Offline test") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("mes notes", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("« Projet Orion » : Le projet Orion appartient à Clara."))
+            assertTrue(reply.text, reply.text.contains("« Projet Vega » : Le projet Vega appartient à Léa."))
+            assertTrue(reply.text.contains("notes complètes"))
+            assertEquals(2, notes.list().size)
+        }
+    }
+
+    @Test fun conflictingFactsDoNotBecomeAnInventedSingleAnswer() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("ambiguous-fact-notes")
+        notes.addUserNote("Projet Courrier", "Le projet courrier appartient à Clara.")
+        notes.addUserNote("Projet Courrier", "Le projet courrier appartient à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Offline test") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Quel est le projet courrier ?", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("Laquelle"))
+            assertFalse(reply.text.contains("Clara"))
+            assertFalse(reply.text.contains("Léa"))
+            assertEquals(2, notes.list().size)
+        }
+    }
+
     @Test fun learnedSynonymIsOnlyUsedIfItIdentifiesExactlyOneSource() {
         val city = LocalKnowledgeLibrary.Entry("city", "Ville",
             "Je vis à Lyon.", "user:manual", 10, null, false)

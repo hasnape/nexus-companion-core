@@ -36,6 +36,7 @@ internal class NativeBrainService(
         val evidenceSources: List<EvidenceSource> = emptyList(),
         val generatedLocally: Boolean = false
     )
+    private val dialogue = CompanionDialogue()
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
         val expires: Long
@@ -207,6 +208,9 @@ internal class NativeBrainService(
             val history = if (stats.archivedNotes == 0) "" else " Je conserve aussi ${stats.archivedNotes} ${if (stats.archivedNotes == 1) "ancienne version" else "anciennes versions"}."
             return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.$history", null, true, expectsAnswer = true)
         }
+        // Static dialogue examples are not memories. Match only unambiguous intents,
+        // after explicit approvals and before the optional language model.
+        dialogue.answer(message)?.let { return Reply(it, null, true, expectsAnswer = true) }
         // Pure public arithmetic is answered offline, even when the optional GGUF model
         // cannot be loaded. This path never reads or exposes personal notes.
         OfflineArithmetic.answer(message)?.let { return Reply(it, null, true, expectsAnswer = true) }

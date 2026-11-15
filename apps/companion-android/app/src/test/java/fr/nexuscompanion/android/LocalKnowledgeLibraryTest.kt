@@ -306,7 +306,18 @@ class LocalKnowledgeLibraryTest {
     @Test fun expiredNotesAreExcludedFromBothSearchAndConversationalContext() {
         file().writeText(legacy(entry("expired", "note expirée", 100L), entry("valid", "note valide")))
         assertEquals("valid", library().search("note", 101L).single().id)
-        assertEquals("valid", library().contextFor("inconnu", 101L).single().id)
+        assertTrue("Unknown topics must not inherit the last unrelated memory",
+            library().contextFor("inconnu", 101L).isEmpty())
+        assertEquals("valid", library().contextFor("mes notes", 101L).single().id)
+    }
+
+    @Test fun unrelatedRecentNotesNeverPolluteAnOrdinaryQuestion() {
+        val store = library("no-unrelated-fallback")
+        store.addUserNote("Dossier Orion", "Orion appartient à Clara.")
+        store.addUserNote("Dossier Vega", "Vega appartient à Léa.")
+        assertTrue(store.contextFor("volcan").isEmpty())
+        assertEquals(2, store.contextFor("mes notes").size)
+        assertEquals(2, store.list().size)
     }
 
     @Test fun companionNamespacesRemainSeparateAndCopiedCiphertextFailsAuthentication() {

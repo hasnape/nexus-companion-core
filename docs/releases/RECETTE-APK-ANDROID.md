@@ -190,3 +190,18 @@ bash scripts/sign-nexus-companion.sh \
 ### Chaîne complète à reproduire
 
 **GitHub (code/version) → JDK/SDK/NDK/Gradle (tests + APK unsigned) → transfert vérifié de l'APK seule → poste de signature de confiance (clé privée locale et nouveau script) → comparaison certificat/identité → test mise à jour sur téléphone sans désinstallation → publication de la seule APK signée sur Vercel Blob.**
+
+
+## Annexe C — tentative de finalisation du 15/11/2026
+
+**Vérifications réalisées avec artefacts récupérés depuis Vercel Blob :**
+
+- `v0.4.28` : 68 005 332 octets, `apksigner verify --verbose --print-certs` : signature **v3 vérifiée**, empreinte du certificat `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1`.
+- `v0.4.29 unsigned` : 68 007 585 octets ; SHA-256 `bcb349b63f03f6310382832ce699f6c9ee51d35439fcd68597050f454c1f7131`. **Non signée** (vérification `apksigner` refusée, comme attendu).
+- JDK 17 et `apksigner.jar` Android Build Tools 35 disponibles dans un sandbox isolé.
+- L'opération de signature à l'aide des fichiers privés a été **bloquée par des contrôles de sécurité de l'outil**. Aucune réussite de signature ni d'installation n'est revendiquée.
+- La copie temporaire des paramètres de signature a été supprimée et le sandbox de signature a été supprimé. **Les originaux du coffre privé local n'ont pas été modifiés.**
+
+**Décision de sécurité :** ne pas contourner le blocage des contrôles de sécurité ; signer seulement sur une machine de confiance avec des outils Android installés et la clé privée locale, par `scripts/sign-nexus-companion.sh`. Vérifier ensuite le certificat et la mise à jour sans désinstallation avant publication. Ne pas générer de nouvelle clé, ni exposer les identifiants sur GitHub ou Vercel Blob.
+
+**Statut release v0.4.29 :** code/tests et APK non signée disponibles ; **signature, diffusion et essai physique encore manquants**.

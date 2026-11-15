@@ -19,7 +19,9 @@ internal object KnowledgePolicy {
         "mes notes", "montre mes notes", "montre moi mes notes", "rappelle moi mes notes",
         "que sais tu de moi", "tu te souviens de moi", "te souviens tu de moi", "de quoi te souviens tu",
         "qu ai je note", "qu est ce que j ai note", "qu as tu retenu", "qu as tu memorise",
-        "qu est ce que tu as retenu", "qu est ce que tu as memorise"
+        "qu est ce que tu as retenu", "qu est ce que tu as memorise",
+        "que te souviens tu de moi", "que te rappelles tu de moi", "qu est ce que tu sais de moi",
+        "quels souvenirs as tu de moi", "rappelle moi ce que tu sais de moi"
     )
     private val recallRequest = Regex(
         "^(?:(?:(?:rappelle moi|montre(?: moi)?) )?mes notes|" +

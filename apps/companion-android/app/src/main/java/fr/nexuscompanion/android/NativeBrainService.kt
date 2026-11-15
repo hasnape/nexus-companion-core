@@ -268,11 +268,20 @@ internal class NativeBrainService(
             val preferred = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
             focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferred)
         } catch (_: Exception) { null }
+        // Filter BEFORE serializing notes for the shared brain or local generator.
+        // Legacy notes are private until their owner explicitly shares them.
+        val unlocked = privateAccess()
+        val visibleNotes = notes?.let { SelectiveMemoryAccess.accessible(it, unlocked) }
+        if (!unlocked && recall != null && !notes.isNullOrEmpty() && visibleNotes.isNullOrEmpty()) {
+            return codeRequired()
+        }
+        val sharedContext = !unlocked && !visibleNotes.isNullOrEmpty() &&
+            visibleNotes.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE }
         val array = JSONArray()
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
-            .put("privateAccessGranted", privateAccess())
+            .put("privateAccessGranted", unlocked || sharedContext)
         if (evidenceContext != null) request.put("evidenceContext", evidenceContext)
         if (focusedNote == null) {
             conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
@@ -296,7 +305,7 @@ internal class NativeBrainService(
             Candidate(content, it.getBoolean("sensitive"))
         }
         val evidence = result.optJSONArray("evidenceIds")
-        turnEvidence = notes.orEmpty().filter { note ->
+        turnEvidence = visibleNotes.orEmpty().filter { note ->
             note.id != "external-context" && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
         }.distinctBy { it.id }
         val sources = result.optJSONArray("evidenceSources")
@@ -305,10 +314,10 @@ internal class NativeBrainService(
             val item = requireNotNull(sources).getJSONObject(i)
             val source = EvidenceSource(item.getString("id"), item.getString("title"), item.getString("source"))
             check(source.id.length in 1..64 && source.title.length in 1..160 && source.source.length in 1..512)
-            check(notes.orEmpty().any { it.id == source.id } && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == source.id })
+            check(visibleNotes.orEmpty().any { it.id == source.id } && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == source.id })
             source
         }.distinctBy { it.id }
-        val recalledSource = notes.orEmpty().firstOrNull { note ->
+        val recalledSource = visibleNotes.orEmpty().firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
                 && note.source.matches(Regex("https://fr\\.wikipedia\\.org/\\?curid=[1-9][0-9]*"))
         }?.let { note -> note.source.substringAfter("curid=").toIntOrNull()?.let { id ->

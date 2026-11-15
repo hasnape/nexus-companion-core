@@ -271,6 +271,42 @@ class LocalKnowledgeLibraryTest {
         assertEquals("Note privée alpha", library("alpha").list().single().excerpt)
     }
 
+    @Test fun batchPrivacyChangeIsAtomicAndPersistsAfterRestart() {
+        val id = "batch-privacy-atomic"
+        val store = library(id)
+        val first = store.addUserNote("Loisir", "J'aime les promenades.").entry
+        val second = store.addUserNote("Préférence", "Je préfère le thé vert.").entry
+        val changed = store.setConversationSharingBatch(listOf(first, second), true)
+        assertEquals(2, changed.size)
+        assertTrue(changed.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        assertEquals(2, library(id).list().count { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        val before = file(id).readBytes()
+        assertThrows(KnowledgeChanged::class.java) {
+            store.setConversationSharingBatch(listOf(changed[0], second), false)
+        }
+        assertArrayEquals(before, file(id).readBytes())
+        val revoked = store.setConversationSharingBatch(changed, false)
+        assertTrue(revoked.all { it.source == "user:manual" })
+        assertEquals(2, library(id).list().count { it.source == "user:manual" })
+        assertEquals(2, store.list().size)
+    }
+
+    @Test fun batchPrivacyRejectsDuplicateAndConfidentialSelectionsWithoutPartialWrite() {
+        val id = "batch-privacy-reject"
+        val store = library(id)
+        val ordinary = store.addUserNote("Loisir", "J'aime les promenades.").entry
+        val secret = store.addUserNote("Identifiant", "Mon mot de passe est abc123.").entry
+        val before = file(id).readBytes()
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, ordinary), true)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, secret), true)
+        }
+        assertArrayEquals(before, file(id).readBytes())
+        assertEquals(2, store.list().size)
+    }
+
     @Test fun fullLibraryReturnsTheSpecificCapacityFailureWithoutLosingNotes() {
         val entries = (0 until NativeCapacity.MAX_LIBRARY_ENTRIES).map { entry("id-$it", "note $it") }
         file().writeBytes(JvmCipher("test").encrypt(KnowledgePayload.encode(legacy(*entries.toTypedArray()).toByteArray())))

@@ -205,3 +205,14 @@ bash scripts/sign-nexus-companion.sh \
 **Décision de sécurité :** ne pas contourner le blocage des contrôles de sécurité ; signer seulement sur une machine de confiance avec des outils Android installés et la clé privée locale, par `scripts/sign-nexus-companion.sh`. Vérifier ensuite le certificat et la mise à jour sans désinstallation avant publication. Ne pas générer de nouvelle clé, ni exposer les identifiants sur GitHub ou Vercel Blob.
 
 **Statut release v0.4.29 :** code/tests et APK non signée disponibles ; **signature, diffusion et essai physique encore manquants**.
+
+
+### Solution locale Windows (Android Studio)
+
+Le script `scripts/sign-nexus-companion-windows.ps1` a été ajouté pour un poste Windows disposant du keystore et du fichier d'identifiants **dans un répertoire privé local**. Il utilise automatiquement Android SDK Build Tools 35.0.0, télécharge **l'APK non signée uniquement**, contrôle son SHA-256 épinglé, effectue `zipalign`, signe, compare l'empreinte du certificat et vérifie `applicationId=fr.nexuscompanion.android` ainsi que `versionCode=35`. Les secrets ne sont pas placés dans GitHub ou dans le Blob. L'APK signée est écrite dans le dossier Téléchargements.
+
+```powershell
+.\scripts\sign-nexus-companion-windows.ps1 -PrivateSigningDirectory "$HOME\nexus-signing-private"
+```
+
+Ce script est enregistré mais **n'a pas encore été exécuté sur un vrai poste Windows ni sur la clé privée locale de ce poste**. Son exécution et les essais sur téléphone sont nécessaires avant de déclarer la release livrée.

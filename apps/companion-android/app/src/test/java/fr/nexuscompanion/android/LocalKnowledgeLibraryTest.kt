@@ -103,6 +103,37 @@ class LocalKnowledgeLibraryTest {
         assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(original, true) }
     }
 
+    @Test fun editingSharedMemoryRevokesNoCodeAccessAndPreservesEncryptedHistory() {
+        val id = "shared-edit-revocation"
+        val store = library(id)
+        val original = store.addUserNote("Préférence", "J'aime les promenades.").entry
+        val shared = store.setConversationSharing(original, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(shared, unlocked = false))
+
+        // Even an apparently harmless edit must not inherit a previous disclosure decision.
+        val revised = store.replace(shared, "Préférence", "Je préfère me promener le matin.").entry
+        assertEquals("user:manual", revised.source)
+        assertFalse(SelectiveMemoryAccess.canRead(revised, unlocked = false))
+        assertEquals("user:manual", library(id).list().single().source)
+        assertEquals(listOf(original.excerpt, shared.excerpt), library(id).history(revised.id).map { it.excerpt })
+        assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(shared, false) }
+
+        // An unchanged save cannot implicitly re-authorize the edited note.
+        assertFalse(store.replace(revised, revised.title, revised.excerpt).created)
+        assertFalse(SelectiveMemoryAccess.canRead(store.list().single(), unlocked = false))
+        val newConsent = store.setConversationSharing(revised, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(newConsent, unlocked = false))
+        assertEquals(3, library(id).history(newConsent.id).size)
+    }
+
+    @Test fun editingAnImportedNoteDoesNotConvertItToManualOrShared() {
+        val store = library("imported-edit-origin")
+        val source = store.add("Article", "Information externe.", "external:clipboard")
+        val revised = store.replace(source, "Article révisé", "Information externe révisée.").entry
+        assertEquals("external:clipboard", revised.source)
+        assertFalse(SelectiveMemoryAccess.canRead(revised, unlocked = false))
+    }
+
     @Test fun sharingRejectsPotentialSecretsAndImportedSources() {
         val store = library("selective-rejection")
         val secret = store.addUserNote("Code secret", "123456").entry

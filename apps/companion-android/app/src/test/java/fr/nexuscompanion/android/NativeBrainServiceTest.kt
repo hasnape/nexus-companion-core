@@ -392,6 +392,25 @@ class NativeBrainServiceTest {
         assertEquals(1, library.list().size)
     }
 
+    @Test fun explicitlySharedMemoryWorksWhenLockedAndRevocationIsImmediate() {
+        val context = RuntimeEnvironment.getApplication()
+        val id = "shared-memory-routing"
+        val library = LocalKnowledgeLibrary(context, id, LocalKnowledgeLibraryTest.JvmCipher(id))
+        val original = library.addUserNote("Préférence", "Je préfère le thé vert.").entry
+        val shared = library.setConversationSharing(original, true).entry
+        NativeBrainService(context, library, privateAccess = { false }, resources = { balancedTestDevice }).use { brain ->
+            val accessible = brain.reply("Tu te souviens de moi ?", onlineEnabled = false)
+            assertTrue(accessible.text.contains("thé vert"))
+            assertFalse(accessible.requiresUserCode)
+            library.setConversationSharing(shared, false)
+            val locked = brain.reply("Tu te souviens de moi ?", onlineEnabled = false)
+            assertTrue(locked.requiresUserCode)
+            assertFalse(locked.text.contains("thé vert"))
+            assertFalse(brain.reply("répète").text.contains("thé vert"))
+        }
+        assertEquals(1, library.list().size)
+    }
+
     @Test fun sharedBrainUsesEncryptedNotesButNeverPersistsAProposalByItself() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "bridge", LocalKnowledgeLibraryTest.JvmCipher("bridge"))

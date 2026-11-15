@@ -300,6 +300,17 @@ open class MainActivity : Activity() {
             val browser = pendingBrowserReading
             if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
+        // Navigation is local UI only: no permission, network or private-memory access.
+        fun jumpTo(section: Int) {
+            val target = findViewById<View>(section)
+            homeScroll.post {
+                if (foreground && !destroyed) homeScroll.smoothScrollTo(0,
+                    (target.top - (12 * resources.displayMetrics.density).toInt()).coerceAtLeast(0))
+            }
+        }
+        bindButton(R.id.home_jump_voice, disableWhileBusy = false) { jumpTo(R.id.home_section_voice) }
+        bindButton(R.id.home_jump_chat, disableWhileBusy = false) { jumpTo(R.id.home_section_chat) }
+        bindButton(R.id.home_jump_memory, disableWhileBusy = false) { jumpTo(R.id.home_section_memory) }
         bindButton(R.id.home_notes) { showNotes() }
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }

@@ -688,8 +688,11 @@ class MainActivityTest {
         assertEquals(1, selection.listView.adapter.count)
         selection.listView.performItemClick(null, 0, 0)
         selection.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== selection &&
+            ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 2 }
         val options = ShadowAlertDialog.getLatestAlertDialog()
         options.listView.performItemClick(null, 1, 1)
+        await { ShadowAlertDialog.getLatestAlertDialog() !== options }
         val confirmation = ShadowAlertDialog.getLatestAlertDialog()
         assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("sans code"))
         assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("Loisir"))

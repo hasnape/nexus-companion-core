@@ -204,6 +204,14 @@ internal class NativeBrainService(
             }
         }
         if (VoiceTranscriptPolicy.commandWords(message) in setOf("etat de ta memoire", "etat de la memoire", "bilan memoire", "combien de notes as tu")) {
+            // A locked overview must not reveal counts, byte sizes or version history of private notes.
+            if (!privateAccess()) {
+                val now = System.currentTimeMillis()
+                val shared = library.list().count { it.source == SelectiveMemoryAccess.SHARED_SOURCE &&
+                    !KnowledgePolicy.isExpired(it.expiresAt, now) }
+                return Reply("Ma mémoire accessible sans code contient $shared ${if (shared == 1) "note partagée" else "notes partagées"}. Pour voir le bilan complet, déverrouille l’accès personnel avec ton code.",
+                    null, true, expectsAnswer = true)
+            }
             val stats = library.statistics()
             val history = if (stats.archivedNotes == 0) "" else " Je conserve aussi ${stats.archivedNotes} ${if (stats.archivedNotes == 1) "ancienne version" else "anciennes versions"}."
             return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.$history", null, true, expectsAnswer = true)
@@ -347,9 +355,12 @@ internal class NativeBrainService(
             return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
         }
         // A read, edit, confirmation, lookup or clarification never becomes a model operation.
-        if (generator.usesNotes && privateAccess() && candidate == null && recall == null && focusedNote == null &&
+        // Explicitly shared notes may ground the local model without a code.
+        // Unshared evidence always requires a live, authenticated private session.
+        if (generator.usesNotes && candidate == null && recall == null && focusedNote == null &&
             !text.trimEnd().endsWith("?") && result.optString("publicLookupOffer").isEmpty() &&
-            result.optString("publicLookupQuery").isEmpty() && result.optString("webLookupQuery").isEmpty() && turnEvidence.isNotEmpty()) {
+            result.optString("publicLookupQuery").isEmpty() && result.optString("webLookupQuery").isEmpty() &&
+            turnEvidence.isNotEmpty() && turnEvidence.all { SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
             groundedReply(message, queryTerms, local)?.let { return it }
         }
         val offer = result.optString("publicLookupOffer")
@@ -387,11 +398,13 @@ internal class NativeBrainService(
                 !metadata.getBoolean("credential")
             }
             val evidence = GroundedNotes.prepare(selected, terms)
-            if (evidence.isEmpty() || !privateAccess()) return null
+            if (evidence.isEmpty() || selected.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) return null
             val request = LocalDraftRequest(message, "notes", evidence)
             val quotes = GroundedNotes.validate(generator.generate(request), evidence) ?: return null
             // A model result cannot extend the unlock window or keep superseded evidence alive.
-            if (!privateAccess()) { clearConversation(); return codeRequired() }
+            if (selected.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation(); return codeRequired()
+            }
             val current = library.list().associateBy { it.id }
             if (selected.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) }) {
                 clearConversation()
@@ -400,7 +413,8 @@ internal class NativeBrainService(
             val ids = quotes.map { quote -> evidence.single { it.key == quote.source }.noteId }.toSet()
             turnEvidence = selected.filter { it.id in ids }
             fallback.copy(text = "D’après tes notes enregistrées, non vérifiées :\n" + quotes.joinToString("\n") { it.text },
-                generatedLocally = true, protectedInformation = true,
+                generatedLocally = true,
+                protectedInformation = selected.any { it.source != SelectiveMemoryAccess.SHARED_SOURCE },
                 evidenceSources = fallback.evidenceSources.filter { it.id in ids })
         } catch (_: Exception) { null }
     }

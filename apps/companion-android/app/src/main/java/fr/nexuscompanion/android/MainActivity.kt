@@ -825,7 +825,7 @@ open class MainActivity : Activity() {
             }.toTypedArray()
             showDialog(AlertDialog.Builder(this)
                 .setTitle(if (notes.size > choices.size)
-                    "Sélection : 50 premiers souvenirs (affine la recherche)"
+                    "50 sur ${notes.size} souvenirs · affiner la recherche"
                     else "Choisir les souvenirs à protéger")
                 .setMultiChoiceItems(labels, selected) { _, index, checked -> selected[index] = checked }
                 .setNegativeButton(R.string.cancel, null)
@@ -851,7 +851,9 @@ open class MainActivity : Activity() {
                                         runTask(R.string.working, R.string.library_write_failed,
                                             { library.setConversationSharingBatch(chosen, shared) }) { changed ->
                                             worker.execute { brain.clearConversation() }
-                                            showAnswer("Protection vérifiée pour ${changed.size} souvenir(s).")
+                                            showAnswer(if (shared)
+                                                "${changed.size} souvenir(s) autorisé(s) sans code."
+                                                else "${changed.size} souvenir(s) protégé(s) par code.")
                                         }
                                     }
                                 }.create())

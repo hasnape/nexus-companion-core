@@ -229,6 +229,40 @@ internal class LocalKnowledgeLibrary(
         NoteSave(updated, true)
     }
 
+    /**
+     * Atomic, owner-confirmed privacy change for a selected group of notes.
+     * Validate the whole selection before writing: never partially declassify a batch.
+     */
+    fun setConversationSharingBatch(expected: List<Entry>, shared: Boolean): List<Entry> = synchronized(storeLock) {
+        require(expected.isNotEmpty() && expected.map { it.id }.distinct().size == expected.size) {
+            "Select distinct notes"
+        }
+        val entries = readEntries()
+        val active = entries.filter { it.supersededBy == null }.associateBy { it.id }
+        expected.forEach { note ->
+            val current = active[note.id] ?: throw KnowledgeChanged()
+            if (current != note) throw KnowledgeChanged()
+            require(current.source == "user:manual" || current.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+                "Only manually authored notes can be shared"
+            }
+            if (shared) require(SelectiveMemoryAccess.safeToShare(current.title, current.excerpt)) {
+                "Potentially confidential note cannot be shared"
+            }
+        }
+        val target = if (shared) SelectiveMemoryAccess.SHARED_SOURCE else "user:manual"
+        val changed = expected.filter { it.source != target }
+        if (changed.isEmpty()) return@synchronized expected
+        if (entries.size + changed.size > NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
+        val replacements = changed.associate { old ->
+            old.id to old.copy(id = UUID.randomUUID().toString(), source = target,
+                recordedAt = System.currentTimeMillis(), manuallyEdited = true)
+        }
+        save(entries.map { old ->
+            replacements[old.id]?.let { old.copy(supersededBy = it.id) } ?: old
+        } + replacements.values)
+        expected.map { replacements[it.id] ?: it }
+    }
+
     /** An explicit permanent deletion removes the entire version chain. */
     fun remove(id: String, expected: Entry? = null): Boolean = synchronized(storeLock) {
         val existing = readEntries()

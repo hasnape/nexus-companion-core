@@ -88,6 +88,30 @@ class LocalKnowledgeLibraryTest {
         assertArrayEquals(corrupted, file(id).readBytes())
     }
 
+    @Test fun explicitConversationSharingPersistsAndCanBeRevokedWithoutLosingHistory() {
+        val id = "selective-persistence"
+        val store = library(id)
+        val original = store.addUserNote("Préférence", "J'aime les promenades.").entry
+        assertFalse(SelectiveMemoryAccess.canRead(original, false))
+        val shared = store.setConversationSharing(original, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(shared, false))
+        assertTrue(SelectiveMemoryAccess.canRead(library(id).list().single(), false))
+        assertEquals(original.excerpt, library(id).history(shared.id).single().excerpt)
+        val revoked = library(id).setConversationSharing(shared, false).entry
+        assertFalse(SelectiveMemoryAccess.canRead(library(id).list().single(), false))
+        assertEquals(2, library(id).history(revoked.id).size)
+        assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(original, true) }
+    }
+
+    @Test fun sharingRejectsPotentialSecretsAndImportedSources() {
+        val store = library("selective-rejection")
+        val secret = store.addUserNote("Code secret", "123456").entry
+        assertThrows(IllegalArgumentException::class.java) { store.setConversationSharing(secret, true) }
+        val imported = store.add("Article", "Une note publique.", "https://example.org")
+        assertThrows(IllegalArgumentException::class.java) { store.setConversationSharing(imported, true) }
+        assertFalse(SelectiveMemoryAccess.canRead(secret, false))
+    }
+
     @Test fun cosmeticDuplicatesKeepTheOriginalIdentityAndSpelling() {
         val store = library("cosmetic")
         val original = store.addUserNote("Thé vert", "Je préfère le thé vert.")

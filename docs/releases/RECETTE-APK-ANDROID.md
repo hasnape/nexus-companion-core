@@ -131,3 +131,62 @@ Le fichier d'identifiants actuel contient une seule mention « mot de passe du k
 Conserver au moins **deux copies chiffrées indépendantes** du keystore et des identifiants, avec contrôle d'accès strict, hors dépôt et hors stockage public. Vérifier périodiquement la restauration. Perdre la clé de signature d'origine empêcherait la mise à jour transparente des APK déjà installées.
 
 **Ne jamais générer une nouvelle clé de production pour « réparer » une signature manquante** : elle ne correspondrait plus au certificat des installations existantes.
+
+
+## Annexe B — faits retrouvés dans l'historique et vérifiés le 15 novembre 2026
+
+### Livraison réellement réalisée le 14 novembre : v0.4.28
+
+- La **v0.4.28**, `versionCode=34`, a été produite avec le certificat permanent, puis distribuée via **Vercel Blob** :
+  `https://emcvqfexhel0ijwf.public.blob.vercel-storage.com/nexus-companion-v0.4.28-native-alpha-release-3syYACshWV7l83cu2MFWHFsOIRHZdF.apk`
+- Cet objet est **encore présent** dans le stockage relié au projet et porte une taille enregistrée de **68 005 332 octets**.
+- L'historique rapporte **379/379 tests réussis**, signature APK v3 et vérification de l'identité du certificat, puis confirmation par le propriétaire de la **mise à jour sans perte de mémoire**.
+- L'ancienne release signée v0.4.27 est également conservée dans l'espace documentaire privé, ce qui permet une vérification comparative locale.
+
+### Certificat d'origine confirmé par contrôle cryptographique local
+
+Empreinte SHA-256 **publique** du certificat associé à la **clé privée de production** :
+
+```text
+01:44:5C:D0:F0:F5:66:88:FB:A4:6B:AD:32:84:0F:F8:
+5F:BD:EE:11:9C:DD:BD:2D:3A:19:31:4D:94:C4:72:D1
+```
+
+Le 15/11/2026, un contrôle `keytool -list -v` utilisant les identifiants **sans les afficher** a confirmé :
+- le keystore privé s'ouvre correctement ;
+- l'alias prévu existe et correspond à une `PrivateKeyEntry` ;
+- l'empreinte correspond **à la fois** à la valeur historique et à la référence inscrite dans le fichier privé.
+
+Ce contrôle prouve l'identité de la **clé disponible**, **pas** que la v0.4.29 ait déjà été signée.
+
+### Fichier source de la v0.4.29 réellement disponible
+
+APK compilée et conservée séparément dans le Blob connecté au projet :
+
+`https://emcvqfexhel0ijwf.public.blob.vercel-storage.com/nexus-companion-v0.4.29-unsigned-qugAyGydUZDVEvWPrjzmziOT0Ry034.apk`
+
+Taille : **68 007 585 octets**. **Non signée — ne pas installer ni communiquer comme version livrée.** Pour l'utiliser, la transférer vers le **poste de signature de confiance**, contrôler son hash, puis signer **localement**.
+
+### Script historique et remplacement maintenable
+
+Les conversations antérieures citaient `sign-nexus-companion.sh` mais **ce fichier d'origine n'est pas présent dans la branche GitHub actuelle**. Son contenu exact n'a donc **pas été récupéré** ; ne pas prétendre le contraire.
+
+Un **nouveau script de remplacement**, sans secrets, est maintenant versionné ici :
+`scripts/sign-nexus-companion.sh`
+
+Ce script requiert l'APK non signée, un chemin de sortie inédit, SDK Build Tools 35.0.0 et les quatre variables secrètes chargées **en privé**. Il réalise `zipalign`, `apksigner sign` (les mots de passe sont référencés par **nom de variable d'environnement**, jamais écrits en clair en arguments), `apksigner verify`, contrôle le certificat de production, vérifie `applicationId` et facultativement `versionCode`, puis affiche le SHA-256 de l'artefact signé.
+
+Exemple d'appel **après chargement sécurisé des secrets**, depuis la racine du dépôt sur le poste de signature :
+
+```bash
+export NEXUS_ANDROID_EXPECTED_VERSION_CODE=35
+bash scripts/sign-nexus-companion.sh \
+  /chemin/local/app-release-unsigned.apk \
+  /chemin/local/nexus-companion-v0.4.29-native-alpha-release.apk
+```
+
+**Ce nouveau script n'est pas encore validé par une signature réelle de v0.4.29.** Vérifier ses résultats avant toute publication. Les clés privées et les mots de passe ne doivent jamais être versés dans le Blob public.
+
+### Chaîne complète à reproduire
+
+**GitHub (code/version) → JDK/SDK/NDK/Gradle (tests + APK unsigned) → transfert vérifié de l'APK seule → poste de signature de confiance (clé privée locale et nouveau script) → comparaison certificat/identité → test mise à jour sur téléphone sans désinstallation → publication de la seule APK signée sur Vercel Blob.**

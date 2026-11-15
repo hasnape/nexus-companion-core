@@ -304,8 +304,13 @@ open class MainActivity : Activity() {
         fun jumpTo(section: Int) {
             val target = findViewById<View>(section)
             homeScroll.post {
-                if (foreground && !destroyed) homeScroll.smoothScrollTo(0,
-                    (target.top - (12 * resources.displayMetrics.density).toInt()).coerceAtLeast(0))
+                if (foreground && !destroyed && target.isAttachedToWindow) {
+                    val bounds = android.graphics.Rect(0, 0, target.width, target.height)
+                    homeScroll.offsetDescendantRectToMyCoords(target, bounds)
+                    homeScroll.smoothScrollTo(0,
+                        (bounds.top + homeScroll.scrollY - (12 * resources.displayMetrics.density).toInt())
+                            .coerceAtLeast(0))
+                }
             }
         }
         bindButton(R.id.home_jump_voice, disableWhileBusy = false) { jumpTo(R.id.home_section_voice) }

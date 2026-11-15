@@ -94,3 +94,40 @@ apksigner verify --verbose --print-certs nexus-companion-v0.4.29-release.apk
 - Statut final : **non signée / signée / vérifiée / testée sur téléphone / publiée** (ne jamais confondre ces étapes).
 
 **Règle définitive :** aucune « APK finale » annoncée tant que l'artefact signé n'existe pas et que sa signature, son identité Android et sa mise à jour préservant les données n'ont pas été vérifiées.
+
+
+## Annexe A — inventaire exact des fichiers de signature (privés)
+
+Les deux fichiers suivants ont été **vérifiés présents dans l'espace privé de travail** le 15/11/2026 :
+
+| Fichier | Usage | Taille observée | Confidentialité |
+| --- | --- | ---: | --- |
+| `nexus-companion-production.jks` | Clé Android de signature production | 3 616 octets | **SECRET** : ne jamais versionner |
+| `nexus-companion-signature-credentials.txt` | Alias, mot de passe du keystore/de la clé et empreinte de référence | 453 octets | **SECRET** : ne jamais versionner |
+
+Emplacement de travail privé actuellement utilisé : `/mnt/data/nexus-signing-private/`. Ce chemin est **spécifique à l'environnement de travail**, et non un chemin universel garanti sur tout poste. Il faut restaurer les fichiers depuis le coffre privé lorsqu'ils ne sont pas montés.
+
+**Contrôle d'accès local appliqué :** répertoire en mode `0700` ; fichiers en mode `0600`. Ne jamais copier ces deux fichiers dans le dépôt GitHub, une issue, une pull request, un artefact public, un Blob public, un log, un message de conversation ou un APK.
+
+Le fichier d'identifiants contient les libellés `Alias`, `Mot de passe du keystore et de la clé` et `SHA256`. **Leurs valeurs ne figurent pas dans ce document.** L'empreinte de certificat (non secrète) peut être utilisée comme référence après une vérification indépendante par `apksigner`.
+
+### Liaison aux variables Gradle
+
+Les quatre noms attendus par `app/build.gradle.kts` sont :
+
+```text
+NEXUS_ANDROID_KEYSTORE_PATH
+NEXUS_ANDROID_STORE_PASSWORD
+NEXUS_ANDROID_KEY_ALIAS
+NEXUS_ANDROID_KEY_PASSWORD
+```
+
+Sur un poste de signature fiable, charger les valeurs du coffre privé dans l'environnement du **processus Gradle seulement**, sans les imprimer ni les écrire dans un fichier du dépôt. La variable `NEXUS_ANDROID_KEYSTORE_PATH` doit pointer vers la copie privée du `.jks`. Ne pas supposer que le nom de l'alias correspond au nom du fichier : **lire la valeur exacte dans le fichier privé**.
+
+Le fichier d'identifiants actuel contient une seule mention « mot de passe du keystore et de la clé » ; le renseignement de `NEXUS_ANDROID_STORE_PASSWORD` et `NEXUS_ANDROID_KEY_PASSWORD` à partir de cette valeur doit être confirmé au moyen d'un contrôle local non journalisé avant de signer.
+
+### Sauvegarde durable
+
+Conserver au moins **deux copies chiffrées indépendantes** du keystore et des identifiants, avec contrôle d'accès strict, hors dépôt et hors stockage public. Vérifier périodiquement la restauration. Perdre la clé de signature d'origine empêcherait la mise à jour transparente des APK déjà installées.
+
+**Ne jamais générer une nouvelle clé de production pour « réparer » une signature manquante** : elle ne correspondrait plus au certificat des installations existantes.

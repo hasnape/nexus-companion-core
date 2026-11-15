@@ -1,8 +1,10 @@
 package fr.nexuscompanion.android
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -29,26 +31,61 @@ class LocalModelActivity : Activity() {
         super.onCreate(state)
         title = "Modèle de langage local"
         store = LocalModelStore(this)
-        val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28, 28, 28, 28) }
-        setContentView(ScrollView(this).apply { addView(panel) })
-        fun text(value: String) = TextView(this).also { it.text = value; it.textSize = 17f; panel.addView(it) }
-        text("Répondre hors ligne avec LFM2.5")
-        text("Le modèle s’installe séparément : environ 731 Mo. Il répond aux questions générales ; les connaissances enregistrées et les commandes restent gérées par le moteur Nexus. Ses réponses peuvent contenir des erreurs et ne sont jamais enregistrées automatiquement.")
-        status = text("")
-        diagnostics = text("")
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(24), dp(20), dp(24))
+        }
+        setContentView(ScrollView(this).apply {
+            fillViewport = true
+            setBackgroundColor(getColor(R.color.home_background))
+            addView(panel)
+        })
+        fun text(value: String) = TextView(this).also {
+            it.text = value
+            it.textSize = 15f
+            it.setTextColor(getColor(R.color.home_text))
+            it.setPadding(0, 0, 0, dp(14))
+            panel.addView(it)
+        }
+        text("CERVEAU LOCAL · LFM2.5").apply {
+            textSize = 22f
+            setTextColor(getColor(R.color.home_mint))
+        }
+        text("Le modèle s’installe séparément : environ 731 Mo. Il répond aux questions générales ; les connaissances enregistrées et les commandes restent gérées par le moteur Nexus. Ses réponses peuvent contenir des erreurs et ne sont jamais enregistrées automatiquement.").apply {
+            setTextColor(getColor(R.color.home_muted_text))
+        }
+        status = text("").apply {
+            textSize = 17f
+            setTextColor(getColor(R.color.home_mint))
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        diagnostics = text("").apply { setTextColor(getColor(R.color.home_sky)) }
         toggle = Switch(this).apply {
             text = getString(R.string.llm_ui_1)
+            setTextColor(getColor(R.color.home_text))
+            minHeight = dp(48)
             isChecked = store.enabled
             setOnCheckedChangeListener { _, checked -> store.enabled = checked; refresh() }
         }.also(panel::addView)
         notesToggle = Switch(this).apply {
             text = getString(R.string.llm_use_notes)
+            setTextColor(getColor(R.color.home_text))
+            minHeight = dp(48)
             isChecked = store.notesEnabled
             setOnCheckedChangeListener { _, checked -> store.notesEnabled = checked }
         }.also(panel::addView)
         text(getString(R.string.llm_notes_explanation))
         fun button(label: String, action: () -> Unit) = Button(this).also { b ->
-            b.text = label; b.setOnClickListener { action() }; panel.addView(b); actions.add(b)
+            b.text = label
+            b.isAllCaps = false
+            b.minHeight = dp(48)
+            b.setTextColor(getColor(R.color.home_action_text))
+            b.setBackgroundResource(R.drawable.home_action)
+            b.setOnClickListener { action() }
+            panel.addView(b, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+            actions.add(b)
         }
         button("Télécharger le modèle officiel · 731 Mo") {
             transfer {
@@ -60,10 +97,22 @@ class LocalModelActivity : Activity() {
         button("Importer le fichier GGUF officiel") {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), 451)
         }
-        button("Supprimer le modèle local") { transfer { store.delete() } }
+        button("Supprimer le modèle local") {
+            AlertDialog.Builder(this).setTitle("Supprimer LFM2.5 ?")
+                .setMessage("Le modèle téléchargé sera supprimé du téléphone. Les souvenirs et le cerveau Nexus sont conservés. Confirmer ?")
+                .setNegativeButton("Annuler", null)
+                .setPositiveButton("Supprimer") { _, _ -> transfer { store.delete() } }
+                .show()
+        }
         button("Réévaluer la mémoire et la disponibilité du LLM") { refresh() }
         Button(this).apply {
-            text = getString(R.string.llm_ui_2); setOnClickListener { cancelled.set(true) }; panel.addView(this)
+            text = getString(R.string.llm_ui_2)
+            isAllCaps = false
+            minHeight = dp(48)
+            setTextColor(getColor(R.color.home_action_text))
+            setBackgroundResource(R.drawable.home_action)
+            setOnClickListener { cancelled.set(true) }
+            panel.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         }
         text("La vérification SHA-256 doit réussir avant l’activation. Le calcul reste sur le téléphone. Il se met en retrait en cas de manque de RAM, de batterie faible, de chauffe ou d’économie d’énergie.")
         text("Le calcul requiert Android 64 bits et au moins 1,5 Gio de RAM actuellement disponible. Le contrôle est refait avant chaque génération. Les 256 Mo parfois affichés correspondent au tas Java, pas à toute la RAM du processus. Android ne permet pas de réserver ou monopoliser de la RAM à l’installation. Si la batterie est à 15 % ou moins, branche le téléphone.")

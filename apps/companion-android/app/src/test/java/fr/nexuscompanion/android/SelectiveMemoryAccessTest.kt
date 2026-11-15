@@ -27,6 +27,14 @@ class SelectiveMemoryAccessTest {
         assertEquals(1, SelectiveMemoryAccess.accessible(notes, false).size)
     }
 
+    @Test fun sensitiveContentIsRejectedBeforeSharing() {
+        assertFalse(SelectiveMemoryAccess.safeToShare("Wi-Fi", "Mot de passe : exemple"))
+        assertFalse(SelectiveMemoryAccess.safeToShare("Code", "123456"))
+        assertFalse(SelectiveMemoryAccess.safeToShare("Contact", "personne@example.com"))
+        assertFalse(SelectiveMemoryAccess.safeToShare("Adresse", "12 rue des Lilas"))
+        assertTrue(SelectiveMemoryAccess.safeToShare("Préférence", "J'aime les promenades."))
+    }
+
     @Test fun sourcePrefixCannotAccidentallyDeclassify() {
         assertFalse(SelectiveMemoryAccess.canRead(note("user:conversation-shared:fake"), false))
         assertFalse(SelectiveMemoryAccess.canRead(note("user:conversation"), false))

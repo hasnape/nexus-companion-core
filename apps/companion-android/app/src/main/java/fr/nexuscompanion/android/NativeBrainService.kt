@@ -356,6 +356,24 @@ internal class NativeBrainService(
             array.put(item); submittedNotes.add(note); requestChars += added
         }
         val result = JSONObject(brain().replyJson(request.toString()))
+        // Privacy or content may have changed while the brain was processing.
+        // Never return a computed answer using revoked, deleted, expired or
+        // newly locked evidence. A future model must obey this same boundary.
+        if (submittedNotes.any { it.id != "external-context" }) {
+            val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                clearConversation()
+                return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (submittedNotes.any { it.id != "external-context" &&
+                    (current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis())) }) {
+                clearConversation()
+                return Reply("La source a changé pendant la réponse. Pose de nouveau ta question pour consulter la version actuelle.", null, true, expectsAnswer = true)
+            }
+            if (submittedNotes.any { it.id != "external-context" && !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation()
+                return codeRequired()
+            }
+        }
         check(result.getInt("protocolVersion") == 1 && result.getString("engine") == "nexus-core-rules-v1")
         val text = result.getString("text")
         check(text.isNotBlank() && text.length <= NativeCapacity.MAX_REPLY_TEXT_CHARS)

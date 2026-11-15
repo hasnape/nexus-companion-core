@@ -372,6 +372,11 @@ internal class NativeBrainService(
             val savedEvidenceMatches = notes.orEmpty().any { note ->
                 KnowledgePolicy.score(queryTerms, note.title, note.excerpt) > 0
             }
+            // Preserve usable personal knowledge offline even when native model
+            // admission fails (RAM, battery, installation or thermal limits).
+            if (savedEvidenceMatches && evidenceContext == null && recall == null && focusedNote == null) {
+                offlineEvidenceReply(queryTerms, visibleNotes.orEmpty())?.let { return it }
+            }
             if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null &&
                 turnEvidence.isEmpty() && !savedEvidenceMatches) {
                 generator.generate(LocalDraftRequest(message, offer))?.let { draft ->
@@ -393,6 +398,48 @@ internal class NativeBrainService(
         if (query.isEmpty()) return local
         check(query.isNotBlank() && query.length <= 180 && candidate == null)
         return lookup(query, onlineEnabled, notes != null)
+    }
+
+    /**
+     * Answer from a current, permitted local sentence when the optional GGUF
+     * model cannot be used. This is quotation-based recall, not text generation.
+     * A generic recent-note fallback must never be presented as a relevant fact.
+     */
+    private fun offlineEvidenceReply(queryTerms: List<String>, notes: List<LocalKnowledgeLibrary.Entry>): Reply? {
+        if (queryTerms.isEmpty()) return null
+        val likely = notes.mapNotNull { note ->
+            val score = KnowledgePolicy.score(queryTerms, note.title, note.excerpt)
+            val coverage = score / (queryTerms.size + 1)
+            val distinctiveTitleMatch = queryTerms.any { term ->
+                term.length >= 5 && KnowledgePolicy.score(listOf(term), note.title, "") > 0
+            }
+            if (coverage >= 2 || (coverage >= 1 && distinctiveTitleMatch && queryTerms.size <= 3))
+                note to score else null
+        }.maxByOrNull { it.second }?.first ?: return null
+
+        val sentence = GroundedNotes.prepare(listOf(likely), queryTerms)
+            .firstOrNull()?.sentences?.firstOrNull() ?: return null
+
+        // Revalidate after selection: a note may be edited, removed, expired,
+        // made private or locked while the shared brain is processing a turn.
+        val unlocked = privateAccess()
+        if (!SelectiveMemoryAccess.canRead(likely, unlocked)) {
+            clearConversation()
+            return codeRequired()
+        }
+        val current = try { library.get(likely.id) } catch (_: Exception) { null }
+        if (current != likely || KnowledgePolicy.isExpired(likely.expiresAt, System.currentTimeMillis())) {
+            clearConversation()
+            return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.",
+                null, true, expectsAnswer = true)
+        }
+        turnEvidence = listOf(likely)
+        return Reply(
+            "D’après la note « ${likely.title} » (information enregistrée, non vérifiée) : ${sentence}",
+            null, true, expectsAnswer = true,
+            protectedInformation = likely.source != SelectiveMemoryAccess.SHARED_SOURCE,
+            evidenceSources = listOf(EvidenceSource(likely.id, likely.title, likely.source))
+        )
     }
 
     private fun groundedReply(message: String, terms: List<String>, fallback: Reply): Reply? {

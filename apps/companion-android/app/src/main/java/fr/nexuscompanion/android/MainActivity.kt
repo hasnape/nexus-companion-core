@@ -770,7 +770,14 @@ open class MainActivity : Activity() {
             if (foreground) {
                 val dialog = AlertDialog.Builder(this)
                     .setTitle(getString(R.string.notes_page, start + 1, start + shown.size, notes.size))
-                    .setItems(shown.map { it.title }.toTypedArray()) { _, position -> showNote(shown[position]) }
+                    .setItems(shown.map { note ->
+                        val privacy = when (note.source) {
+                            SelectiveMemoryAccess.SHARED_SOURCE -> "🔓 Sans code"
+                            "user:manual" -> "🔒 Privé · code requis"
+                            else -> "🔒 Source protégée"
+                        }
+                        "$privacy  ·  ${note.title}"
+                    }.toTypedArray()) { _, position -> showNote(shown[position]) }
                     .setNegativeButton(R.string.close, null)
                 if (start + shown.size < notes.size) dialog.setPositiveButton(R.string.notes_next) { _, _ -> showNotes(page + 1) }
                 if (start > 0) dialog.setNeutralButton(R.string.notes_previous) { _, _ -> showNotes(page - 1) }
@@ -793,14 +800,20 @@ open class MainActivity : Activity() {
         if (note.manuallyEdited) details.addView(TextView(this).apply { setText(R.string.note_manually_edited) })
         val manuallyAuthored = note.source == "user:manual" ||
             note.source == SelectiveMemoryAccess.SHARED_SOURCE
+        if (!manuallyAuthored) details.addView(TextView(this).apply {
+            text = "🔒 Source protégée : le partage sans code est réservé aux souvenirs créés manuellement."
+            contentDescription = "Source protégée, partage sans code indisponible"
+        })
         if (manuallyAuthored) {
             val shared = note.source == SelectiveMemoryAccess.SHARED_SOURCE
             details.addView(TextView(this).apply {
-                text = if (shared) "Mémoire conversationnelle : autorisée sans code"
-                    else "Mémoire privée : code nécessaire"
+                text = if (shared) "🔓 Sans code : Alif peut utiliser ce souvenir à voix haute."
+                    else "🔒 Privé : authentification requise pour consulter ce souvenir."
+                textSize = 16f
+                contentDescription = if (shared) "Souvenir accessible sans code" else "Souvenir privé, code requis"
             })
             details.addView(Button(this).apply {
-                text = if (shared) "Rendre cette note privée" else "Autoriser cette note en conversation"
+                text = if (shared) "🔒 Protéger avec un code" else "🔓 Autoriser sans code"
                 setOnClickListener {
                     if (!privateAccessAllowed()) {
                         requireUserAccess { showNote(note) }

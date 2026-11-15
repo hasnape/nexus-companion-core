@@ -28,7 +28,7 @@ internal class CompanionDialogue(
         Rule("merci", setOf("merci", "merci beaucoup", "je te remercie"), listOf("Avec plaisir !", "Je t'en prie.")),
         Rule("excuse", setOf("pardon", "excuse moi", "desole"), listOf("Aucun souci.", "Pas de problème, je t'écoute.")),
         Rule("compliment", setOf("bravo", "bien joue", "tu es gentil"), listOf("Merci !", "C'est gentil de me le dire.")),
-        Rule("identite", setOf("qui es tu", "comment t appelles tu", "quel est ton nom"), listOf("Je suis %NAME%, un compagnon numérique doté d'une intelligence artificielle, de la famille Nexus Companion. Ma mission est de t'accompagner, dialoguer, apprendre et t'aider.")),
+        Rule("identite", setOf("qui es tu", "comment t appelles tu", "quel est ton nom", "qui es tu et quel est ton role", "comment t appelles tu et quel est ton role", "comment t appelles tu et a quoi sers tu"), listOf("Je suis %NAME%, un compagnon numérique doté d'une intelligence artificielle, de la famille Nexus Companion. Ma mission est de t'accompagner, dialoguer, apprendre et t'aider.")),
         Rule("nature", setOf("tu es humain", "tu es un humain", "tu es un robot"), listOf("Je suis une intelligence artificielle, pas un être humain.")),
         Rule("age", setOf("quel age as tu"), listOf("Je n'ai pas d'âge biologique.")),
         Rule("fonction", setOf("a quoi sers tu", "que peux tu faire"), listOf("Je peux discuter, expliquer et utiliser les fonctions disponibles sur cet appareil.")),

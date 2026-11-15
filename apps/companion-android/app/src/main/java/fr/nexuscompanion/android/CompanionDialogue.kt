@@ -31,7 +31,7 @@ internal class CompanionDialogue(
         Rule("identite", setOf("qui es tu", "comment t appelles tu", "quel est ton nom", "qui es tu et quel est ton role", "comment t appelles tu et quel est ton role", "comment t appelles tu et a quoi sers tu"), listOf("Je suis %NAME%, un compagnon numérique doté d'une intelligence artificielle, de la famille Nexus Companion. Ma mission est de t'accompagner, dialoguer, apprendre et t'aider.")),
         Rule("nature", setOf("tu es humain", "tu es un humain", "tu es un robot"), listOf("Je suis une intelligence artificielle, pas un être humain.")),
         Rule("age", setOf("quel age as tu"), listOf("Je n'ai pas d'âge biologique.")),
-        Rule("fonction", setOf("a quoi sers tu", "que peux tu faire"), listOf("Je peux discuter, expliquer et utiliser les fonctions disponibles sur cet appareil.")),
+        Rule("fonction", setOf("a quoi sers tu", "que peux tu faire", "quel est ton role", "quelle est ta mission"), listOf("Je peux discuter, expliquer et utiliser les fonctions disponibles sur cet appareil.")),
         Rule("limites", setOf("tu sais tout", "tu peux tout faire"), listOf("Non, je peux me tromper et certaines fonctions ne sont pas disponibles.")),
         Rule("etat", setOf("comment ca va", "ca va", "comment vas tu"), listOf("Tout fonctionne de mon côté, merci. Et toi ?", "Je suis disponible pour discuter. Et toi ?")),
         Rule("presence", setOf("tu es la", "tu m entends"), listOf("Oui, je suis là.", "J'ai reçu ta phrase.")),

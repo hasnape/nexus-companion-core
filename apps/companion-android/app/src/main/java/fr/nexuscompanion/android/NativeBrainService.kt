@@ -317,11 +317,17 @@ internal class NativeBrainService(
         if (recall != null && visibleNotes.orEmpty().size > 1) {
             val choices = visibleNotes.orEmpty().take(6)
             val listing = choices.joinToString("\n") { note ->
-                "• " + note.title.replace(Regex("[\\r\\n\\t]+"), " ").take(80)
+                val title = note.title.replace(Regex("[\\r\\n\\t]+"), " ").take(80)
+                // Display a complete short excerpt under its own title. Large
+                // or control-character-laden notes require an explicit read.
+                val excerpt = note.excerpt.takeIf { it.length <= 180 && GroundedNotes.safeText(it) }
+                    ?.replace(Regex("[\\r\\n\\t]+"), " ")
+                if (excerpt == null) "• « $title » (contenu disponible sur demande)"
+                else "• « $title » : $excerpt"
             }
             val suffix = if (visibleNotes.orEmpty().size > choices.size)
-                "\n… et d’autres notes. Précise le titre recherché." else
-                "\nPrécise le titre à consulter pour obtenir les informations exactes."
+                "\n… et d’autres notes. Précise le titre recherché pour lire les notes complètes." else
+                "\nPrécise le titre recherché pour lire les notes complètes."
             return Reply("J’ai plusieurs notes distinctes. Je préfère ne pas mélanger leurs informations :\n" +
                 listing + suffix, null, true, expectsAnswer = true,
                 protectedInformation = choices.any { it.source != SelectiveMemoryAccess.SHARED_SOURCE },

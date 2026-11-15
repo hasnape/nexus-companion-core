@@ -961,7 +961,9 @@ open class MainActivity : Activity() {
             .setPositiveButton(R.string.save_note) { _, _ ->
                 val editedTitle = title.text.toString(); val editedContent = content.text.toString()
                 runTask(R.string.working, R.string.library_write_failed, { library.replace(note, editedTitle, editedContent) }) { result ->
-                    showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
+                    if (result.created && note.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+                        showAnswer("Souvenir modifié : accès sans code révoqué. Cette nouvelle version est privée jusqu'à une nouvelle autorisation.")
+                    } else showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
                 }
             }.create())
     }

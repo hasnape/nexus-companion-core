@@ -18,6 +18,9 @@ class CompanionDialogueTest {
         val second = dialogue.answer("Bonjour")
         assertNotEquals(first, second)
         assertNull(dialogue.answer("Que sais-tu de moi ?"))
+        // Memory questions must reach the encrypted memory retrieval pipeline, not a canned reply.
+        assertNull(dialogue.answer("Tu te souviens de moi ?"))
+        assertNull(dialogue.answer("Que te souviens-tu de moi ?"))
         assertNull(dialogue.answer("Lis mes notes"))
         assertNull(dialogue.answer("Bonjour, lis mes notes"))
     }

@@ -311,9 +311,10 @@ internal class NativeBrainService(
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
             .put("privateAccessGranted", unlocked || sharedContext)
-        if (evidenceContext != null) request.put("evidenceContext", evidenceContext)
+        // Do not carry the previous source into an unrelated new question.
+        if (contextual && evidenceContext != null) request.put("evidenceContext", evidenceContext)
         if (focusedNote == null) {
-            conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
+            if (contextual) conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
             if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
         }
         var requestChars = request.toString().length

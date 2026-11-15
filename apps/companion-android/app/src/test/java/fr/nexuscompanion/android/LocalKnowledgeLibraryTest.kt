@@ -115,7 +115,7 @@ class LocalKnowledgeLibraryTest {
         assertEquals("user:manual", revised.source)
         assertFalse(SelectiveMemoryAccess.canRead(revised, unlocked = false))
         assertEquals("user:manual", library(id).list().single().source)
-        assertEquals(listOf(original.excerpt, shared.excerpt), library(id).history(revised.id).map { it.excerpt })
+        assertEquals(listOf(shared.excerpt, original.excerpt), library(id).history(revised.id).map { it.excerpt })
         assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(shared, false) }
 
         // An unchanged save cannot implicitly re-authorize the edited note.

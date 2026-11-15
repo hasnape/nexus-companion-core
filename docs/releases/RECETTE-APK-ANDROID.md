@@ -1,8 +1,25 @@
 # Recette de livraison APK — Nexus Companion Android
 
-**Statut :** procédure de référence reproductible, basée sur les compilations et validations réellement effectuées. **Un artefact v0.4.29 portant un bloc de signature APK v2 existe localement depuis le 15/11/2026 ; sa vérification cryptographique par `apksigner` et son installation restent à valider.** Ne pas confondre présence du bloc de signature et validation de la signature.
+**Statut actuel (15/11/2026) :** la **v0.4.30** a été compilée en release, signée avec le certificat permanent, vérifiée par `apksigner` et installée par-dessus la version existante. Son propriétaire a confirmé **7 contrôles fonctionnels réussis sur téléphone, sans perte de souvenirs**. Les informations sur v0.4.28/v0.4.29 plus bas sont conservées à titre historique.
 
-**Projet :** `apps/companion-android` ; **application de production :** `fr.nexuscompanion.android`. Branche de travail actuelle : `fix/android-llm-memory-readiness-20261114`. La v0.4.28 (`versionCode=34`) est installée sur le téléphone ; la v0.4.29 (`versionCode=35`) est compilée ; un artefact signé est conservé localement, mais pas encore validé par `apksigner` ni testé sur téléphone.
+**Projet :** `apps/companion-android` ; **application de production :** `fr.nexuscompanion.android`. Branche de développement : `fix/android-llm-memory-readiness-20261114`. **Version installée après validation :** `0.4.30-native-alpha` (`versionCode=36`). Les correctifs ultérieurs de la branche nécessitent une nouvelle version et un nouveau cycle de tests/signature ; ne pas les attribuer rétroactivement à l'APK déjà installée.
+
+## Validation de terrain — APK v0.4.30 (15 novembre 2026)
+
+- **APK release signée et vérifiée** : `fr.nexuscompanion.android`, `versionCode=36`, `versionName=0.4.30-native-alpha`, **68 050 388 octets**.
+- **SHA-256 du fichier signé** : `a255b212d31ec9d6c9710e6f841a3849eb620f53e655f4efbf3c87902f4c116b`.
+- **SHA-256 du certificat de signature** : `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1`, conforme au certificat de production antérieur. `apksigner verify` : schéma APK v3 valide.
+- **Installation par-dessus l'ancienne application** : réussie selon le retour du propriétaire ; aucune désinstallation nécessaire.
+- **Sept vérifications fonctionnelles confirmées sur le téléphone par le propriétaire** : démarrage sans plantage ; anciens souvenirs présents ; reconnaissance vocale opérationnelle ; réponses écrites et orales ; notes privées accessibles uniquement avec code ; notes partagées accessibles sans code ; fonctionnement en mode avion.
+- **Portée de la validation** : retour terrain fonctionnel, pas une mesure de performance du LLM LFM2.5 ni une vérification d'autonomie prolongée. La présence d'un modèle téléchargé ne prouve pas qu'il soit chargé sur cet appareil.
+
+### Développement postérieur à l'APK v0.4.30
+
+Le 15/11/2026, le code en branche a reçu un renforcement du filtre de confidentialité pour les **numéros de téléphone français avec séparateurs**, des tests de refus atomique du partage groupé et une correction d'un test d'avertissement « version test / production ». Après un `clean` avec `-PnexusPreview=false`, **410 tests Android ont réussi, 0 échec, 0 ignoré** (41 classes). Ces changements **ne sont pas inclus** dans l'APK v0.4.30 déjà distribuée : ils feront partie d'une prochaine release, après son propre contrôle de signature, sa compilation et une nouvelle recette terrain.
+
+**Attention au cache de variantes** : après tout passage `-PnexusPreview=true` vers `false`, lancer `:app:clean` avant tests/assemblage. Sans nettoyage, une compilation incrémentale peut conserver une valeur de `BuildConfig.IS_PREVIEW` de la variante précédente et provoquer un résultat de test trompeur. Le script `scripts/build-android-apk.sh` exécute déjà `:app:clean`.
+
+---
 
 ## 0. Ingrédients — à réunir avant de commencer
 

@@ -55,7 +55,7 @@ actual_cert="$(printf '%s\n' "$verification" |
   head -n 1 | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
 [[ "$actual_cert" == "$expected_cert" ]] || fail "Unexpected production signing certificate"
 
-metadata="$("$aapt" dump badging "$output" | head -n 1)" || fail "Unable to inspect APK manifest"
+metadata="$("$aapt" dump badging "$output" | sed -n '1p')" || fail "Unable to inspect APK manifest"
 [[ "$metadata" == *"name='fr.nexuscompanion.android'"* ]] ||
   fail "Wrong applicationId (preview/debug package?)"
 if [[ -n "${NEXUS_ANDROID_EXPECTED_VERSION_CODE:-}" ]]; then

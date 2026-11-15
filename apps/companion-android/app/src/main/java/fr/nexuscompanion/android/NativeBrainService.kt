@@ -407,18 +407,9 @@ internal class NativeBrainService(
      */
     private fun offlineEvidenceReply(queryTerms: List<String>, notes: List<LocalKnowledgeLibrary.Entry>): Reply? {
         if (queryTerms.isEmpty()) return null
-        val likely = notes.mapNotNull { note ->
-            val score = KnowledgePolicy.score(queryTerms, note.title, note.excerpt)
-            val coverage = score / (queryTerms.size + 1)
-            val distinctiveTitleMatch = queryTerms.any { term ->
-                term.length >= 5 && KnowledgePolicy.score(listOf(term), note.title, "") > 0
-            }
-            if (coverage >= 2 || (coverage >= 1 && distinctiveTitleMatch && queryTerms.size <= 3))
-                note to score else null
-        }.maxByOrNull { it.second }?.first ?: return null
-
-        val sentence = GroundedNotes.prepare(listOf(likely), queryTerms)
-            .firstOrNull()?.sentences?.firstOrNull() ?: return null
+        val selected = OfflineMemoryEvidence.select(queryTerms, notes) ?: return null
+        val likely = selected.note
+        val sentence = selected.sentence
 
         // Revalidate after selection: a note may be edited, removed, expired,
         // made private or locked while the shared brain is processing a turn.

@@ -513,7 +513,11 @@ class MainActivityTest {
     }
 
     @Test fun voiceSetupIsPrivateAndTheTestChannelClearlyIdentifiesItsSeparateMemory() {
-        assertEquals(BuildConfig.IS_PREVIEW, hasText(activity.getString(R.string.preview_warning)))
+        // The preview label is part of both layouts; production hides it.
+        // Checking text existence (including GONE views) causes a false failure.
+        val warning = activity.findViewById<TextView>(R.id.home_preview_warning)
+        assertEquals(if (BuildConfig.IS_PREVIEW) View.VISIBLE else View.GONE, warning.visibility)
+        assertEquals(BuildConfig.IS_PREVIEW, warning.text.toString() == activity.getString(R.string.preview_warning))
         button(R.string.voice_settings).performClick()
         assertEquals(VoiceSettingsActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
         assertFalse(activity.packageManager.getActivityInfo(android.content.ComponentName(activity, VoiceSettingsActivity::class.java), 0).exported)

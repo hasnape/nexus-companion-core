@@ -48,8 +48,6 @@ internal class CompanionDialogue(
         Rule("ignorance", setOf("tu ne sais pas"), listOf("Je préfère dire que je ne sais pas plutôt qu'inventer.")),
         Rule("correction", setOf("c est faux", "tu te trompes"), listOf("Merci de me corriger. Vérifions ensemble.", "Je vais revoir mon raisonnement.")),
         Rule("malentendu", setOf("tu as mal compris"), listOf("Désolé. Peux-tu reformuler ?")),
-        Rule("silence", setOf("silence", "tais toi", "arrete de parler"), listOf("Compris, je me tais.")),
-        Rule("pause", setOf("attends", "patiente"), listOf("D'accord, je patiente.")),
         Rule("amitie", setOf("tu es mon ami"), listOf("Je peux être un compagnon de discussion, même si je ne suis pas une personne.")),
         Rule("affection", setOf("tu m aimes"), listOf("Je suis conçu pour t'accompagner avec attention et respect.")),
         Rule("colere_ia", setOf("tu es fache"), listOf("Non, je ne ressens pas la colère comme un humain.")),

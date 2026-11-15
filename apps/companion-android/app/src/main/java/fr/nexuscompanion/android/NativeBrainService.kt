@@ -293,7 +293,7 @@ internal class NativeBrainService(
         }
         var requestChars = request.toString().length
         // Budget each serialized record once; never repeatedly serialize an oversized context.
-        for (note in notes.orEmpty()) {
+        for (note in visibleNotes.orEmpty()) {
             val item = noteJson(note)
             val added = item.toString().length + if (array.length() > 0) 1 else 0
             if (requestChars + added > minOf(SharedBrainRuntime.MAX_REQUEST_CHARS, budget?.requestChars ?: SharedBrainRuntime.MAX_REQUEST_CHARS)) break

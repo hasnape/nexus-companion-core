@@ -16,13 +16,22 @@ if (( present == 4 )); then
 fi
 python3 "$ROOT/scripts/prepare-local-llm.py"
 cd "$ROOT/apps/companion-android"
-tasks=(:app:clean :app:testDebugUnitTest :app:lintDebug :app:assembleDebug)
-if (( present == 4 )); then tasks+=(:app:testReleaseUnitTest :app:lintRelease :app:assembleRelease); fi
 case "${NEXUS_ANDROID_PREVIEW:-false}" in
   true|false) preview="${NEXUS_ANDROID_PREVIEW:-false}" ;;
   *) echo 'NEXUS_ANDROID_PREVIEW must be true or false.' >&2; exit 1 ;;
 esac
-bash ./gradlew --no-daemon --max-workers=2 "-PnexusPreview=$preview" "${tasks[@]}"
+# Run tests, lint, and compilation in separate memory-limited Gradle processes.
+# Concurrent Kotlin test workers and Android lint may exceed a 4 GiB builder.
+gradle=(bash ./gradlew --no-daemon --max-workers=1 "-PnexusPreview=$preview")
+"${gradle[@]}" :app:clean
+"${gradle[@]}" :app:testDebugUnitTest
+"${gradle[@]}" :app:lintDebug
+"${gradle[@]}" :app:assembleDebug
+if (( present == 4 )); then
+  "${gradle[@]}" :app:testReleaseUnitTest
+  "${gradle[@]}" :app:lintRelease
+  "${gradle[@]}" :app:assembleRelease
+fi
 DEBUG_APK="$PWD/app/build/outputs/apk/debug/app-debug.apk"
 version="$("$TOOLS/aapt" dump badging "$DEBUG_APK" | sed -n "s/^package:.*versionName='\([^']*\)'.*/\1/p")"
 [[ "$version" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo 'Invalid APK version name.' >&2; exit 1; }

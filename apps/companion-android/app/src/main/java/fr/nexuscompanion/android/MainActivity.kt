@@ -791,6 +791,44 @@ open class MainActivity : Activity() {
             textSize = 18f
         })
         if (note.manuallyEdited) details.addView(TextView(this).apply { setText(R.string.note_manually_edited) })
+        val manuallyAuthored = note.source == "user:manual" ||
+            note.source == SelectiveMemoryAccess.SHARED_SOURCE
+        if (manuallyAuthored) {
+            val shared = note.source == SelectiveMemoryAccess.SHARED_SOURCE
+            details.addView(TextView(this).apply {
+                text = if (shared) "Mémoire conversationnelle : autorisée sans code"
+                    else "Mémoire privée : code nécessaire"
+            })
+            details.addView(Button(this).apply {
+                text = if (shared) "Rendre cette note privée" else "Autoriser cette note en conversation"
+                setOnClickListener {
+                    if (!privateAccessAllowed()) {
+                        requireUserAccess { showNote(note) }
+                        return@setOnClickListener
+                    }
+                    val targetShared = !shared
+                    val explanation = if (targetShared)
+                        "Nexus pourra utiliser le texte de cette note sans demander ton code, y compris à voix haute. Vérifie qu'elle ne contient aucun renseignement confidentiel. Confirmer ?"
+                    else "Cette note redeviendra privée et nécessitera le code pour être consultée. Confirmer ?"
+                    showDialog(AlertDialog.Builder(this@MainActivity)
+                        .setTitle(if (targetShared) "Autoriser la mémoire conversationnelle" else "Protéger cette note")
+                        .setMessage(explanation)
+                        .setNegativeButton(R.string.cancel, null)
+                        .setPositiveButton("Confirmer") { _, _ ->
+                            if (!privateAccessAllowed()) {
+                                requireUserAccess { showNote(note) }
+                            } else {
+                                runTask(R.string.working, R.string.library_write_failed,
+                                    { library.setConversationSharing(note, targetShared) }) { updated ->
+                                    worker.execute { brain.clearConversation() }
+                                    showAnswer(if (updated.created)
+                                        "Protection de la note mise à jour." else "Protection inchangée.")
+                                }
+                            }
+                        }.create())
+                }
+            })
+        }
         val history = Button(this).apply { id = R.id.note_history_button; setText(R.string.note_history) }
         details.addView(history)
         val dialog = AlertDialog.Builder(this).setTitle(note.title)

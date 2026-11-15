@@ -146,4 +146,79 @@ class LocalGenerationTest {
             assertTrue(brain.reply("Pourquoi ?").text.contains("supprimée"))
         }
     }
+    @Test fun explicitlySharedNotesGroundTheLocalModelWithoutUnlockingPrivateNotes() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-shared-grounding")
+        val original = notes.addUserNote("Métier", "Je travaille comme technicien informatique.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        notes.addUserNote("Information privée", "Mon identifiant secret est ORION.")
+        val requests = mutableListOf<LocalDraftRequest>()
+        val model = object : LocalDraftGenerator {
+            override val usesNotes = true
+            override fun generate(request: LocalDraftRequest): String {
+                requests.add(request)
+                val source = request.evidence.single()
+                return JSONObject().put("quotes", org.json.JSONArray().put(
+                    JSONObject().put("source", source.key).put("text", source.sentences.first())
+                )).toString()
+            }
+            override fun cancel() {}
+            override fun close() {}
+        }
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, generator = model).use { brain ->
+            val reply = brain.reply("Quel est mon métier ?", onlineEnabled = false)
+            assertTrue("The shared note should ground the local response", reply.generatedLocally)
+            assertTrue(reply.text.contains("technicien informatique"))
+            assertFalse(reply.text.contains("ORION"))
+            assertFalse(reply.protectedInformation)
+            assertEquals(shared.id, requests.single().evidence.single().noteId)
+            assertEquals(2, notes.list().size)
+        }
+    }
+
+    @Test fun revocationDuringLocalGenerationFailsClosedWithoutReplayingPrivateEvidence() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-share-revocation")
+        val original = notes.addUserNote("Métier", "Je travaille comme technicien informatique.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        val model = object : LocalDraftGenerator {
+            override val usesNotes = true
+            override fun generate(request: LocalDraftRequest): String {
+                val source = request.evidence.single()
+                notes.setConversationSharing(shared, false)
+                return JSONObject().put("quotes", org.json.JSONArray().put(
+                    JSONObject().put("source", source.key).put("text", source.sentences.first())
+                )).toString()
+            }
+            override fun cancel() {}
+            override fun close() {}
+        }
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, generator = model).use { brain ->
+            val reply = brain.reply("Quel est mon métier ?", onlineEnabled = false)
+            assertTrue(reply.requiresUserCode)
+            assertFalse(reply.text.contains("technicien informatique"))
+            assertEquals(1, notes.list().size)
+            assertEquals("user:manual", notes.list().single().source)
+        }
+    }
+
+    @Test fun lockedMemoryOverviewCountsOnlySharedNotesNotPrivateHistoryOrStorage() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-private-statistics")
+        val shared = notes.addUserNote("Loisir", "Je préfère les promenades.").entry
+        notes.setConversationSharing(shared, true)
+        notes.addUserNote("Information privée", "Mon identifiant secret est ORION.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }).use { brain ->
+            val overview = brain.reply("État de ta mémoire", onlineEnabled = false)
+            assertTrue(overview.text.contains("1 note partagée"))
+            assertFalse(overview.text.contains("2 notes"))
+            assertFalse(overview.text.contains("kilo-octets"))
+            assertFalse(overview.text.contains("ORION"))
+        }
+        assertEquals(2, notes.list().size)
+    }
+
 }

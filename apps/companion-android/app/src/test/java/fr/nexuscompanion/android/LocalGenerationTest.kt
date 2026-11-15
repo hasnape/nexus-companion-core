@@ -197,7 +197,9 @@ class LocalGenerationTest {
         NativeBrainService(context, notes, privateAccess = { false },
             resources = { balancedTestDevice }, generator = model).use { brain ->
             val reply = brain.reply("Quel est mon métier ?", onlineEnabled = false)
-            assertTrue(reply.requiresUserCode)
+            // Revoked evidence is never returned, even when a model finished generating.
+            assertFalse(reply.generatedLocally)
+            assertTrue(reply.requiresUserCode || reply.text.contains("source a été modifiée"))
             assertFalse(reply.text.contains("technicien informatique"))
             assertEquals(1, notes.list().size)
             assertEquals("user:manual", notes.list().single().source)

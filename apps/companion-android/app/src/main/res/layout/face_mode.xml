@@ -12,6 +12,20 @@
         android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/home_inset"
+        android:fontFamily="sans-serif-medium"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:text="NEXUS · PRÉSENCE"
+        android:textColor="@color/home_sky"
+        android:textSize="12sp" />
+
     <Button
         android:id="@+id/face_mode_exit"
         style="@style/HomeAction"

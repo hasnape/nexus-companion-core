@@ -88,6 +88,76 @@ class LocalKnowledgeLibraryTest {
         assertArrayEquals(corrupted, file(id).readBytes())
     }
 
+    @Test fun explicitConversationSharingPersistsAndCanBeRevokedWithoutLosingHistory() {
+        val id = "selective-persistence"
+        val store = library(id)
+        val original = store.addUserNote("Préférence", "J'aime les promenades.").entry
+        assertFalse(SelectiveMemoryAccess.canRead(original, false))
+        val shared = store.setConversationSharing(original, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(shared, false))
+        assertTrue(SelectiveMemoryAccess.canRead(library(id).list().single(), false))
+        assertEquals(original.excerpt, library(id).history(shared.id).single().excerpt)
+        val revoked = library(id).setConversationSharing(shared, false).entry
+        assertFalse(SelectiveMemoryAccess.canRead(library(id).list().single(), false))
+        assertEquals(2, library(id).history(revoked.id).size)
+        assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(original, true) }
+    }
+
+    @Test fun editingSharedMemoryRevokesNoCodeAccessAndPreservesEncryptedHistory() {
+        val id = "shared-edit-revocation"
+        val store = library(id)
+        val original = store.addUserNote("Préférence", "J'aime les promenades.").entry
+        val shared = store.setConversationSharing(original, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(shared, unlocked = false))
+
+        // Even an apparently harmless edit must not inherit a previous disclosure decision.
+        val revised = store.replace(shared, "Préférence", "Je préfère me promener le matin.").entry
+        assertEquals("user:manual", revised.source)
+        assertFalse(SelectiveMemoryAccess.canRead(revised, unlocked = false))
+        assertEquals("user:manual", library(id).list().single().source)
+        assertEquals(listOf(shared.excerpt, original.excerpt), library(id).history(revised.id).map { it.excerpt })
+        assertThrows(KnowledgeChanged::class.java) { store.setConversationSharing(shared, false) }
+
+        // An unchanged save cannot implicitly re-authorize the edited note.
+        assertFalse(store.replace(revised, revised.title, revised.excerpt).created)
+        assertFalse(SelectiveMemoryAccess.canRead(store.list().single(), unlocked = false))
+        val newConsent = store.setConversationSharing(revised, true).entry
+        assertTrue(SelectiveMemoryAccess.canRead(newConsent, unlocked = false))
+        assertEquals(3, library(id).history(newConsent.id).size)
+    }
+
+    @Test fun editingAnImportedNoteDoesNotConvertItToManualOrShared() {
+        val store = library("imported-edit-origin")
+        val source = store.add("Article", "Information externe.", "external:clipboard")
+        val revised = store.replace(source, "Article révisé", "Information externe révisée.").entry
+        assertEquals("external:clipboard", revised.source)
+        assertFalse(SelectiveMemoryAccess.canRead(revised, unlocked = false))
+    }
+
+    @Test fun sharingRejectsPotentialSecretsAndImportedSources() {
+        val store = library("selective-rejection")
+        val secret = store.addUserNote("Code secret", "123456").entry
+        assertThrows(IllegalArgumentException::class.java) { store.setConversationSharing(secret, true) }
+        val imported = store.add("Article", "Une note publique.", "https://example.org")
+        assertThrows(IllegalArgumentException::class.java) { store.setConversationSharing(imported, true) }
+        assertFalse(SelectiveMemoryAccess.canRead(secret, false))
+    }
+
+    @Test fun batchSharingRefusesPhoneNumberWithoutPartiallyExposingOtherNotes() {
+        val id = "batch-phone-privacy"
+        val store = library(id)
+        val ordinary = store.addUserNote("Loisir", "Je préfère les promenades.").entry
+        val confidential = store.addUserNote("Contact", "Mon numéro est le 06 12 34 56 78.").entry
+        val before = file(id).readBytes()
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, confidential), true)
+        }
+        assertArrayEquals("The encrypted store must not change on rejected batch", before, file(id).readBytes())
+        assertTrue(store.list().all { !SelectiveMemoryAccess.canRead(it, unlocked = false) })
+        assertEquals(0, store.history(ordinary.id).size)
+        assertEquals(0, store.history(confidential.id).size)
+    }
+
     @Test fun cosmeticDuplicatesKeepTheOriginalIdentityAndSpelling() {
         val store = library("cosmetic")
         val original = store.addUserNote("Thé vert", "Je préfère le thé vert.")
@@ -236,7 +306,18 @@ class LocalKnowledgeLibraryTest {
     @Test fun expiredNotesAreExcludedFromBothSearchAndConversationalContext() {
         file().writeText(legacy(entry("expired", "note expirée", 100L), entry("valid", "note valide")))
         assertEquals("valid", library().search("note", 101L).single().id)
-        assertEquals("valid", library().contextFor("inconnu", 101L).single().id)
+        assertTrue("Unknown topics must not inherit the last unrelated memory",
+            library().contextFor("inconnu", 101L).isEmpty())
+        assertEquals("valid", library().contextFor("mes notes", 101L).single().id)
+    }
+
+    @Test fun unrelatedRecentNotesNeverPolluteAnOrdinaryQuestion() {
+        val store = library("no-unrelated-fallback")
+        store.addUserNote("Dossier Orion", "Orion appartient à Clara.")
+        store.addUserNote("Dossier Vega", "Vega appartient à Léa.")
+        assertTrue(store.contextFor("volcan").isEmpty())
+        assertEquals(2, store.contextFor("mes notes").size)
+        assertEquals(2, store.list().size)
     }
 
     @Test fun companionNamespacesRemainSeparateAndCopiedCiphertextFailsAuthentication() {
@@ -245,6 +326,42 @@ class LocalKnowledgeLibraryTest {
         file("beta").writeBytes(file("alpha").readBytes())
         assertThrows(Exception::class.java) { library("beta").list() }
         assertEquals("Note privée alpha", library("alpha").list().single().excerpt)
+    }
+
+    @Test fun batchPrivacyChangeIsAtomicAndPersistsAfterRestart() {
+        val id = "batch-privacy-atomic"
+        val store = library(id)
+        val first = store.addUserNote("Loisir", "J'aime les promenades.").entry
+        val second = store.addUserNote("Préférence", "Je préfère le thé vert.").entry
+        val changed = store.setConversationSharingBatch(listOf(first, second), true)
+        assertEquals(2, changed.size)
+        assertTrue(changed.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        assertEquals(2, library(id).list().count { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        val before = file(id).readBytes()
+        assertThrows(KnowledgeChanged::class.java) {
+            store.setConversationSharingBatch(listOf(changed[0], second), false)
+        }
+        assertArrayEquals(before, file(id).readBytes())
+        val revoked = store.setConversationSharingBatch(changed, false)
+        assertTrue(revoked.all { it.source == "user:manual" })
+        assertEquals(2, library(id).list().count { it.source == "user:manual" })
+        assertEquals(2, store.list().size)
+    }
+
+    @Test fun batchPrivacyRejectsDuplicateAndConfidentialSelectionsWithoutPartialWrite() {
+        val id = "batch-privacy-reject"
+        val store = library(id)
+        val ordinary = store.addUserNote("Loisir", "J'aime les promenades.").entry
+        val secret = store.addUserNote("Identifiant", "Mon mot de passe est abc123.").entry
+        val before = file(id).readBytes()
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, ordinary), true)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, secret), true)
+        }
+        assertArrayEquals(before, file(id).readBytes())
+        assertEquals(2, store.list().size)
     }
 
     @Test fun fullLibraryReturnsTheSpecificCapacityFailureWithoutLosingNotes() {

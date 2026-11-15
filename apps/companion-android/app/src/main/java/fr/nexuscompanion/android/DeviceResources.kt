@@ -55,7 +55,7 @@ internal object DeviceResources {
         fun gib(bytes: Long) = String.format(java.util.Locale.FRANCE, "%.1f", bytes.toDouble() / (1024 * MIB))
         return "Profil ${budget.label} • ${snapshot.processors} processeurs logiques\n" +
             "RAM : ${gib(snapshot.totalRam)} Go ; disponible : ${gib(snapshot.availableRam)} Go\n" +
-            "Mémoire autorisée à l’application : ${snapshot.heapBytes / MIB} Mo\n" +
+            "Limite du tas Java : ${snapshot.heapBytes / MIB} Mo (mémoire native du LLM distincte)\n" +
             "Stockage disponible : ${gib(snapshot.freeStorage)} Go\n" +
             "Batterie : ${snapshot.batteryPercent?.let { "$it %" } ?: "inconnue"} ; ${if (snapshot.charging) "en charge" else "sur batterie"}\n" +
             "Chauffe Android : ${snapshot.thermalStatus} ; économie d’énergie : ${if (snapshot.powerSave) "oui" else "non"}\n" +

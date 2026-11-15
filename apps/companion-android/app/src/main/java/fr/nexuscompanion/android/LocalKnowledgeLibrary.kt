@@ -190,7 +190,11 @@ internal class LocalKnowledgeLibrary(
         NoteSave(entry, created = true)
     }
 
-    /** Compare-and-swap revision: preserve every old byte of text and its source in history. */
+    /**
+     * Compare-and-swap revision: preserve the encrypted version history.
+     * Editing a previously shared note always revokes its no-code access:
+     * the owner must explicitly review and share the new content again.
+     */
     fun replace(expected: Entry, title: String, excerpt: String): NoteSave = synchronized(storeLock) {
         if (!KnowledgePolicy.isValidUserNote(title, excerpt)) throw InvalidKnowledgeNote()
         val entries = readEntries()
@@ -199,9 +203,69 @@ internal class LocalKnowledgeLibrary(
         if (current.title == title.trim() && current.excerpt == excerpt.trim()) return@synchronized NoteSave(current, false)
         if (entries.size >= NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
         val updated = current.copy(id = UUID.randomUUID().toString(), title = title.trim(), excerpt = excerpt.trim(),
+            source = if (current.source == SelectiveMemoryAccess.SHARED_SOURCE) "user:manual" else current.source,
             recordedAt = System.currentTimeMillis(), verified = false, manuallyEdited = true)
         save(entries.map { if (it.id == current.id) it.copy(supersededBy = updated.id) else it } + updated)
         NoteSave(updated, true)
+    }
+
+    /**
+     * Owner-confirmed conversational sharing for manually authored notes only.
+     * External sources and imported notes cannot be silently declassified.
+     * A revision is recorded, preserving history and encryption.
+     */
+    fun setConversationSharing(expected: Entry, shared: Boolean): NoteSave = synchronized(storeLock) {
+        val entries = readEntries()
+        val current = entries.firstOrNull { it.id == expected.id && it.supersededBy == null }
+            ?: throw KnowledgeChanged()
+        if (current != expected) throw KnowledgeChanged()
+        require(current.source == "user:manual" || current.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+            "Only manually authored notes can be shared"
+        }
+        if (shared) require(SelectiveMemoryAccess.safeToShare(current.title, current.excerpt)) {
+            "Potentially confidential note cannot be shared"
+        }
+        val target = if (shared) SelectiveMemoryAccess.SHARED_SOURCE else "user:manual"
+        if (current.source == target) return@synchronized NoteSave(current, false)
+        if (entries.size >= NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
+        val updated = current.copy(id = UUID.randomUUID().toString(), source = target,
+            recordedAt = System.currentTimeMillis(), manuallyEdited = true)
+        save(entries.map { if (it.id == current.id) it.copy(supersededBy = updated.id) else it } + updated)
+        NoteSave(updated, true)
+    }
+
+    /**
+     * Atomic, owner-confirmed privacy change for a selected group of notes.
+     * Validate the whole selection before writing: never partially declassify a batch.
+     */
+    fun setConversationSharingBatch(expected: List<Entry>, shared: Boolean): List<Entry> = synchronized(storeLock) {
+        require(expected.isNotEmpty() && expected.map { it.id }.distinct().size == expected.size) {
+            "Select distinct notes"
+        }
+        val entries = readEntries()
+        val active = entries.filter { it.supersededBy == null }.associateBy { it.id }
+        expected.forEach { note ->
+            val current = active[note.id] ?: throw KnowledgeChanged()
+            if (current != note) throw KnowledgeChanged()
+            require(current.source == "user:manual" || current.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+                "Only manually authored notes can be shared"
+            }
+            if (shared) require(SelectiveMemoryAccess.safeToShare(current.title, current.excerpt)) {
+                "Potentially confidential note cannot be shared"
+            }
+        }
+        val target = if (shared) SelectiveMemoryAccess.SHARED_SOURCE else "user:manual"
+        val changed = expected.filter { it.source != target }
+        if (changed.isEmpty()) return@synchronized expected
+        if (entries.size + changed.size > NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
+        val replacements = changed.associate { old ->
+            old.id to old.copy(id = UUID.randomUUID().toString(), source = target,
+                recordedAt = System.currentTimeMillis(), manuallyEdited = true)
+        }
+        save(entries.map { old ->
+            replacements[old.id]?.let { old.copy(supersededBy = it.id) } ?: old
+        } + replacements.values)
+        expected.map { replacements[it.id] ?: it }
     }
 
     /** An explicit permanent deletion removes the entire version chain. */
@@ -243,7 +307,10 @@ internal class LocalKnowledgeLibrary(
             null -> queryTerms
         }
         val matches = matchingEntries(terms, now, recall == null)
-        val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic && recall !is KnowledgePolicy.Recall.Read) {
+        // Only an explicit memory overview may include unrelated recent notes.
+        // Ordinary questions must not silently combine a recent personal fact
+        // with the requested subject when lexical retrieval found no evidence.
+        val ranked = if (recall is KnowledgePolicy.Recall.Overview) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
         // Learned associations never override an explicit full-note selection or an expired source.

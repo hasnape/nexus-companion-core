@@ -300,6 +300,22 @@ open class MainActivity : Activity() {
             val browser = pendingBrowserReading
             if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
+        // Navigation is local UI only: no permission, network or private-memory access.
+        fun jumpTo(section: Int) {
+            val target = findViewById<View>(section)
+            homeScroll.post {
+                if (foreground && !destroyed && target.isAttachedToWindow) {
+                    val bounds = android.graphics.Rect(0, 0, target.width, target.height)
+                    homeScroll.offsetDescendantRectToMyCoords(target, bounds)
+                    homeScroll.smoothScrollTo(0,
+                        (bounds.top + homeScroll.scrollY - (12 * resources.displayMetrics.density).toInt())
+                            .coerceAtLeast(0))
+                }
+            }
+        }
+        bindButton(R.id.home_jump_voice, disableWhileBusy = false) { jumpTo(R.id.home_section_voice) }
+        bindButton(R.id.home_jump_chat, disableWhileBusy = false) { jumpTo(R.id.home_section_chat) }
+        bindButton(R.id.home_jump_memory, disableWhileBusy = false) { jumpTo(R.id.home_section_memory) }
         bindButton(R.id.home_notes) { showNotes() }
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
@@ -770,12 +786,81 @@ open class MainActivity : Activity() {
             if (foreground) {
                 val dialog = AlertDialog.Builder(this)
                     .setTitle(getString(R.string.notes_page, start + 1, start + shown.size, notes.size))
-                    .setItems(shown.map { it.title }.toTypedArray()) { _, position -> showNote(shown[position]) }
+                    .setItems(shown.map { note ->
+                        val privacy = when (note.source) {
+                            SelectiveMemoryAccess.SHARED_SOURCE -> "🔓 Sans code"
+                            "user:manual" -> "🔒 Privé · code requis"
+                            else -> "🔒 Source protégée"
+                        }
+                        "$privacy  ·  ${note.title}"
+                    }.toTypedArray()) { _, position -> showNote(shown[position]) }
                     .setNegativeButton(R.string.close, null)
                 if (start + shown.size < notes.size) dialog.setPositiveButton(R.string.notes_next) { _, _ -> showNotes(page + 1) }
+                if (start == 0) dialog.setNeutralButton("🔐 Sélection multiple") { _, _ -> selectMemoryPrivacy() }
                 if (start > 0) dialog.setNeutralButton(R.string.notes_previous) { _, _ -> showNotes(page - 1) }
                 showDialog(dialog.create())
             }
+        }
+    }
+
+    private fun selectMemoryPrivacy() {
+        if (!privateAccessAllowed()) { requireUserAccess { selectMemoryPrivacy() }; return }
+        val query = input.text.toString().trim()
+        runTask(R.string.working, R.string.library_read_failed, {
+            val all = if (query.isBlank()) library.list() else library.search(query)
+            all.filter { it.source == "user:manual" ||
+                it.source == SelectiveMemoryAccess.SHARED_SOURCE }.sortedBy { it.title }
+        }) { notes ->
+            if (!privateAccessAllowed() || !foreground) return@runTask
+            if (notes.isEmpty()) {
+                showAnswer("Aucun souvenir créé manuellement ne peut être sélectionné.")
+                return@runTask
+            }
+            // Android's multi-choice dialog is not virtualized: limit its size and
+            // let the owner narrow the selection using the existing notes search.
+            val choices = notes.take(50)
+            val selected = BooleanArray(choices.size)
+            val labels = choices.map { note ->
+                (if (note.source == SelectiveMemoryAccess.SHARED_SOURCE) "🔓 " else "🔒 ") + note.title
+            }.toTypedArray()
+            showDialog(AlertDialog.Builder(this)
+                .setTitle(if (notes.size > choices.size)
+                    "50 sur ${notes.size} souvenirs · affiner la recherche"
+                    else "Choisir les souvenirs à protéger")
+                .setMultiChoiceItems(labels, selected) { _, index, checked -> selected[index] = checked }
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton("Continuer") { _, _ ->
+                    val chosen = choices.filterIndexed { index, _ -> selected[index] }
+                    if (chosen.isEmpty()) { showAnswer("Aucun souvenir sélectionné."); return@setPositiveButton }
+                    val choices = arrayOf("🔒 Privé · code requis", "🔓 Sans code · conversation")
+                    showDialog(AlertDialog.Builder(this)
+                        .setTitle("Confidentialité de ${chosen.size} souvenir(s)")
+                        .setItems(choices) { _, choice ->
+                            val shared = choice == 1
+                            val warning = if (shared)
+                                "Ces souvenirs pourront être utilisés sans code, y compris à voix haute. Les informations sensibles ne peuvent pas être rendues publiques."
+                            else "Ces souvenirs nécessiteront le code utilisateur pour être consultés."
+                            val preview = chosen.take(5).joinToString("\n") { "• " + it.title.take(80) }
+                            val others = if (chosen.size > 5) "\n… et ${chosen.size - 5} autre(s)" else ""
+                            showDialog(AlertDialog.Builder(this)
+                                .setTitle("Confirmer la protection")
+                                .setMessage("$warning\n\nSouvenirs concernés (${chosen.size}) :\n$preview$others")
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton("Confirmer") { _, _ ->
+                                    if (!privateAccessAllowed()) {
+                                        requireUserAccess { selectMemoryPrivacy() }
+                                    } else {
+                                        runTask(R.string.working, R.string.library_write_failed,
+                                            { library.setConversationSharingBatch(chosen, shared) }) { changed ->
+                                            worker.execute { brain.clearConversation() }
+                                            showAnswer(if (shared)
+                                                "${changed.size} souvenir(s) autorisé(s) sans code."
+                                                else "${changed.size} souvenir(s) protégé(s) par code.")
+                                        }
+                                    }
+                                }.create())
+                        }.create())
+                }.create())
         }
     }
 
@@ -791,6 +876,50 @@ open class MainActivity : Activity() {
             textSize = 18f
         })
         if (note.manuallyEdited) details.addView(TextView(this).apply { setText(R.string.note_manually_edited) })
+        val manuallyAuthored = note.source == "user:manual" ||
+            note.source == SelectiveMemoryAccess.SHARED_SOURCE
+        if (!manuallyAuthored) details.addView(TextView(this).apply {
+            text = "🔒 Source protégée : le partage sans code est réservé aux souvenirs créés manuellement."
+            contentDescription = "Source protégée, partage sans code indisponible"
+        })
+        if (manuallyAuthored) {
+            val shared = note.source == SelectiveMemoryAccess.SHARED_SOURCE
+            details.addView(TextView(this).apply {
+                text = if (shared) "🔓 Sans code : Alif peut utiliser ce souvenir à voix haute."
+                    else "🔒 Privé : authentification requise pour consulter ce souvenir."
+                textSize = 16f
+                contentDescription = if (shared) "Souvenir accessible sans code" else "Souvenir privé, code requis"
+            })
+            details.addView(Button(this).apply {
+                text = if (shared) "🔒 Protéger avec un code" else "🔓 Autoriser sans code"
+                setOnClickListener {
+                    if (!privateAccessAllowed()) {
+                        requireUserAccess { showNote(note) }
+                        return@setOnClickListener
+                    }
+                    val targetShared = !shared
+                    val explanation = if (targetShared)
+                        "Nexus pourra utiliser le texte de cette note sans demander ton code, y compris à voix haute. Vérifie qu'elle ne contient aucun renseignement confidentiel. Confirmer ?"
+                    else "Cette note redeviendra privée et nécessitera le code pour être consultée. Confirmer ?"
+                    showDialog(AlertDialog.Builder(this@MainActivity)
+                        .setTitle(if (targetShared) "Autoriser la mémoire conversationnelle" else "Protéger cette note")
+                        .setMessage(explanation)
+                        .setNegativeButton(R.string.cancel, null)
+                        .setPositiveButton("Confirmer") { _, _ ->
+                            if (!privateAccessAllowed()) {
+                                requireUserAccess { showNote(note) }
+                            } else {
+                                runTask(R.string.working, R.string.library_write_failed,
+                                    { library.setConversationSharing(note, targetShared) }) { updated ->
+                                    worker.execute { brain.clearConversation() }
+                                    showAnswer(if (updated.created)
+                                        "Protection de la note mise à jour." else "Protection inchangée.")
+                                }
+                            }
+                        }.create())
+                }
+            })
+        }
         val history = Button(this).apply { id = R.id.note_history_button; setText(R.string.note_history) }
         details.addView(history)
         val dialog = AlertDialog.Builder(this).setTitle(note.title)
@@ -802,6 +931,7 @@ open class MainActivity : Activity() {
                     .setMessage(R.string.delete_note_confirmation).setNegativeButton(R.string.cancel, null)
                     .setPositiveButton(R.string.delete_note) { _, _ ->
                         runTask(R.string.working, R.string.library_write_failed, { library.remove(note.id, note) }) { removed ->
+                            if (removed) worker.execute { brain.clearConversation() }
                             showAnswer(if (removed) R.string.note_deleted else R.string.library_no_results)
                         }
                     }.create())
@@ -834,7 +964,10 @@ open class MainActivity : Activity() {
             .setPositiveButton(R.string.save_note) { _, _ ->
                 val editedTitle = title.text.toString(); val editedContent = content.text.toString()
                 runTask(R.string.working, R.string.library_write_failed, { library.replace(note, editedTitle, editedContent) }) { result ->
-                    showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
+                    if (result.created) worker.execute { brain.clearConversation() }
+                    if (result.created && note.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+                        showAnswer("Souvenir modifié : accès sans code révoqué. Cette nouvelle version est privée jusqu'à une nouvelle autorisation.")
+                    } else showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
                 }
             }.create())
     }
@@ -857,6 +990,7 @@ open class MainActivity : Activity() {
                                 .setPositiveButton(R.string.note_restore) { _, _ ->
                                     runTask(R.string.working, R.string.library_write_failed,
                                         { library.replace(current, old.title, old.excerpt) }) { restored ->
+                                        if (restored.created) worker.execute { brain.clearConversation() }
                                         showAnswer(if (restored.created) R.string.note_restored else R.string.note_unchanged)
                                     }
                                 }.create())

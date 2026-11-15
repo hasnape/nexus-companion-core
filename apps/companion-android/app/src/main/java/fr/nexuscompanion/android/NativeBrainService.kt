@@ -36,6 +36,7 @@ internal class NativeBrainService(
         val evidenceSources: List<EvidenceSource> = emptyList(),
         val generatedLocally: Boolean = false
     )
+    private val dialogue = CompanionDialogue()
     private var runtime: SharedBrainRuntime? = null
     private sealed interface Pending {
         val expires: Long
@@ -203,10 +204,24 @@ internal class NativeBrainService(
             }
         }
         if (VoiceTranscriptPolicy.commandWords(message) in setOf("etat de ta memoire", "etat de la memoire", "bilan memoire", "combien de notes as tu")) {
+            // A locked overview must not reveal counts, byte sizes or version history of private notes.
+            if (!privateAccess()) {
+                val now = System.currentTimeMillis()
+                val shared = library.list().count { it.source == SelectiveMemoryAccess.SHARED_SOURCE &&
+                    !KnowledgePolicy.isExpired(it.expiresAt, now) }
+                return Reply("Ma mémoire accessible sans code contient $shared ${if (shared == 1) "note partagée" else "notes partagées"}. Pour voir le bilan complet, déverrouille l’accès personnel avec ton code.",
+                    null, true, expectsAnswer = true)
+            }
             val stats = library.statistics()
             val history = if (stats.archivedNotes == 0) "" else " Je conserve aussi ${stats.archivedNotes} ${if (stats.archivedNotes == 1) "ancienne version" else "anciennes versions"}."
             return Reply("Ma mémoire contient ${stats.notes} notes. Elle occupe ${(stats.storedBytes + 1023) / 1024} kilo-octets. La compression économise ${stats.compressionPercent} pour cent avant chiffrement.$history", null, true, expectsAnswer = true)
         }
+        // Static dialogue examples are not memories. Match only unambiguous intents,
+        // after explicit approvals and before the optional language model.
+        dialogue.answer(message)?.let { return Reply(it, null, true, expectsAnswer = true) }
+        // Pure public arithmetic is answered offline, even when the optional GGUF model
+        // cannot be loaded. This path never reads or exposes personal notes.
+        OfflineArithmetic.answer(message)?.let { return Reply(it, null, true, expectsAnswer = true) }
         val body = JSONObject(brain().bodyJson(JSONObject().put("message", message).put("steeringAxle", steeringAxle).toString()))
         if (body.getBoolean("handled")) return Reply(body.getString("text"), null, true, expectsAnswer = true,
             body = body.optJSONObject("plan")?.let(RollingBodyState.Plan::read))
@@ -245,7 +260,14 @@ internal class NativeBrainService(
         }
         val understandingRequest = JSONObject().put("message", message).apply { if (evidenceContext != null) put("evidenceContext", evidenceContext) }
         val understanding = JSONObject(brain().understandingJson(understandingRequest.toString()))
-        val contextual = understanding.getBoolean("contextual") && !understanding.getBoolean("needsContext")
+        // "Et le projet Vega ?" names a different saved note even if the
+        // language classifier initially considers the turn a continuation.
+        val proposedContextual = understanding.getBoolean("contextual") && !understanding.getBoolean("needsContext")
+        val explicitlyDifferentSource = proposedContextual && previousNotes.isNotEmpty() && try {
+            MemoryRecallScope.refersToDifferentTitle(message, previousNotes,
+                SelectiveMemoryAccess.accessible(library.list(), privateAccess()))
+        } catch (_: Exception) { false }
+        val contextual = proposedContextual && !explicitlyDifferentSource
         if (contextual && last?.reply?.protectedInformation == true && !privateAccess()) { clearConversation(); return codeRequired() }
         if (contextual && !last?.notes.isNullOrEmpty()) {
             val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
@@ -255,35 +277,119 @@ internal class NativeBrainService(
                 clearConversation(); return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.", null, true, expectsAnswer = true)
             }
         }
-        val resolvedQuery = understanding.getString("query")
+        // If the new message explicitly names another note, ignore any
+        // query rewritten using the old topic by the dialogue classifier.
+        val resolvedQuery = if (explicitlyDifferentSource) message else understanding.getString("query")
         turnQuestion = resolvedQuery.takeIf { it.length <= 600 }
         val recall = if (contextual) null else KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(resolvedQuery)).getJSONArray("terms")
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
+        var preferredIds: List<String> = emptyList()
         val notes = try {
             val selected = requireNotNull(budget)
-            val preferred = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
-            focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferred)
+            preferredIds = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
+            focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferredIds)
         } catch (_: Exception) { null }
+        // Filter BEFORE serializing notes for the shared brain or local generator.
+        // Legacy notes are private until their owner explicitly shares them.
+        val unlocked = privateAccess()
+        val accessibleNotes = notes?.let { SelectiveMemoryAccess.accessible(it, unlocked) }
+        // Continuations with multiple source notes have no unique referent.
+        // Ask which one, rather than mixing two people or projects into a fact.
+        if (contextual && accessibleNotes.orEmpty().size > 1 && focusedNote == null) {
+            clearConversation()
+            return Reply("J’ai plusieurs souvenirs sur ce sujet. Laquelle de ces notes veux-tu consulter ? Précise le nom ou le titre.", null, true, expectsAnswer = true)
+        }
+        val visibleNotes = if (!contextual && recall == null && focusedNote == null && accessibleNotes != null) {
+            when (val decision = MemoryRecallScope.forFact(queryTerms, accessibleNotes, preferredIds)) {
+                is MemoryRecallScope.Decision.Single -> listOf(decision.note)
+                MemoryRecallScope.Decision.NoMatch -> emptyList()
+                MemoryRecallScope.Decision.Ambiguous -> {
+                    clearConversation()
+                    return Reply("J’ai plusieurs souvenirs qui correspondent à ta question. Laquelle veux-tu consulter ? Précise la personne ou le titre pour éviter de mélanger les informations.", null, true, expectsAnswer = true)
+                }
+            }
+        } else accessibleNotes
+        if (!unlocked && recall != null && !notes.isNullOrEmpty() && visibleNotes.isNullOrEmpty()) {
+            return codeRequired()
+        }
+        // For an explicit overview or topic request, present the distinct note
+        // titles instead of letting the engine splice facts from several people
+        // or projects into an unattributed answer.
+        if (recall != null && visibleNotes.orEmpty().size > 1) {
+            val choices = visibleNotes.orEmpty().take(6)
+            // Even the attributed overview is a disclosure: revalidate the
+            // unlock state and current encrypted note versions before reading.
+            if (choices.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation()
+                return codeRequired()
+            }
+            val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                clearConversation()
+                return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (choices.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) }) {
+                clearConversation()
+                return Reply("Les notes ont changé. Recommence la consultation pour utiliser leur version actuelle.", null, true, expectsAnswer = true)
+            }
+            val listing = choices.joinToString("\n") { note ->
+                val title = note.title.replace(Regex("[\\r\\n\\t]+"), " ").take(80)
+                // Display a complete short excerpt under its own title. Large
+                // or control-character-laden notes require an explicit read.
+                val excerpt = note.excerpt.takeIf { it.length <= 180 && GroundedNotes.safeText(it) }
+                    ?.replace(Regex("[\\r\\n\\t]+"), " ")
+                if (excerpt == null) "• « $title » (contenu disponible sur demande)"
+                else "• « $title » : $excerpt"
+            }
+            val suffix = if (visibleNotes.orEmpty().size > choices.size)
+                "\n… et d’autres notes. Précise le titre recherché pour lire les notes complètes." else
+                "\nPrécise le titre recherché pour lire les notes complètes."
+            return Reply("J’ai plusieurs notes distinctes. Je préfère ne pas mélanger leurs informations :\n" +
+                listing + suffix, null, true, expectsAnswer = true,
+                protectedInformation = choices.any { it.source != SelectiveMemoryAccess.SHARED_SOURCE },
+                evidenceSources = choices.map { EvidenceSource(it.id, it.title, it.source) })
+        }
+        val sharedContext = !unlocked && !visibleNotes.isNullOrEmpty() &&
+            visibleNotes.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE }
         val array = JSONArray()
         val request = JSONObject().put("protocolVersion", 1).put("message", message)
             .put("notes", array).put("now", now).put("recallRequested", recall != null || focusedNote != null)
             .put("readRequested", recall is KnowledgePolicy.Recall.Read || focusedNote != null)
-            .put("privateAccessGranted", privateAccess())
-        if (evidenceContext != null) request.put("evidenceContext", evidenceContext)
+            .put("privateAccessGranted", unlocked || sharedContext)
+        // Do not carry the previous source into an unrelated new question.
+        if (contextual && evidenceContext != null) request.put("evidenceContext", evidenceContext)
         if (focusedNote == null) {
-            conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
+            if (contextual) conversation?.reply?.publicContextTopic?.let { request.put("publicContextTopic", it) }
             if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
         }
         var requestChars = request.toString().length
+        val submittedNotes = mutableListOf<LocalKnowledgeLibrary.Entry>()
         // Budget each serialized record once; never repeatedly serialize an oversized context.
-        for (note in notes.orEmpty()) {
+        for (note in visibleNotes.orEmpty()) {
             val item = noteJson(note)
             val added = item.toString().length + if (array.length() > 0) 1 else 0
             if (requestChars + added > minOf(SharedBrainRuntime.MAX_REQUEST_CHARS, budget?.requestChars ?: SharedBrainRuntime.MAX_REQUEST_CHARS)) break
-            array.put(item); requestChars += added
+            array.put(item); submittedNotes.add(note); requestChars += added
         }
         val result = JSONObject(brain().replyJson(request.toString()))
+        // Privacy or content may have changed while the brain was processing.
+        // Never return a computed answer using revoked, deleted, expired or
+        // newly locked evidence. A future model must obey this same boundary.
+        if (submittedNotes.any { it.id != "external-context" }) {
+            val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                clearConversation()
+                return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (submittedNotes.any { it.id != "external-context" &&
+                    (current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis())) }) {
+                clearConversation()
+                return Reply("La source a changé pendant la réponse. Pose de nouveau ta question pour consulter la version actuelle.", null, true, expectsAnswer = true)
+            }
+            if (submittedNotes.any { it.id != "external-context" && !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation()
+                return codeRequired()
+            }
+        }
         check(result.getInt("protocolVersion") == 1 && result.getString("engine") == "nexus-core-rules-v1")
         val text = result.getString("text")
         check(text.isNotBlank() && text.length <= NativeCapacity.MAX_REPLY_TEXT_CHARS)
@@ -293,19 +399,20 @@ internal class NativeBrainService(
             Candidate(content, it.getBoolean("sensitive"))
         }
         val evidence = result.optJSONArray("evidenceIds")
-        turnEvidence = notes.orEmpty().filter { note ->
+        turnEvidence = submittedNotes.filter { note ->
             note.id != "external-context" && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
         }.distinctBy { it.id }
         val sources = result.optJSONArray("evidenceSources")
         check((sources?.length() ?: 0) <= 4)
-        val evidenceSources = (0 until (sources?.length() ?: 0)).map { i ->
+        val evidenceSources = (0 until (sources?.length() ?: 0)).mapNotNull { i ->
             val item = requireNotNull(sources).getJSONObject(i)
             val source = EvidenceSource(item.getString("id"), item.getString("title"), item.getString("source"))
             check(source.id.length in 1..64 && source.title.length in 1..160 && source.source.length in 1..512)
-            check(notes.orEmpty().any { it.id == source.id } && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == source.id })
-            source
+            // Evidence metadata must not disclose a locked note's title or source.
+            if (submittedNotes.none { it.id == source.id } ||
+                (0 until (evidence?.length() ?: 0)).none { evidence?.optString(it) == source.id }) null else source
         }.distinctBy { it.id }
-        val recalledSource = notes.orEmpty().firstOrNull { note ->
+        val recalledSource = submittedNotes.firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
                 && note.source.matches(Regex("https://fr\\.wikipedia\\.org/\\?curid=[1-9][0-9]*"))
         }?.let { note -> note.source.substringAfter("curid=").toIntOrNull()?.let { id ->
@@ -329,16 +436,30 @@ internal class NativeBrainService(
             return local.copy(text = "Je peux retenir : « ${candidate.content} ». Tu confirmes son enregistrement local ?")
         }
         // A read, edit, confirmation, lookup or clarification never becomes a model operation.
-        if (generator.usesNotes && privateAccess() && candidate == null && recall == null && focusedNote == null &&
+        // Explicitly shared notes may ground the local model without a code.
+        // Unshared evidence always requires a live, authenticated private session.
+        if (generator.usesNotes && candidate == null && recall == null && focusedNote == null &&
             !text.trimEnd().endsWith("?") && result.optString("publicLookupOffer").isEmpty() &&
-            result.optString("publicLookupQuery").isEmpty() && result.optString("webLookupQuery").isEmpty() && turnEvidence.isNotEmpty()) {
+            result.optString("publicLookupQuery").isEmpty() && result.optString("webLookupQuery").isEmpty() &&
+            turnEvidence.isNotEmpty() && turnEvidence.all { SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
             groundedReply(message, queryTerms, local)?.let { return it }
         }
         val offer = result.optString("publicLookupOffer")
         if (offer.isNotEmpty()) {
             check(offer.length <= 180 && candidate == null)
             // Only this core-validated public fallback may enter the language model.
-            if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null && turnEvidence.isEmpty()) {
+            // Do not replace a locally matching saved source with an ungrounded public model answer.
+            // Unrelated personal notes must not block ordinary public questions.
+            val savedEvidenceMatches = notes.orEmpty().any { note ->
+                KnowledgePolicy.score(queryTerms, note.title, note.excerpt) > 0
+            }
+            // Preserve usable personal knowledge offline even when native model
+            // admission fails (RAM, battery, installation or thermal limits).
+            if (savedEvidenceMatches && evidenceContext == null && recall == null && focusedNote == null) {
+                offlineEvidenceReply(queryTerms, visibleNotes.orEmpty())?.let { return it }
+            }
+            if (message.length <= 600 && GroundedNotes.safeText(message) && evidenceContext == null &&
+                turnEvidence.isEmpty() && !savedEvidenceMatches) {
                 generator.generate(LocalDraftRequest(message, offer))?.let { draft ->
                     return local.copy(text = draft, generatedLocally = true, publicContextTopic = null)
                 }
@@ -360,6 +481,39 @@ internal class NativeBrainService(
         return lookup(query, onlineEnabled, notes != null)
     }
 
+    /**
+     * Answer from a current, permitted local sentence when the optional GGUF
+     * model cannot be used. This is quotation-based recall, not text generation.
+     * A generic recent-note fallback must never be presented as a relevant fact.
+     */
+    private fun offlineEvidenceReply(queryTerms: List<String>, notes: List<LocalKnowledgeLibrary.Entry>): Reply? {
+        if (queryTerms.isEmpty()) return null
+        val selected = OfflineMemoryEvidence.select(queryTerms, notes) ?: return null
+        val likely = selected.note
+        val sentence = selected.sentence
+
+        // Revalidate after selection: a note may be edited, removed, expired,
+        // made private or locked while the shared brain is processing a turn.
+        val unlocked = privateAccess()
+        if (!SelectiveMemoryAccess.canRead(likely, unlocked)) {
+            clearConversation()
+            return codeRequired()
+        }
+        val current = try { library.get(likely.id) } catch (_: Exception) { null }
+        if (current != likely || KnowledgePolicy.isExpired(likely.expiresAt, System.currentTimeMillis())) {
+            clearConversation()
+            return Reply("La source a été modifiée, supprimée ou a expiré. Pose de nouveau ta question pour utiliser son état actuel.",
+                null, true, expectsAnswer = true)
+        }
+        turnEvidence = listOf(likely)
+        return Reply(
+            "D’après la note « ${likely.title} » (information enregistrée, non vérifiée) : ${sentence}",
+            null, true, expectsAnswer = true,
+            protectedInformation = likely.source != SelectiveMemoryAccess.SHARED_SOURCE,
+            evidenceSources = listOf(EvidenceSource(likely.id, likely.title, likely.source))
+        )
+    }
+
     private fun groundedReply(message: String, terms: List<String>, fallback: Reply): Reply? {
         if (message.length > 600 || !GroundedNotes.safeText(message)) return null
         return try {
@@ -369,11 +523,13 @@ internal class NativeBrainService(
                 !metadata.getBoolean("credential")
             }
             val evidence = GroundedNotes.prepare(selected, terms)
-            if (evidence.isEmpty() || !privateAccess()) return null
+            if (evidence.isEmpty() || selected.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) return null
             val request = LocalDraftRequest(message, "notes", evidence)
             val quotes = GroundedNotes.validate(generator.generate(request), evidence) ?: return null
             // A model result cannot extend the unlock window or keep superseded evidence alive.
-            if (!privateAccess()) { clearConversation(); return codeRequired() }
+            if (selected.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation(); return codeRequired()
+            }
             val current = library.list().associateBy { it.id }
             if (selected.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) }) {
                 clearConversation()
@@ -382,7 +538,8 @@ internal class NativeBrainService(
             val ids = quotes.map { quote -> evidence.single { it.key == quote.source }.noteId }.toSet()
             turnEvidence = selected.filter { it.id in ids }
             fallback.copy(text = "D’après tes notes enregistrées, non vérifiées :\n" + quotes.joinToString("\n") { it.text },
-                generatedLocally = true, protectedInformation = true,
+                generatedLocally = true,
+                protectedInformation = selected.any { it.source != SelectiveMemoryAccess.SHARED_SOURCE },
                 evidenceSources = fallback.evidenceSources.filter { it.id in ids })
         } catch (_: Exception) { null }
     }

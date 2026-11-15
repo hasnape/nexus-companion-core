@@ -513,7 +513,11 @@ class MainActivityTest {
     }
 
     @Test fun voiceSetupIsPrivateAndTheTestChannelClearlyIdentifiesItsSeparateMemory() {
-        assertEquals(BuildConfig.IS_PREVIEW, hasText(activity.getString(R.string.preview_warning)))
+        // The preview label is part of both layouts; production hides it.
+        // Checking text existence (including GONE views) causes a false failure.
+        val warning = activity.findViewById<TextView>(R.id.home_preview_warning)
+        assertEquals(if (BuildConfig.IS_PREVIEW) View.VISIBLE else View.GONE, warning.visibility)
+        assertEquals(BuildConfig.IS_PREVIEW, warning.text.toString() == activity.getString(R.string.preview_warning))
         button(R.string.voice_settings).performClick()
         assertEquals(VoiceSettingsActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
         assertFalse(activity.packageManager.getActivityInfo(android.content.ComponentName(activity, VoiceSettingsActivity::class.java), 0).exported)
@@ -659,6 +663,65 @@ class MainActivityTest {
         assertFalse(libraryFile().exists())
     }
 
+    @Test fun noteListDisplaysExplicitPrivacyStatusAndSharingRequiresConfirmation() {
+        val library = localLibrary()
+        val personal = library.addUserNote("Préférence", "J'aime les promenades.").entry
+        library.addUserNote("Secret", "Information confidentielle.")
+        val shared = library.setConversationSharing(personal, true).entry
+        input().setText("")
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 2 }
+        val list = ShadowAlertDialog.getLatestAlertDialog()
+        val labels = (0 until 2).map { list.listView.adapter.getItem(it).toString() }
+        assertTrue(labels.any { it.contains("🔓 Sans code") && it.contains("Préférence") })
+        assertTrue(labels.any { it.contains("🔒 Privé") && it.contains("Secret") })
+        assertEquals(SelectiveMemoryAccess.SHARED_SOURCE, library.get(shared.id)?.source)
+    }
+
+    @Test fun privacyBatchSelectionRespectsSearchAndRequiresExplicitConfirmation() {
+        val library = localLibrary()
+        library.addUserNote("Loisir", "J'aime les promenades.")
+        library.addUserNote("Travail", "Je travaille en informatique.")
+        input().setText("Loisir")
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 1 }
+        val notesDialog = ShadowAlertDialog.getLatestAlertDialog()
+        notesDialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== notesDialog }
+        val selection = ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(1, selection.listView.adapter.count)
+        selection.listView.performItemClick(null, 0, 0)
+        selection.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== selection &&
+            ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 2 }
+        val options = ShadowAlertDialog.getLatestAlertDialog()
+        options.listView.performItemClick(null, 1, 1)
+        await { ShadowAlertDialog.getLatestAlertDialog() !== options }
+        val confirmation = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("sans code"))
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("Loisir"))
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("Souvenirs concernés (1)"))
+        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals(2, library.list().count { it.source == "user:manual" })
+    }
+
+    @Test fun quickNavigationKeepsHomeControlsAndPrivacyIntact() {
+        val home = activity.findViewById<ScrollView>(R.id.home_scroll)
+        val voice = activity.findViewById<View>(R.id.home_section_voice)
+        val chat = activity.findViewById<View>(R.id.home_section_chat)
+        val memory = activity.findViewById<View>(R.id.home_section_memory)
+        assertTrue(home.isShown)
+        assertTrue(voice.isAttachedToWindow)
+        assertTrue(chat.isAttachedToWindow)
+        assertTrue(memory.isAttachedToWindow)
+        for (id in listOf(R.id.home_jump_voice, R.id.home_jump_chat, R.id.home_jump_memory)) {
+            activity.findViewById<Button>(id).performClick()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(home.isShown)
+            assertTrue(activity.findViewById<View>(R.id.home_input).isShown)
+        }
+    }
+
     @Test fun emptyNotesRemainAnHonestEmptyState() {
         button(R.string.my_notes).performClick()
         await { hasText(activity.getString(R.string.library_no_results)) }
@@ -677,7 +740,7 @@ class MainActivityTest {
         val second = ShadowAlertDialog.getLatestAlertDialog()
         assertEquals(11, second.listView.adapter.count)
         reachable.addAll((0 until 11).map { second.listView.adapter.getItem(it).toString() })
-        assertEquals((0 until 61).map { "Note $it" }.toSet(), reachable)
+        assertEquals((0 until 61).map { "🔒 Privé · code requis  ·  Note $it" }.toSet(), reachable)
         second.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
         await { ShadowAlertDialog.getLatestAlertDialog() !== second }
         assertEquals(50, ShadowAlertDialog.getLatestAlertDialog().listView.adapter.count)

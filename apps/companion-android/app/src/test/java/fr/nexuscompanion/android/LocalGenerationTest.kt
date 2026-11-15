@@ -45,6 +45,220 @@ class LocalGenerationTest {
             assertTrue(generator.requests.isEmpty())
         }
     }
+    @Test fun unavailableModelCanQuoteAnAuthorizedStoredFactOfflineWithoutFabrication() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-quotation")
+        val note = notes.addUserNote("Projet Ganymède", "Ganymède utilise une mémoire chiffrée sur le téléphone.").entry
+        val generator = FakeGenerator(null)
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = generator).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("mémoire chiffrée"))
+            assertTrue(reply.text, reply.text.contains("D’après"))
+            assertFalse(reply.generatedLocally)
+            assertTrue(reply.protectedInformation)
+            assertEquals(note.id, reply.evidenceSources.single().id)
+            assertEquals(1, notes.list().size)
+        }
+    }
+
+    @Test fun deterministicEvidenceSelectionNeverTreatsRecentUnrelatedMemoryAsAnAnswer() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("old", "Projet Ganymède",
+                "Ganymède conserve les connaissances dans une bibliothèque chiffrée.", "user:manual", 10, null, false),
+            LocalKnowledgeLibrary.Entry("new", "Loisir",
+                "Je préfère marcher au bord du fleuve.", "user:manual", 100, null, false)
+        )
+        val relevant = OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Parle-moi du projet Ganymède"), notes)
+        assertEquals("old", relevant?.note?.id)
+        assertTrue(relevant!!.sentence.contains("bibliothèque chiffrée"))
+        val unrelated = OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Qu’est-ce qu’un volcan ?"), notes)
+        assertNull("A non-matching recent note is not source evidence", unrelated)
+        assertNull(OfflineMemoryEvidence.select(emptyList(), notes))
+    }
+
+    @Test fun offlineEvidenceRejectsUnquotableSentencesAndRequiresStrongMatching() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("bad", "Projet Ganymède",
+                "A".repeat(400), "user:manual", 1, null, false),
+            LocalKnowledgeLibrary.Entry("generic", "Information",
+                "Le sujet de cette information est ordinaire.", "user:manual", 2, null, false)
+        )
+        assertNull(OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Parle-moi du projet Ganymède"), notes))
+        assertNull(OfflineMemoryEvidence.select(
+            KnowledgePolicy.queryTerms("Pourquoi les océans sont salés ?"), notes))
+    }
+
+    @Test fun unavailableModelNeverReadsLockedPrivateMemoryAsPublicEvidence() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-locked")
+        notes.addUserNote("Projet Ganymède", "Ganymède utilise un stockage secret local.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertFalse(reply.text.contains("stockage secret"))
+            assertTrue(reply.evidenceSources.isEmpty())
+        }
+        assertEquals(1, notes.list().size)
+    }
+
+    @Test fun unavailableModelQuotesOnlyExplicitlySharedNotesWhileLocked() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-local-shared")
+        val original = notes.addUserNote("Projet Ganymède", "Ganymède conserve les repères dans une bibliothèque locale.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        notes.addUserNote("Données privées", "La clé secrète est ORION.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Ganymède", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("bibliothèque locale"))
+            assertFalse(reply.text.contains("ORION"))
+            assertFalse(reply.protectedInformation)
+            assertEquals(shared.id, reply.evidenceSources.single().id)
+        }
+        assertEquals(2, notes.list().size)
+    }
+
+    @Test fun unrelatedRecentMemoryCannotBeInventedAsAnOfflineAnswer() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-unrelated")
+        notes.addUserNote("Projet Ganymède", "Ganymède utilise une bibliothèque locale.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { null },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Qu’est-ce qu’un volcan ?", onlineEnabled = false)
+            assertFalse(reply.text.contains("Ganymède"))
+            assertTrue(reply.evidenceSources.isEmpty())
+        }
+    }
+
+    @Test fun ordinaryQuestionSelectsOnlyTheNamedPersonOrProject() {
+        val orion = LocalKnowledgeLibrary.Entry("orion", "Projet Orion",
+            "Orion appartient à Clara et conserve ses notes séparément.", "user:manual", 10, null, false)
+        val vega = LocalKnowledgeLibrary.Entry("vega", "Projet Vega",
+            "Vega appartient à Léa et contient des informations différentes.", "user:manual", 20, null, false)
+        val selected = MemoryRecallScope.forFact(
+            KnowledgePolicy.queryTerms("Quel est le projet Orion ?"), listOf(vega, orion))
+        assertEquals(orion, (selected as MemoryRecallScope.Decision.Single).note)
+        assertEquals(MemoryRecallScope.Decision.NoMatch,
+            MemoryRecallScope.forFact(KnowledgePolicy.queryTerms("Quels volcans ?"), listOf(vega, orion)))
+    }
+
+    @Test fun conflictingNotesRequireClarificationRatherThanMixingFacts() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("a", "Projet Courrier",
+                "Le projet courrier appartient à Clara.", "user:manual", 10, null, false),
+            LocalKnowledgeLibrary.Entry("b", "Projet Courrier",
+                "Le projet courrier appartient à Léa.", "user:manual", 20, null, false)
+        )
+        assertEquals(MemoryRecallScope.Decision.Ambiguous,
+            MemoryRecallScope.forFact(KnowledgePolicy.queryTerms("Quel est le projet courrier ?"), notes))
+    }
+
+    @Test fun explicitlyNamedNewProjectBreaksAnUnrelatedPreviousContext() {
+        val orion = LocalKnowledgeLibrary.Entry("orion", "Projet Orion",
+            "Le projet Orion appartient à Clara.", "user:manual", 10, null, false)
+        val vega = LocalKnowledgeLibrary.Entry("vega", "Projet Vega",
+            "Le projet Vega appartient à Léa.", "user:manual", 20, null, false)
+        assertTrue(MemoryRecallScope.refersToDifferentTitle(
+            "Et le projet Vega ?", listOf(orion), listOf(orion, vega)))
+        assertFalse(MemoryRecallScope.refersToDifferentTitle(
+            "Et pourquoi ?", listOf(orion), listOf(orion, vega)))
+        assertFalse(MemoryRecallScope.refersToDifferentTitle(
+            "Et le projet Orion ?", listOf(orion), listOf(orion, vega)))
+    }
+
+    @Test fun aNewNamedProjectNeverReusesThePreviousProjectsFact() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("new-topic-switch")
+        notes.addUserNote("Projet Orion", "Orion est confié à Clara.")
+        notes.addUserNote("Projet Vega", "Vega est confié à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            brain.reply("Parle-moi du projet Orion", onlineEnabled = false)
+            val second = brain.reply("Et le projet Vega ?", onlineEnabled = false)
+            assertFalse("Stale Orion evidence reached Vega: ${second.text}", second.text.contains("Clara"))
+            assertFalse(second.evidenceSources.any { it.title == "Projet Orion" })
+        }
+        assertEquals(2, notes.list().size)
+    }
+
+    @Test fun multiNoteOverviewKeepsEachFactUnderItsOriginalTitle() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("overview-isolates-notes")
+        notes.addUserNote("Projet Orion", "Le projet Orion appartient à Clara.")
+        notes.addUserNote("Projet Vega", "Le projet Vega appartient à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Offline test") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("mes notes", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("« Projet Orion » : Le projet Orion appartient à Clara."))
+            assertTrue(reply.text, reply.text.contains("« Projet Vega » : Le projet Vega appartient à Léa."))
+            assertTrue(reply.text.contains("notes complètes"))
+            assertEquals(2, notes.list().size)
+        }
+    }
+
+    @Test fun conflictingFactsDoNotBecomeAnInventedSingleAnswer() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("ambiguous-fact-notes")
+        notes.addUserNote("Projet Courrier", "Le projet courrier appartient à Clara.")
+        notes.addUserNote("Projet Courrier", "Le projet courrier appartient à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Offline test") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Quel est le projet courrier ?", onlineEnabled = false)
+            assertTrue(reply.text, reply.text.contains("Laquelle"))
+            assertFalse(reply.text.contains("Clara"))
+            assertFalse(reply.text.contains("Léa"))
+            assertEquals(2, notes.list().size)
+        }
+    }
+
+    @Test fun learnedSynonymIsOnlyUsedIfItIdentifiesExactlyOneSource() {
+        val city = LocalKnowledgeLibrary.Entry("city", "Ville",
+            "Je vis à Lyon.", "user:manual", 10, null, false)
+        val job = LocalKnowledgeLibrary.Entry("job", "Métier",
+            "Je suis technicien.", "user:manual", 20, null, false)
+        val terms = KnowledgePolicy.queryTerms("habite")
+        assertEquals(city,
+            (MemoryRecallScope.forFact(terms, listOf(city, job), listOf("city")) as
+                MemoryRecallScope.Decision.Single).note)
+        assertEquals(MemoryRecallScope.Decision.Ambiguous,
+            MemoryRecallScope.forFact(terms, listOf(city, job), listOf("city", "job")))
+    }
+
+    @Test fun privateAndSharedNotesDoNotGetMergedByTheScopedBrain() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("scope-person-project")
+        notes.addUserNote("Projet Orion", "Orion appartient à Clara et utilise une sauvegarde chiffrée.")
+        val other = notes.addUserNote("Projet Vega", "Vega appartient à Léa et fonctionne hors ligne.").entry
+        notes.setConversationSharing(other, true)
+
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be called") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Vega", onlineEnabled = false)
+            assertFalse(reply.text.contains("Clara"))
+            assertFalse(reply.text.contains("sauvegarde chiffrée"))
+            assertTrue(reply.evidenceSources.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        }
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be called") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Orion", onlineEnabled = false)
+            assertFalse(reply.text.contains("Léa"))
+            assertTrue(reply.evidenceSources.size <= 1)
+        }
+    }
+
     @Test fun unavailableModelKeepsTheExistingFallbackAndConfirmation() {
         val context = RuntimeEnvironment.getApplication(); val generator = FakeGenerator(null)
         NativeBrainService(context, library("draft-fallback"), privateAccess = { false }, resources = { balancedTestDevice }, search = { null }, generator = generator).use { brain ->
@@ -77,6 +291,40 @@ class LocalGenerationTest {
         assertFalse(LocalDraftPolicy.permitted(ready.copy(powerSave = true)))
         assertFalse(LocalDraftPolicy.permitted(ready.copy(abis = listOf("armeabi-v7a"))))
     }
+    @Test fun singleFlightGuardPreventsSimultaneousNativeModelAllocations() {
+        val gate = NativeGenerationGate()
+        assertTrue(gate.tryEnter())
+        assertFalse("A second generation must not allocate another GGUF context", gate.tryEnter())
+        gate.leave()
+        assertTrue("A cancelled or completed request frees the slot", gate.tryEnter())
+        gate.leave()
+    }
+
+    @Test fun memoryAdmissionReportsBlockersAndDoesNotConfuseJavaHeapWithNativeRam() {
+        val mib = 1024L * 1024L
+        val ready = balancedTestDevice.copy(
+            availableRam = 2L * 1024 * mib, heapBytes = 256L * mib,
+            lowMemory = false, powerSave = false, thermalStatus = 0,
+            charging = true, abis = listOf("arm64-v8a")
+        )
+        assertNull(LocalDraftPolicy.blockReason(ready))
+        assertTrue(LocalDraftPolicy.permitted(ready))
+
+        // The 256 MiB Java heap is not the native GGUF process memory budget.
+        val pressured = ready.copy(availableRam = 700L * mib)
+        val reason = LocalDraftPolicy.blockReason(pressured)
+        assertNotNull(reason)
+        assertTrue(reason!!.contains("700 Mio"))
+        assertTrue(reason.contains("1536 Mio"))
+        assertFalse(LocalDraftPolicy.permitted(pressured))
+
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(lowMemory = true))!!.contains("pression mémoire"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(powerSave = true))!!.contains("économie"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(thermalStatus = 2))!!.contains("chaud"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(charging = false, batteryPercent = null))!!.contains("Batterie"))
+        assertTrue(LocalDraftPolicy.blockReason(ready.copy(abis = listOf("armeabi-v7a")))!!.contains("64 bits"))
+    }
+
     @Test fun badOrCancelledImportPreservesThePreviousFile() {
         val context = RuntimeEnvironment.getApplication(); val store = LocalModelStore(context, availableBytes = { 2L shl 30 })
         store.file.writeText("previous")
@@ -112,4 +360,81 @@ class LocalGenerationTest {
             assertTrue(brain.reply("Pourquoi ?").text.contains("supprimée"))
         }
     }
+    @Test fun explicitlySharedNotesGroundTheLocalModelWithoutUnlockingPrivateNotes() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-shared-grounding")
+        val original = notes.addUserNote("Métier", "Je travaille comme technicien informatique.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        notes.addUserNote("Information privée", "Mon identifiant secret est ORION.")
+        val requests = mutableListOf<LocalDraftRequest>()
+        val model = object : LocalDraftGenerator {
+            override val usesNotes = true
+            override fun generate(request: LocalDraftRequest): String {
+                requests.add(request)
+                val source = request.evidence.single()
+                return JSONObject().put("quotes", org.json.JSONArray().put(
+                    JSONObject().put("source", source.key).put("text", source.sentences.first())
+                )).toString()
+            }
+            override fun cancel() {}
+            override fun close() {}
+        }
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, generator = model).use { brain ->
+            val reply = brain.reply("Quel est mon métier ?", onlineEnabled = false)
+            assertTrue("The shared note should ground the local response", reply.generatedLocally)
+            assertTrue(reply.text.contains("technicien informatique"))
+            assertFalse(reply.text.contains("ORION"))
+            assertFalse(reply.protectedInformation)
+            assertEquals(shared.id, requests.single().evidence.single().noteId)
+            assertEquals(2, notes.list().size)
+        }
+    }
+
+    @Test fun revocationDuringLocalGenerationFailsClosedWithoutReplayingPrivateEvidence() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-share-revocation")
+        val original = notes.addUserNote("Métier", "Je travaille comme technicien informatique.").entry
+        val shared = notes.setConversationSharing(original, true).entry
+        val model = object : LocalDraftGenerator {
+            override val usesNotes = true
+            override fun generate(request: LocalDraftRequest): String {
+                val source = request.evidence.single()
+                notes.setConversationSharing(shared, false)
+                return JSONObject().put("quotes", org.json.JSONArray().put(
+                    JSONObject().put("source", source.key).put("text", source.sentences.first())
+                )).toString()
+            }
+            override fun cancel() {}
+            override fun close() {}
+        }
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, generator = model).use { brain ->
+            val reply = brain.reply("Quel est mon métier ?", onlineEnabled = false)
+            // Revoked evidence is never returned, even when a model finished generating.
+            assertFalse(reply.generatedLocally)
+            assertTrue(reply.requiresUserCode || reply.text.contains("source a été modifiée"))
+            assertFalse(reply.text.contains("technicien informatique"))
+            assertEquals(1, notes.list().size)
+            assertEquals("user:manual", notes.list().single().source)
+        }
+    }
+
+    @Test fun lockedMemoryOverviewCountsOnlySharedNotesNotPrivateHistoryOrStorage() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("draft-private-statistics")
+        val shared = notes.addUserNote("Loisir", "Je préfère les promenades.").entry
+        notes.setConversationSharing(shared, true)
+        notes.addUserNote("Information privée", "Mon identifiant secret est ORION.")
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }).use { brain ->
+            val overview = brain.reply("État de ta mémoire", onlineEnabled = false)
+            assertTrue(overview.text.contains("1 note partagée"))
+            assertFalse(overview.text.contains("2 notes"))
+            assertFalse(overview.text.contains("kilo-octets"))
+            assertFalse(overview.text.contains("ORION"))
+        }
+        assertEquals(2, notes.list().size)
+    }
+
 }

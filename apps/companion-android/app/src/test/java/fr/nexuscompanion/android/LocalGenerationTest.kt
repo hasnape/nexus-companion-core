@@ -138,6 +138,66 @@ class LocalGenerationTest {
         }
     }
 
+    @Test fun ordinaryQuestionSelectsOnlyTheNamedPersonOrProject() {
+        val orion = LocalKnowledgeLibrary.Entry("orion", "Projet Orion",
+            "Orion appartient à Clara et conserve ses notes séparément.", "user:manual", 10, null, false)
+        val vega = LocalKnowledgeLibrary.Entry("vega", "Projet Vega",
+            "Vega appartient à Léa et contient des informations différentes.", "user:manual", 20, null, false)
+        val selected = MemoryRecallScope.forFact(
+            KnowledgePolicy.queryTerms("Quel est le projet Orion ?"), listOf(vega, orion))
+        assertEquals(orion, (selected as MemoryRecallScope.Decision.Single).note)
+        assertEquals(MemoryRecallScope.Decision.NoMatch,
+            MemoryRecallScope.forFact(KnowledgePolicy.queryTerms("Quels volcans ?"), listOf(vega, orion)))
+    }
+
+    @Test fun conflictingNotesRequireClarificationRatherThanMixingFacts() {
+        val notes = listOf(
+            LocalKnowledgeLibrary.Entry("a", "Projet Courrier",
+                "Le projet courrier appartient à Clara.", "user:manual", 10, null, false),
+            LocalKnowledgeLibrary.Entry("b", "Projet Courrier",
+                "Le projet courrier appartient à Léa.", "user:manual", 20, null, false)
+        )
+        assertEquals(MemoryRecallScope.Decision.Ambiguous,
+            MemoryRecallScope.forFact(KnowledgePolicy.queryTerms("Quel est le projet courrier ?"), notes))
+    }
+
+    @Test fun learnedSynonymIsOnlyUsedIfItIdentifiesExactlyOneSource() {
+        val city = LocalKnowledgeLibrary.Entry("city", "Ville",
+            "Je vis à Lyon.", "user:manual", 10, null, false)
+        val job = LocalKnowledgeLibrary.Entry("job", "Métier",
+            "Je suis technicien.", "user:manual", 20, null, false)
+        val terms = KnowledgePolicy.queryTerms("habite")
+        assertEquals(city,
+            (MemoryRecallScope.forFact(terms, listOf(city, job), listOf("city")) as
+                MemoryRecallScope.Decision.Single).note)
+        assertEquals(MemoryRecallScope.Decision.Ambiguous,
+            MemoryRecallScope.forFact(terms, listOf(city, job), listOf("city", "job")))
+    }
+
+    @Test fun privateAndSharedNotesDoNotGetMergedByTheScopedBrain() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("scope-person-project")
+        notes.addUserNote("Projet Orion", "Orion appartient à Clara et utilise une sauvegarde chiffrée.")
+        val other = notes.addUserNote("Projet Vega", "Vega appartient à Léa et fonctionne hors ligne.").entry
+        notes.setConversationSharing(other, true)
+
+        NativeBrainService(context, notes, privateAccess = { false },
+            resources = { balancedTestDevice }, search = { error("Network must not be called") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Vega", onlineEnabled = false)
+            assertFalse(reply.text.contains("Clara"))
+            assertFalse(reply.text.contains("sauvegarde chiffrée"))
+            assertTrue(reply.evidenceSources.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE })
+        }
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be called") },
+            generator = FakeGenerator(null)).use { brain ->
+            val reply = brain.reply("Parle-moi du projet Orion", onlineEnabled = false)
+            assertFalse(reply.text.contains("Léa"))
+            assertTrue(reply.evidenceSources.size <= 1)
+        }
+    }
+
     @Test fun unavailableModelKeepsTheExistingFallbackAndConfirmation() {
         val context = RuntimeEnvironment.getApplication(); val generator = FakeGenerator(null)
         NativeBrainService(context, library("draft-fallback"), privateAccess = { false }, resources = { balancedTestDevice }, search = { null }, generator = generator).use { brain ->

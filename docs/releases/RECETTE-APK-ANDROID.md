@@ -21,6 +21,18 @@ Le 15/11/2026, le code en branche a reçu un renforcement du filtre de confident
 
 ---
 
+## Validation de la liaison cerveau–mémoire pour la v0.4.31 (15/11/2026)
+
+- Nouveau chemin de secours **`OfflineMemoryEvidence`** : si le cerveau intégré n'a pas répondu et que le LLM natif n'est pas utilisable, la réponse peut citer **une phrase exacte enregistrée**, uniquement si elle est suffisamment pertinente pour la question.
+- Ne fabrique aucune information : contrôle de pertinence par mots correspondants, citation d'une phrase complète, indication que la note n'est **pas vérifiée**.
+- Vérifie l'accès privé / partagé, la version actuelle de la note et sa date d'expiration juste avant de restituer le contenu ; si la note est révoquée ou modifiée, le contenu n'est pas retransmis.
+- Les réponses déjà produites par le cerveau natif restent prioritaires ; le correctif ne remplace pas les chemins de rappel qui fonctionnent déjà.
+- Tests supplémentaires : aucun contenu privé cité lorsque le code n'est pas accordé, fonctionnement des notes explicitement partagées, refus des notes récentes mais sans rapport, choix d'une phrase réellement disponible.
+- **Validation du code postérieur à la v0.4.30 :** `-PnexusPreview=false :app:clean :app:testDebugUnitTest` → **416 tests, 0 échec, 0 ignoré (41 classes)** ; `-PnexusPreview=false :app:lintDebug` → **BUILD SUCCESSFUL**. Tests et lint exécutés séparément dans l'environnement à ressources limitées.
+- **Non encore réalisé :** APK release v0.4.31 signée et installée sur téléphone ; autonomie, précision et chargement effectif du modèle GGUF à tester sur appareil.
+
+---
+
 ## 0. Ingrédients — à réunir avant de commencer
 
 - Dépôt GitHub Nexus Companion à une révision **immuable** (enregistrer le SHA du commit).

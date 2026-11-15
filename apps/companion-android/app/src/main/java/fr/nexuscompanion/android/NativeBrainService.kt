@@ -310,12 +310,13 @@ internal class NativeBrainService(
         }.distinctBy { it.id }
         val sources = result.optJSONArray("evidenceSources")
         check((sources?.length() ?: 0) <= 4)
-        val evidenceSources = (0 until (sources?.length() ?: 0)).map { i ->
+        val evidenceSources = (0 until (sources?.length() ?: 0)).mapNotNull { i ->
             val item = requireNotNull(sources).getJSONObject(i)
             val source = EvidenceSource(item.getString("id"), item.getString("title"), item.getString("source"))
             check(source.id.length in 1..64 && source.title.length in 1..160 && source.source.length in 1..512)
-            check(visibleNotes.orEmpty().any { it.id == source.id } && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == source.id })
-            source
+            // Evidence metadata must not disclose a locked note's title or source.
+            if (visibleNotes.orEmpty().none { it.id == source.id } ||
+                (0 until (evidence?.length() ?: 0)).none { evidence?.optString(it) == source.id }) null else source
         }.distinctBy { it.id }
         val recalledSource = visibleNotes.orEmpty().firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }

@@ -10,8 +10,8 @@
         android:layout_height="wrap_content"
         android:focusableInTouchMode="true"
         android:orientation="vertical"
-        android:paddingHorizontal="18dp"
-        android:paddingTop="14dp"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="18dp"
         android:paddingBottom="24dp">
 
         <LinearLayout
@@ -28,7 +28,7 @@
                 android:fontFamily="sans-serif-medium"
                 android:text="@string/app_name"
                 android:textColor="@color/home_text"
-                android:textSize="20sp" />
+                android:textSize="23sp" />
 
             <TextView
                 android:id="@+id/home_network_mode"
@@ -43,6 +43,17 @@
                 android:textColor="@color/home_mint"
                 android:textSize="12sp" />
         </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:contentDescription="Interface Nexus Companion, intelligence personnelle locale"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.11"
+            android:text="COMPAGNON PERSONNEL · INTELLIGENCE LOCALE"
+            android:textColor="@color/home_sky"
+            android:textSize="10sp" />
 
         <TextView
             android:id="@+id/home_preview_warning"
@@ -61,13 +72,13 @@
             android:gravity="center_horizontal"
             android:orientation="vertical"
             android:paddingHorizontal="14dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="13dp">
+            android:paddingTop="16dp"
+            android:paddingBottom="18dp">
 
             <fr.nexuscompanion.android.NexusAvatarView
                 android:id="@+id/nexus_avatar"
                 android:layout_width="match_parent"
-                android:layout_height="156dp"
+                android:layout_height="220dp"
                 android:importantForAccessibility="no" />
 
             <TextView
@@ -202,7 +213,7 @@
                 android:lineSpacingExtra="3dp"
                 android:text="@string/greeting"
                 android:textColor="@color/home_text"
-                android:textSize="19sp" />
+                android:textSize="18sp" />
 
             <TextView
                 android:id="@+id/home_answer_source"
@@ -403,8 +414,38 @@
                 android:layout_marginTop="8dp"
                 android:text="@string/about" />
         </LinearLayout>
-        <Button android:id="@+id/home_brain_backup" style="@style/HomeAction" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/backup_title" />
-        <Button android:id="@+id/home_local_model" style="@style/HomeAction" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/local_model_settings" />
-        <Button android:id="@+id/home_voice_diagnostic" style="@style/HomeAction" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/local_voice_diagnostic" />
+        <LinearLayout
+            style="@style/HomeCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+            <TextView
+                style="@style/HomeHeading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
+                android:text="SYSTÈME · DIAGNOSTICS" />
+            <Button
+                android:id="@+id/home_brain_backup"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/backup_title" />
+            <Button
+                android:id="@+id/home_local_model"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/local_model_settings" />
+            <Button
+                android:id="@+id/home_voice_diagnostic"
+                style="@style/HomeAction"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/local_voice_diagnostic" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

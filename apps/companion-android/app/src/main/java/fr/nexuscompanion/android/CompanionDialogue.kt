@@ -16,7 +16,7 @@ internal class CompanionDialogue(
 
     private fun normalize(value: String) = Normalizer.normalize(value, Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "").lowercase(Locale.FRANCE)
-        .replace('’', ' ').replace('\'', ' ').replace(Regex("[?!.,]"), " ").replace(Regex("\\s+"), " ").trim()
+        .replace('’', ' ').replace('\'', ' ').replace(Regex("[?!.,-]"), " ").replace(Regex("\\s+"), " ").trim()
 
     private data class Rule(val key: String, val variants: Set<String>, val responses: List<String>)
     private val rules = listOf(

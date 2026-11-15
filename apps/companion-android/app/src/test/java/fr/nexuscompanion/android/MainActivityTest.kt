@@ -674,6 +674,28 @@ class MainActivityTest {
         assertEquals(SelectiveMemoryAccess.SHARED_SOURCE, library.get(shared.id)?.source)
     }
 
+    @Test fun privacyBatchSelectionRespectsSearchAndRequiresExplicitConfirmation() {
+        val library = localLibrary()
+        library.addUserNote("Loisir", "J'aime les promenades.")
+        library.addUserNote("Travail", "Je travaille en informatique.")
+        input().setText("Loisir")
+        button(R.string.my_notes).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog()?.listView?.adapter?.count == 1 }
+        val notesDialog = ShadowAlertDialog.getLatestAlertDialog()
+        notesDialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
+        await { ShadowAlertDialog.getLatestAlertDialog() !== notesDialog }
+        val selection = ShadowAlertDialog.getLatestAlertDialog()
+        assertEquals(1, selection.listView.adapter.count)
+        selection.listView.performItemClick(null, 0, 0)
+        selection.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+        val options = ShadowAlertDialog.getLatestAlertDialog()
+        options.listView.performItemClick(null, 1, 1)
+        val confirmation = ShadowAlertDialog.getLatestAlertDialog()
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("sans code"))
+        confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+        assertEquals(2, library.list().count { it.source == "user:manual" })
+    }
+
     @Test fun emptyNotesRemainAnHonestEmptyState() {
         button(R.string.my_notes).performClick()
         await { hasText(activity.getString(R.string.library_no_results)) }

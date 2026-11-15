@@ -33,6 +33,45 @@ Le 15/11/2026, le code en branche a reçu un renforcement du filtre de confident
 
 ---
 
+## Incident réel : Nexus mélange des informations issues de notes distinctes (signalement propriétaire)
+
+**Contexte :** après installation et validation fonctionnelle 7/7 de l’APK **0.4.30**, le propriétaire signale que Nexus commence à associer entre elles des informations de notes différentes. Cette observation ne doit **pas** être présentée comme résolue sur son téléphone : les corrections ci-dessous sont dans le code de **0.4.31**, pas dans l’APK installée.
+
+### Causes constatées dans le code
+
+1. `LocalKnowledgeLibrary.contextFor` sélectionnait des **notes récentes sans rapport** lorsqu’aucune recherche ordinaire ne correspondait au sujet.
+2. Le moteur Android pouvait transmettre **plusieurs notes simultanément** pour une question de fait unique, sans clarification préalable en cas d’égalité entre les sources.
+3. Le contexte et le thème public du tour précédent pouvaient continuer à être sérialisés dans un nouveau tour sans confirmation que celui-ci était réellement une suite.
+4. Une nouvelle personne ou un nouveau projet explicitement nommé après « Et… » pouvait être traité à tort comme une continuation de la note précédente.
+
+### Correctifs 0.4.31 réalisés et enregistrés
+
+- **Isolation des réponses factuelles** dans `MemoryRecallScope` : une seule note pertinente est fournie au moteur ; en cas d’égalité de pertinence, Nexus demande une clarification plutôt que fusionner des personnes ou des projets.
+- **Aucun rappel par simple récence** pour une question inconnue ; l’accès aux notes récentes reste possible par la demande explicite « mes notes ».
+- **Changement explicite de sujet prioritaire** sur un classificateur conversationnel ambigu : nouvelle note nommée = nouveau sujet ; ne pas réutiliser une reformulation de la question issue de l’ancien sujet.
+- **Vues d’ensemble attribuées par note** : chaque extrait court et complet apparaît sous son propre titre ; les longues notes nécessitent leur lecture explicite. Les anciens souvenirs ne sont pas modifiés.
+- **Revalidation au dernier moment** des droits privé/partagé, de l’expiration et des révisions de notes après traitement du cerveau ou avant affichage d’une vue d’ensemble.
+- **Tests de non-régression ajoutés** : projets Orion/Vega, personnes Clara/Léa, sources équivalentes demandant une clarification, note privée et note partagée, changement de sujet, absence de rappel par récence, conservation de toutes les entrées.
+- **Build plus fiable** : `scripts/build-android-apk.sh` exécute désormais nettoyage, tests, lint et compilation dans des processus Gradle séparés avec un seul worker pour limiter la pression mémoire.
+
+### État des tests et blocage de livraison
+
+- Le dernier cycle **416/416 tests Android + lint réussi** date d’**avant** ce correctif anti-mélange : **ne pas le réutiliser comme validation des nouveaux changements**.
+- Les 7 vérifications du sélecteur Kotlin autonome ont réussi avec un harnais local ; il ne remplace pas les tests Robolectric ni une compilation Android réelle.
+- **Vercel Sandbox retourne `402 payment_required` pour dépassement de quota, remise à zéro annoncée le 01/12/2026** : pas de compilation ni de signature d’une APK 0.4.31 pendant ce blocage.
+- **Aucune APK 0.4.31 n’est livrée ni annoncée prête**. Ne pas renommer l’APK 0.4.30 ; conserver l’installation et les souvenirs, éviter la désinstallation.
+- Dès qu’un environnement Android autorisé et fonctionnel est disponible : relancer `:app:testDebugUnitTest`, `:app:lintDebug`, compiler `:app:assembleRelease`, signer avec le certificat historique, contrôler le SHA-256 et tester une mise à jour par-dessus 0.4.30. Ne jamais exposer les secrets de signature.
+
+### Recette terrain à rejouer après livraison 0.4.31
+
+- Deux notes nommées différentes (par exemple « Projet Orion » / « Projet Vega ») avec personnes différentes : vérifier que chaque question utilise uniquement sa propre note.
+- Poser ensuite « Et le projet Vega ? » après une réponse sur Orion : l’ancienne source ne doit pas apparaître.
+- Deux notes contradictoires sur un même titre : une question unique doit demander **quelle note** plutôt que mélanger les réponses.
+- « Mes notes » doit identifier les différents titres et leurs extraits séparément, sans réécrire le stockage.
+- Rejouer les 7 contrôles v0.4.30 : démarrage, mémoire conservée, reconnaissance vocale, réponses texte/voix, note privée avec code, note partagée sans code, mode avion.
+
+---
+
 ## 0. Ingrédients — à réunir avant de commencer
 
 - Dépôt GitHub Nexus Companion à une révision **immuable** (enregistrer le SHA du commit).

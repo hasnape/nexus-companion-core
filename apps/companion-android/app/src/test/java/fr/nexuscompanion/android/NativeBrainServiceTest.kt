@@ -411,6 +411,25 @@ class NativeBrainServiceTest {
         assertEquals(1, library.list().size)
     }
 
+    @Test fun mixedSharedAndPrivateMemoryNeverLeaksPrivateEvidenceWhileLocked() {
+        val context = RuntimeEnvironment.getApplication()
+        val id = "mixed-access-memory"
+        val library = LocalKnowledgeLibrary(context, id, LocalKnowledgeLibraryTest.JvmCipher(id))
+        val public = library.addUserNote("Loisir", "J'aime les promenades.").entry
+        library.setConversationSharing(public, true)
+        library.addUserNote("Information privée", "Mon identifiant secret est ORION.")
+        NativeBrainService(context, library, privateAccess = { false }, resources = { balancedTestDevice }).use { brain ->
+            val answer = brain.reply("Tu te souviens de moi ?", onlineEnabled = false)
+            assertTrue(answer.text.contains("promenades"))
+            assertFalse(answer.text.contains("ORION"))
+            assertTrue(answer.evidenceSources.none { it.title.contains("Information privée") })
+            val privateAnswer = brain.reply("Mes notes sur mon identifiant secret", onlineEnabled = false)
+            assertTrue(privateAnswer.requiresUserCode)
+            assertFalse(privateAnswer.text.contains("ORION"))
+        }
+        assertEquals(2, library.list().size)
+    }
+
     @Test fun sharedBrainUsesEncryptedNotesButNeverPersistsAProposalByItself() {
         val context = RuntimeEnvironment.getApplication()
         val library = LocalKnowledgeLibrary(context, "bridge", LocalKnowledgeLibraryTest.JvmCipher("bridge"))

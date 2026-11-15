@@ -72,7 +72,6 @@ internal class CompanionDialogue(
         Rule("repas", setOf("tu as mange"), listOf("Je ne mange pas, mais je peux t'aider à choisir un repas.")),
         Rule("sante", setOf("je suis malade", "j ai mal"), listOf("Je peux donner des informations générales, mais je ne remplace pas un professionnel de santé. Quels sont tes symptômes ?")),
         Rule("confidentialite", setOf("tu gardes mes secrets"), listOf("Je dois respecter tes paramètres de confidentialité. Vérifions ce qui est enregistré localement.")),
-        Rule("memoire", setOf("tu te souviens de moi"), listOf("Je peux utiliser les souvenirs qui ont été enregistrés et autorisés.")),
         Rule("detresse", setOf("je veux me faire du mal"), listOf("Je suis désolé que tu traverses cela. Cherche immédiatement le soutien d'une personne de confiance ou d'un service d'urgence si le danger est imminent. Es-tu en sécurité actuellement ?"))
     )
 

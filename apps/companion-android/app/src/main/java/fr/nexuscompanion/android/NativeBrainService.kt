@@ -316,6 +316,20 @@ internal class NativeBrainService(
         // or projects into an unattributed answer.
         if (recall != null && visibleNotes.orEmpty().size > 1) {
             val choices = visibleNotes.orEmpty().take(6)
+            // Even the attributed overview is a disclosure: revalidate the
+            // unlock state and current encrypted note versions before reading.
+            if (choices.any { !SelectiveMemoryAccess.canRead(it, privateAccess()) }) {
+                clearConversation()
+                return codeRequired()
+            }
+            val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
+                clearConversation()
+                return Reply(context.getString(R.string.library_read_failed), null, false)
+            }
+            if (choices.any { current[it.id] != it || KnowledgePolicy.isExpired(it.expiresAt, System.currentTimeMillis()) }) {
+                clearConversation()
+                return Reply("Les notes ont changé. Recommence la consultation pour utiliser leur version actuelle.", null, true, expectsAnswer = true)
+            }
             val listing = choices.joinToString("\n") { note ->
                 val title = note.title.replace(Regex("[\\r\\n\\t]+"), " ").take(80)
                 // Display a complete short excerpt under its own title. Large

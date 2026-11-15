@@ -44,6 +44,15 @@ class KnowledgePolicyTest {
         assertNull(KnowledgePolicy.recallFor("Souviens-toi que la batterie se recharge en USB."))
     }
 
+    @Test fun personalMemoryQuestionsAreRecognizedAsOverviewsNotEmptyTopics() {
+        for (question in listOf("Tu te souviens de moi ?", "Que te souviens-tu de moi ?",
+            "Qu’est-ce que tu sais de moi ?", "Quels souvenirs as-tu de moi ?",
+            "Rappelle-moi ce que tu sais de moi.")) {
+            assertEquals(question, KnowledgePolicy.Recall.Overview, KnowledgePolicy.recallFor(question))
+        }
+        assertNull(KnowledgePolicy.recallFor("Souviens-toi que je préfère les réponses courtes."))
+    }
+
     @Test fun filtersExpiredKnowledge() {
         assertTrue(KnowledgePolicy.isExpired(100L, 100L))
         assertFalse(KnowledgePolicy.isExpired(null, 100L))

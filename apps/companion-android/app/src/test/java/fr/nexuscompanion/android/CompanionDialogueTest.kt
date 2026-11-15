@@ -8,6 +8,8 @@ class CompanionDialogueTest {
         assertTrue(CompanionDialogue().answer("Qui es-tu ?")!!.contains("Alif"))
         assertTrue(CompanionDialogue({ "Noura" }).answer("Comment t'appelles-tu ?")!!.contains("Noura"))
         assertTrue(CompanionDialogue().answer("Tu es humain ?")!!.contains("pas un être humain"))
+        assertTrue(CompanionDialogue().answer("Comment t’appelles-tu et quel est ton rôle ?")!!.contains("Alif"))
+        assertTrue(CompanionDialogue({ "Noura" }).answer("Qui es-tu et quel est ton rôle ?")!!.contains("Noura"))
     }
 
     @Test fun responsesVaryAndAreNotPersonalMemories() {

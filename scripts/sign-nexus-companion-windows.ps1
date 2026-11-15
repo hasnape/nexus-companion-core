@@ -49,7 +49,7 @@ $hash = (Get-FileHash -LiteralPath $unsigned -Algorithm SHA256).Hash.ToLowerInva
 if ($hash -ne $sourceHash) { throw "L'empreinte SHA-256 de l'APK source ne correspond pas à la version vérifiée" }
 
 try {
-  & $zipalign -f -p 4 $unsigned $aligned
+  & $zipalign -P 16 -f 4 $unsigned $aligned
   if ($LASTEXITCODE -ne 0) { throw 'zipalign a échoué' }
   $env:NEXUS_ANDROID_STORE_PASSWORD = $password
   $env:NEXUS_ANDROID_KEY_PASSWORD = $password
@@ -65,7 +65,7 @@ try {
   if (-not ($badging -match "name='fr\.nexuscompanion\.android'" -and $badging -match "versionCode='35'")) {
     throw 'Identifiant Android ou versionCode incorrect'
   }
-  & $zipalign -c -p 4 $signed
+  & $zipalign -c -P 16 4 $signed
   if ($LASTEXITCODE -ne 0) { throw 'APK mal alignée' }
   Write-Host "APK signée et vérifiée : $signed"
   Write-Host "Certificat de production identique à la version précédente."

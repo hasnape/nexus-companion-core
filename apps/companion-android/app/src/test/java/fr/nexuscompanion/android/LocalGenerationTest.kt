@@ -174,6 +174,22 @@ class LocalGenerationTest {
             "Et le projet Orion ?", listOf(orion), listOf(orion, vega)))
     }
 
+    @Test fun aNewNamedProjectNeverReusesThePreviousProjectsFact() {
+        val context = RuntimeEnvironment.getApplication()
+        val notes = library("new-topic-switch")
+        notes.addUserNote("Projet Orion", "Orion est confié à Clara.")
+        notes.addUserNote("Projet Vega", "Vega est confié à Léa.")
+        NativeBrainService(context, notes, privateAccess = { true },
+            resources = { balancedTestDevice }, search = { error("Network must not be used") },
+            generator = FakeGenerator(null)).use { brain ->
+            brain.reply("Parle-moi du projet Orion", onlineEnabled = false)
+            val second = brain.reply("Et le projet Vega ?", onlineEnabled = false)
+            assertFalse("Stale Orion evidence reached Vega: ${second.text}", second.text.contains("Clara"))
+            assertFalse(second.evidenceSources.any { it.title == "Projet Orion" })
+        }
+        assertEquals(2, notes.list().size)
+    }
+
     @Test fun multiNoteOverviewKeepsEachFactUnderItsOriginalTitle() {
         val context = RuntimeEnvironment.getApplication()
         val notes = library("overview-isolates-notes")

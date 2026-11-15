@@ -840,9 +840,11 @@ open class MainActivity : Activity() {
                             val warning = if (shared)
                                 "Ces souvenirs pourront être utilisés sans code, y compris à voix haute. Les informations sensibles ne peuvent pas être rendues publiques."
                             else "Ces souvenirs nécessiteront le code utilisateur pour être consultés."
+                            val preview = chosen.take(5).joinToString("\n") { "• " + it.title.take(80) }
+                            val others = if (chosen.size > 5) "\n… et ${chosen.size - 5} autre(s)" else ""
                             showDialog(AlertDialog.Builder(this)
                                 .setTitle("Confirmer la protection")
-                                .setMessage(warning)
+                                .setMessage("$warning\n\nSouvenirs concernés (${chosen.size}) :\n$preview$others")
                                 .setNegativeButton(R.string.cancel, null)
                                 .setPositiveButton("Confirmer") { _, _ ->
                                     if (!privateAccessAllowed()) {
@@ -929,6 +931,7 @@ open class MainActivity : Activity() {
                     .setMessage(R.string.delete_note_confirmation).setNegativeButton(R.string.cancel, null)
                     .setPositiveButton(R.string.delete_note) { _, _ ->
                         runTask(R.string.working, R.string.library_write_failed, { library.remove(note.id, note) }) { removed ->
+                            if (removed) worker.execute { brain.clearConversation() }
                             showAnswer(if (removed) R.string.note_deleted else R.string.library_no_results)
                         }
                     }.create())
@@ -961,6 +964,7 @@ open class MainActivity : Activity() {
             .setPositiveButton(R.string.save_note) { _, _ ->
                 val editedTitle = title.text.toString(); val editedContent = content.text.toString()
                 runTask(R.string.working, R.string.library_write_failed, { library.replace(note, editedTitle, editedContent) }) { result ->
+                    if (result.created) worker.execute { brain.clearConversation() }
                     if (result.created && note.source == SelectiveMemoryAccess.SHARED_SOURCE) {
                         showAnswer("Souvenir modifié : accès sans code révoqué. Cette nouvelle version est privée jusqu'à une nouvelle autorisation.")
                     } else showAnswer(if (result.created) R.string.note_updated else R.string.note_unchanged)
@@ -986,6 +990,7 @@ open class MainActivity : Activity() {
                                 .setPositiveButton(R.string.note_restore) { _, _ ->
                                     runTask(R.string.working, R.string.library_write_failed,
                                         { library.replace(current, old.title, old.excerpt) }) { restored ->
+                                        if (restored.created) worker.execute { brain.clearConversation() }
                                         showAnswer(if (restored.created) R.string.note_restored else R.string.note_unchanged)
                                     }
                                 }.create())

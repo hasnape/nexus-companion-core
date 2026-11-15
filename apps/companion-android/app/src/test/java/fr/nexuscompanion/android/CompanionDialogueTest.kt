@@ -12,7 +12,7 @@ class CompanionDialogueTest {
 
     @Test fun responsesVaryAndAreNotPersonalMemories() {
         val dialogue = CompanionDialogue()
-        val first = dialogue.answer("Bonjour")
+        val first = dialogue.answer("Salut")
         val second = dialogue.answer("Bonjour")
         assertNotEquals(first, second)
         assertNull(dialogue.answer("Que sais-tu de moi ?"))

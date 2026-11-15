@@ -190,7 +190,11 @@ internal class LocalKnowledgeLibrary(
         NoteSave(entry, created = true)
     }
 
-    /** Compare-and-swap revision: preserve every old byte of text and its source in history. */
+    /**
+     * Compare-and-swap revision: preserve the encrypted version history.
+     * Editing a previously shared note always revokes its no-code access:
+     * the owner must explicitly review and share the new content again.
+     */
     fun replace(expected: Entry, title: String, excerpt: String): NoteSave = synchronized(storeLock) {
         if (!KnowledgePolicy.isValidUserNote(title, excerpt)) throw InvalidKnowledgeNote()
         val entries = readEntries()
@@ -199,6 +203,7 @@ internal class LocalKnowledgeLibrary(
         if (current.title == title.trim() && current.excerpt == excerpt.trim()) return@synchronized NoteSave(current, false)
         if (entries.size >= NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
         val updated = current.copy(id = UUID.randomUUID().toString(), title = title.trim(), excerpt = excerpt.trim(),
+            source = if (current.source == SelectiveMemoryAccess.SHARED_SOURCE) "user:manual" else current.source,
             recordedAt = System.currentTimeMillis(), verified = false, manuallyEdited = true)
         save(entries.map { if (it.id == current.id) it.copy(supersededBy = updated.id) else it } + updated)
         NoteSave(updated, true)

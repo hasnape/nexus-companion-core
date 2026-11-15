@@ -260,7 +260,14 @@ internal class NativeBrainService(
         }
         val understandingRequest = JSONObject().put("message", message).apply { if (evidenceContext != null) put("evidenceContext", evidenceContext) }
         val understanding = JSONObject(brain().understandingJson(understandingRequest.toString()))
-        val contextual = understanding.getBoolean("contextual") && !understanding.getBoolean("needsContext")
+        // "Et le projet Vega ?" names a different saved note even if the
+        // language classifier initially considers the turn a continuation.
+        val proposedContextual = understanding.getBoolean("contextual") && !understanding.getBoolean("needsContext")
+        val explicitlyDifferentSource = proposedContextual && previousNotes.isNotEmpty() && try {
+            MemoryRecallScope.refersToDifferentTitle(message, previousNotes,
+                SelectiveMemoryAccess.accessible(library.list(), privateAccess()))
+        } catch (_: Exception) { false }
+        val contextual = proposedContextual && !explicitlyDifferentSource
         if (contextual && last?.reply?.protectedInformation == true && !privateAccess()) { clearConversation(); return codeRequired() }
         if (contextual && !last?.notes.isNullOrEmpty()) {
             val current = try { library.list().associateBy { it.id } } catch (_: Exception) {
@@ -303,6 +310,22 @@ internal class NativeBrainService(
         } else accessibleNotes
         if (!unlocked && recall != null && !notes.isNullOrEmpty() && visibleNotes.isNullOrEmpty()) {
             return codeRequired()
+        }
+        // For an explicit overview or topic request, present the distinct note
+        // titles instead of letting the engine splice facts from several people
+        // or projects into an unattributed answer.
+        if (recall != null && visibleNotes.orEmpty().size > 1) {
+            val choices = visibleNotes.orEmpty().take(6)
+            val listing = choices.joinToString("\n") { note ->
+                "• " + note.title.replace(Regex("[\\r\\n\\t]+"), " ").take(80)
+            }
+            val suffix = if (visibleNotes.orEmpty().size > choices.size)
+                "\n… et d’autres notes. Précise le titre recherché." else
+                "\nPrécise le titre à consulter pour obtenir les informations exactes."
+            return Reply("J’ai plusieurs notes distinctes. Je préfère ne pas mélanger leurs informations :\n" +
+                listing + suffix, null, true, expectsAnswer = true,
+                protectedInformation = choices.any { it.source != SelectiveMemoryAccess.SHARED_SOURCE },
+                evidenceSources = choices.map { EvidenceSource(it.id, it.title, it.source) })
         }
         val sharedContext = !unlocked && !visibleNotes.isNullOrEmpty() &&
             visibleNotes.all { it.source == SelectiveMemoryAccess.SHARED_SOURCE }

@@ -143,6 +143,21 @@ class LocalKnowledgeLibraryTest {
         assertFalse(SelectiveMemoryAccess.canRead(secret, false))
     }
 
+    @Test fun batchSharingRefusesPhoneNumberWithoutPartiallyExposingOtherNotes() {
+        val id = "batch-phone-privacy"
+        val store = library(id)
+        val ordinary = store.addUserNote("Loisir", "Je préfère les promenades.").entry
+        val confidential = store.addUserNote("Contact", "Mon numéro est le 06 12 34 56 78.").entry
+        val before = file(id).readBytes()
+        assertThrows(IllegalArgumentException::class.java) {
+            store.setConversationSharingBatch(listOf(ordinary, confidential), true)
+        }
+        assertArrayEquals("The encrypted store must not change on rejected batch", before, file(id).readBytes())
+        assertTrue(store.list().all { !SelectiveMemoryAccess.canRead(it, unlocked = false) })
+        assertEquals(0, store.history(ordinary.id).size)
+        assertEquals(0, store.history(confidential.id).size)
+    }
+
     @Test fun cosmeticDuplicatesKeepTheOriginalIdentityAndSpelling() {
         val store = library("cosmetic")
         val original = store.addUserNote("Thé vert", "Je préfère le thé vert.")

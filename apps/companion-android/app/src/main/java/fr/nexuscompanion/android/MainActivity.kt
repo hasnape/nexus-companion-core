@@ -301,6 +301,7 @@ open class MainActivity : Activity() {
             if (browser != null) confirmBrowserNote(browser) else pendingCandidate?.let { confirmNote(it.content, it.sensitive) }
         }
         bindButton(R.id.home_notes) { showNotes() }
+        // Privacy batch mode is available from the notes list after opening it.
         bindButton(R.id.home_user_access) { requireUserAccess { showAnswer("Accès personnel ouvert pour cinq minutes. Le code se modifie dans l’écran sécurisé.") } }
         bindButton(R.id.home_lock_access) { UserAccessSession.lock(); lockPrivateViews(); showAnswer("Accès personnel verrouillé.") }
         bindButton(R.id.home_learning) { showLearning() }
@@ -780,9 +781,60 @@ open class MainActivity : Activity() {
                     }.toTypedArray()) { _, position -> showNote(shown[position]) }
                     .setNegativeButton(R.string.close, null)
                 if (start + shown.size < notes.size) dialog.setPositiveButton(R.string.notes_next) { _, _ -> showNotes(page + 1) }
+                if (start == 0) dialog.setNeutralButton("🔐 Sélection multiple") { _, _ -> selectMemoryPrivacy() }
                 if (start > 0) dialog.setNeutralButton(R.string.notes_previous) { _, _ -> showNotes(page - 1) }
                 showDialog(dialog.create())
             }
+        }
+    }
+
+    private fun selectMemoryPrivacy() {
+        if (!privateAccessAllowed()) { requireUserAccess { selectMemoryPrivacy() }; return }
+        runTask(R.string.working, R.string.library_read_failed, {
+            library.list().filter { it.source == "user:manual" ||
+                it.source == SelectiveMemoryAccess.SHARED_SOURCE }.sortedBy { it.title }
+        }) { notes ->
+            if (!privateAccessAllowed() || !foreground) return@runTask
+            if (notes.isEmpty()) {
+                showAnswer("Aucun souvenir créé manuellement ne peut être sélectionné.")
+                return@runTask
+            }
+            val selected = BooleanArray(notes.size)
+            val labels = notes.map { note ->
+                (if (note.source == SelectiveMemoryAccess.SHARED_SOURCE) "🔓 " else "🔒 ") + note.title
+            }.toTypedArray()
+            showDialog(AlertDialog.Builder(this)
+                .setTitle("Choisir les souvenirs à protéger")
+                .setMultiChoiceItems(labels, selected) { _, index, checked -> selected[index] = checked }
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton("Continuer") { _, _ ->
+                    val chosen = notes.filterIndexed { index, _ -> selected[index] }
+                    if (chosen.isEmpty()) { showAnswer("Aucun souvenir sélectionné."); return@setPositiveButton }
+                    val choices = arrayOf("🔒 Privé · code requis", "🔓 Sans code · conversation")
+                    showDialog(AlertDialog.Builder(this)
+                        .setTitle("Confidentialité de ${chosen.size} souvenir(s)")
+                        .setItems(choices) { _, choice ->
+                            val shared = choice == 1
+                            val warning = if (shared)
+                                "Ces souvenirs pourront être utilisés sans code, y compris à voix haute. Les informations sensibles ne peuvent pas être rendues publiques."
+                            else "Ces souvenirs nécessiteront le code utilisateur pour être consultés."
+                            showDialog(AlertDialog.Builder(this)
+                                .setTitle("Confirmer la protection")
+                                .setMessage(warning)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton("Confirmer") { _, _ ->
+                                    if (!privateAccessAllowed()) {
+                                        requireUserAccess { selectMemoryPrivacy() }
+                                    } else {
+                                        runTask(R.string.working, R.string.library_write_failed,
+                                            { library.setConversationSharingBatch(chosen, shared) }) { changed ->
+                                            worker.execute { brain.clearConversation() }
+                                            showAnswer("Protection vérifiée pour ${changed.size} souvenir(s).")
+                                        }
+                                    }
+                                }.create())
+                        }.create())
+                }.create())
         }
     }
 

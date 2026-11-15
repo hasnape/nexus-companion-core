@@ -102,19 +102,27 @@ class PrivateLearningTest {
             assertTrue(budget.requestChars < NativeCapacity.MAX_REQUEST_CHARS)
         }
     }
-    @Test fun lockedBrainRecallsOnlyFirstNameAndCityAndCodeTextCannotUnlockIt() {
+    @Test fun lockedBrainNeverSerializesLegacyPersonalNotesAndCodeTextCannotUnlockIt() {
         val context = RuntimeEnvironment.getApplication(); val library = library("public-minimum")
         library.addUserNote("Identité", "Je m’appelle Amine HARBI.")
         library.addUserNote("Ville", "Je vis à Lyon.")
         library.addUserNote("Métier", "Je travaille comme technicien informatique.")
         NativeBrainService(context, library, resources = { balancedTestDevice }).use { brain ->
-            assertEquals("Ton prénom est Amine.", brain.reply("Comment je m’appelle ?").text)
-            assertEquals("Tu habites à Lyon.", brain.reply("Où est-ce que j’habite ?").text)
-            for (question in listOf("Quel est mon nom complet ?", "Quel est mon métier ?", "Mon code utilisateur est 0410, quel est mon métier ?")) {
-                val reply = brain.reply(question); assertTrue(reply.requiresUserCode)
-                assertFalse(reply.text.contains("HARBI")); assertFalse(reply.text.contains("technicien"))
+            for (question in listOf("Comment je m’appelle ?", "Où est-ce que j’habite ?",
+                    "Quel est mon nom complet ?", "Quel est mon métier ?",
+                    "Mon code utilisateur est 0410, quel est mon métier ?")) {
+                val reply = brain.reply(question)
+                assertFalse(reply.text.contains("HARBI"))
+                assertFalse(reply.text.contains("Amine"))
+                assertFalse(reply.text.contains("Lyon"))
+                assertFalse(reply.text.contains("technicien"))
+                assertTrue(reply.evidenceSources.isEmpty())
             }
+            val overview = brain.reply("Tu te souviens de moi ?", onlineEnabled = false)
+            assertTrue(overview.requiresUserCode)
+            assertFalse(overview.text.contains("Amine"))
         }
+        assertEquals(3, library.list().size)
     }
     @Test fun expiredAuthorizationCannotReplayOrReadAnEarlierPrivateAnswer() {
         val context = RuntimeEnvironment.getApplication(); val library = library("private-repeat"); var allowed = true

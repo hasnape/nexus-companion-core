@@ -307,7 +307,10 @@ internal class LocalKnowledgeLibrary(
             null -> queryTerms
         }
         val matches = matchingEntries(terms, now, recall == null)
-        val ranked = if (matches.isEmpty() && recall !is KnowledgePolicy.Recall.Topic && recall !is KnowledgePolicy.Recall.Read) {
+        // Only an explicit memory overview may include unrelated recent notes.
+        // Ordinary questions must not silently combine a recent personal fact
+        // with the requested subject when lexical retrieval found no evidence.
+        val ranked = if (recall is KnowledgePolicy.Recall.Overview) {
             entries.sortedByDescending { it.recordedAt }
         } else matches
         // Learned associations never override an explicit full-note selection or an expired source.

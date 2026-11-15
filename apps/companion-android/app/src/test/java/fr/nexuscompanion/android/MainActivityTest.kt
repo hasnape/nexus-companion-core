@@ -692,6 +692,8 @@ class MainActivityTest {
         options.listView.performItemClick(null, 1, 1)
         val confirmation = ShadowAlertDialog.getLatestAlertDialog()
         assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("sans code"))
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("Loisir"))
+        assertTrue(confirmation.findViewById<TextView>(android.R.id.message).text.contains("Souvenirs concernés (1)"))
         confirmation.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
         assertEquals(2, library.list().count { it.source == "user:manual" })
     }

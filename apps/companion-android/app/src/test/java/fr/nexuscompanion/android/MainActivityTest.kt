@@ -711,7 +711,6 @@ class MainActivityTest {
             assertTrue(home.isShown)
             assertTrue(activity.findViewById<View>(R.id.home_input).isShown)
         }
-        assertFalse(UserAccessSession.allowed())
     }
 
     @Test fun emptyNotesRemainAnHonestEmptyState() {

@@ -270,3 +270,80 @@ L'APK source **non signée** et un artefact de sortie **signé** sont désormais
 **Règle permanente de prévention :** ne jamais considérer une signature APK valide sur la seule base de la présence du bloc, de la correspondance du certificat ou du succès de la vérification RSA. Exiger une validation structurelle des préfixes de longueur **à chaque niveau**, la vérification de l'empreinte *entière* du contenu, puis `apksigner verify --verbose --print-certs` dans une chaîne de build disposant du SDK. **Pour les futures versions, utiliser le véritable `apksigner` des Android Build Tools et non un encodeur de bloc APK fait maison.** Tester toujours l'installation sur la version installée, sans désinstallation ni effacement de la mémoire locale.
 
 **Statut de la v0.4.29 corrigée :** nouveau fichier disponible dans les artefacts de conversation, corrigé et vérifié localement au niveau structurel et cryptographique ; **validation officielle et essai physique en attente**. L'ancien lien vers `native-alpha-release.apk` est obsolète et ne doit plus être proposé.
+
+
+## Annexe F — recette détaillée et reproductible après incident de signature v0.4.29
+
+### Objectif et critères de réussite
+
+Livrer une APK Android **réellement installable en mise à jour** de `fr.nexuscompanion.android` sans désinstaller Alif ni perdre ses données. Une archive ZIP lisible ou une vérification RSA isolée ne constituent **pas** une preuve d'installabilité. La réussite exige, dans cet ordre : tests logiciels, APK construite, signature officielle, contrôles du manifeste et du certificat, installation Android réelle et vérification des données après mise à jour.
+
+### Matériel et prérequis
+
+1. Utiliser le dépôt à un commit épinglé, JDK 17, Android SDK Platform 35, Build Tools 35.0.0, NDK 27.2.12479018, CMake 3.22.1 et le Gradle Wrapper versionné.
+2. Conserver les deux secrets **uniquement dans le coffre privé** : `nexus-companion-production.jks` et le fichier privé d'identifiants. Ne jamais imprimer, copier dans le dépôt ou publier la clé, les mots de passe ou leurs encodages.
+3. Vérifier le certificat public attendu : `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1`.
+4. Garder un exemplaire intact de l'APK installée et sauvegarder les données par les mécanismes officiels de l'application si disponibles. **Ne jamais désinstaller ni utiliser `adb install -r -d` ou `pm clear` pour contourner un échec.**
+
+### Étape 1 — figer les entrées
+
+- Noter commit Git, date, `applicationId=fr.nexuscompanion.android`, `versionCode=35`, `versionName=0.4.29-native-alpha`.
+- Pour la source v0.4.29 existante, vérifier **avant signature** : taille **68 007 585 octets** et SHA-256 `bcb349b63f03f6310382832ce699f6c9ee51d35439fcd68597050f454c1f7131`.
+- Si la taille ou l'empreinte ne correspond pas, **arrêter** : ne pas signer un artefact non identifié.
+
+### Étape 2 — tests et compilation
+
+Depuis `apps/companion-android`, exécuter les commandes de la section 2. Ne poursuivre que si les tests sont verts et `assembleRelease` réussit. Pour v0.4.29, les résultats historiques sont **393 tests réussis** et build réussi ; ces résultats ne dispensent pas de tester les versions suivantes.
+
+### Étape 3 — aligner et signer officiellement
+
+- **Méthode recommandée :** configurer les variables `NEXUS_ANDROID_KEYSTORE_PATH`, `NEXUS_ANDROID_STORE_PASSWORD`, `NEXUS_ANDROID_KEY_ALIAS`, `NEXUS_ANDROID_KEY_PASSWORD` dans le processus Gradle sur un poste de confiance, puis produire une release signée avec Gradle.
+- **Méthode alternative :** à partir de l'APK non signée vérifiée, utiliser `zipalign -P 16 -f 4` avant `apksigner sign`, en utilisant le script `scripts/sign-nexus-companion.sh` ou `scripts/sign-nexus-companion-windows.ps1` et les secrets privés locaux. Ne **jamais** modifier l'APK après `apksigner sign`.
+- **Interdiction de régression :** ne pas fabriquer manuellement les blocs de signature APK v2/v3. L'incident v0.4.29 a été causé par un champ de longueur `signer` manquant dans un bloc v2 généré hors de l'outil officiel. Le simple fait que la signature RSA et le digest soient mathématiquement valides ne suffisait pas à rendre le fichier acceptable par Android.
+
+### Étape 4 — contrôles automatiques obligatoires
+
+Sur **le fichier final exact destiné à l'utilisateur**, exécuter :
+
+```bash
+zipalign -c -P 16 4 nexus-companion-release.apk
+apksigner verify --verbose --print-certs nexus-companion-release.apk
+aapt dump badging nexus-companion-release.apk
+sha256sum nexus-companion-release.apk
+```
+
+Vérifier explicitement le résultat des commandes (code retour **0**), la présence des schémas de signature appropriés, le SHA-256 du certificat de production, `package=fr.nexuscompanion.android`, `versionCode=35`, `versionName=0.4.29-native-alpha`, min SDK 31 et target SDK 35. Si un seul contrôle échoue, **ne pas livrer**.
+
+### Étape 5 — test d'installation Android sans perte de mémoire
+
+Sur le téléphone où la v0.4.28 est installée, conserver l'application et ses données. Tester l'installation de l'APK validée via le gestionnaire Android ou :
+
+```bash
+adb install -r nexus-companion-release.apk
+```
+
+**Ne jamais ajouter `-d` ni `-t` pour masquer un défaut de release.** En cas de refus, enregistrer le code exact `INSTALL_FAILED_...` ou `INSTALL_PARSE_FAILED_...` et les journaux pertinents, sans effacer l'application. Après installation réussie, vérifier : version affichée, ouverture d'Alif, mémoire privée et notes, identité, réponses écrites, microphone/voix, mode avion, permissions et retour au premier plan.
+
+### Étape 6 — distribution et traçabilité
+
+Ne publier **que l'APK finale validée**, jamais les secrets ni une APK non signée présentée comme installable. Conserver : SHA de commit, SHA-256 du fichier, taille, certificat, résultats `apksigner`, résultats de test Android, date, canal de téléchargement et confirmation de la conservation des données. Vérifier que le lien de téléchargement fonctionne effectivement sur le téléphone et que le SHA-256 téléchargé correspond à celui de la release.
+
+### Incident v0.4.29 — identification des artefacts
+
+- **Défectueux, à ne plus proposer :** `nexus-companion-v0.4.29-native-alpha-release.apk` — 68 009 634 octets — SHA-256 `392b08d4e4be6372ca19675a43fc5c917f0778731a043887022bba38ed5b48b8`.
+- **Réparé localement, validation Android officielle encore à obtenir :** `nexus-companion-v0.4.29-native-alpha-release-corrected.apk` — 68 009 638 octets — SHA-256 `11f0304d976302e5ddca8e6efc5ad1473885b00d632830f2319b6764934e7114`.
+- La réparation a réintroduit le champ de longueur du `signer` manquant et corrigé les tailles et décalages correspondants, sans changer le contenu signé. Les vérifications structurelles et cryptographiques locales ont réussi, mais **`apksigner verify` officiel et installation physique restent non attestés**. Ne pas appeler cette version « publiée et validée » avant ces deux contrôles.
+
+### Checklist de livraison à cocher pour chaque nouvelle version
+
+- [ ] Code et dépendances figés à un commit
+- [ ] Tests réussis
+- [ ] APK construite et hash source noté
+- [ ] Signature par outils Android officiels
+- [ ] `zipalign` et `apksigner verify` réussis sur le fichier final
+- [ ] Certificat, package, versionCode et versionName conformes
+- [ ] Installation par-dessus l'ancienne version réussie
+- [ ] Mémoire, identité, voix et mode avion préservés
+- [ ] Lien final testé et hash du téléchargement confirmé
+- [ ] Release archivée avec rapport de validation
+

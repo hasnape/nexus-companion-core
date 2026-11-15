@@ -204,6 +204,31 @@ internal class LocalKnowledgeLibrary(
         NoteSave(updated, true)
     }
 
+    /**
+     * Owner-confirmed conversational sharing for manually authored notes only.
+     * External sources and imported notes cannot be silently declassified.
+     * A revision is recorded, preserving history and encryption.
+     */
+    fun setConversationSharing(expected: Entry, shared: Boolean): NoteSave = synchronized(storeLock) {
+        val entries = readEntries()
+        val current = entries.firstOrNull { it.id == expected.id && it.supersededBy == null }
+            ?: throw KnowledgeChanged()
+        if (current != expected) throw KnowledgeChanged()
+        require(current.source == "user:manual" || current.source == SelectiveMemoryAccess.SHARED_SOURCE) {
+            "Only manually authored notes can be shared"
+        }
+        if (shared) require(SelectiveMemoryAccess.safeToShare(current.title, current.excerpt)) {
+            "Potentially confidential note cannot be shared"
+        }
+        val target = if (shared) SelectiveMemoryAccess.SHARED_SOURCE else "user:manual"
+        if (current.source == target) return@synchronized NoteSave(current, false)
+        if (entries.size >= NativeCapacity.MAX_LIBRARY_RECORDS) throw KnowledgeCapacityReached()
+        val updated = current.copy(id = UUID.randomUUID().toString(), source = target,
+            recordedAt = System.currentTimeMillis(), manuallyEdited = true)
+        save(entries.map { if (it.id == current.id) it.copy(supersededBy = updated.id) else it } + updated)
+        NoteSave(updated, true)
+    }
+
     /** An explicit permanent deletion removes the entire version chain. */
     fun remove(id: String, expected: Entry? = null): Boolean = synchronized(storeLock) {
         val existing = readEntries()

@@ -207,7 +207,7 @@
 <string name="vocal_ui_13">Test interrompu par la sortie de l’écran.\n%1$s</string>
 <string name="vocal_ui_status">%1$s\n%2$s</string>
 <string name="llm_use_notes">Utiliser mes notes avec le modèle local</string>
-<string name="llm_notes_explanation">Après déverrouillage par ton code utilisateur, Nexus peut transmettre au modèle local quelques phrases des notes pertinentes. Le modèle sélectionne des citations exactes, contrôlées avant lecture. Les mots de passe et codes sont exclus. Aucun extrait n’est envoyé sur Internet et aucune réponse n’est enregistrée automatiquement.</string>
+<string name="llm_notes_explanation">Nexus utilise uniquement quelques phrases de souvenirs que tu as autorisés sans code, ou de tes notes privées pendant une session déverrouillée par ton code. Le modèle local propose des citations exactes, vérifiées avant lecture ; les extraits détectés comme identifiants sont écartés. Si tu retires une autorisation pendant une réponse, elle ne peut plus être affichée. Aucune note n’est envoyée sur Internet, et aucune réponse n’est enregistrée automatiquement.</string>
 <string name="backup_title">Sauvegarde de ma mémoire</string>
 <string name="backup_explanation">Exporte toutes tes notes et leurs anciennes versions dans une archive chiffrée, restaurable sur un autre appareil. Choisis une phrase secrète de 12 à 128 caractères et conserve-la séparément : elle est indispensable pour restaurer. Les clés Android, le code utilisateur, les modèles et les réglages ne sont pas exportés. Déverrouille avant de saisir la phrase.</string>
 <string name="backup_unlock">Déverrouiller avec mon code utilisateur</string>

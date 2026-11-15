@@ -292,12 +292,13 @@ internal class NativeBrainService(
             if (previous is Pending.Topic) request.put("awaitingLookupTarget", previous.target)
         }
         var requestChars = request.toString().length
+        val submittedNotes = mutableListOf<LocalKnowledgeLibrary.Entry>()
         // Budget each serialized record once; never repeatedly serialize an oversized context.
         for (note in visibleNotes.orEmpty()) {
             val item = noteJson(note)
             val added = item.toString().length + if (array.length() > 0) 1 else 0
             if (requestChars + added > minOf(SharedBrainRuntime.MAX_REQUEST_CHARS, budget?.requestChars ?: SharedBrainRuntime.MAX_REQUEST_CHARS)) break
-            array.put(item); requestChars += added
+            array.put(item); submittedNotes.add(note); requestChars += added
         }
         val result = JSONObject(brain().replyJson(request.toString()))
         check(result.getInt("protocolVersion") == 1 && result.getString("engine") == "nexus-core-rules-v1")
@@ -309,7 +310,7 @@ internal class NativeBrainService(
             Candidate(content, it.getBoolean("sensitive"))
         }
         val evidence = result.optJSONArray("evidenceIds")
-        turnEvidence = visibleNotes.orEmpty().filter { note ->
+        turnEvidence = submittedNotes.filter { note ->
             note.id != "external-context" && (0 until (evidence?.length() ?: 0)).any { evidence?.optString(it) == note.id }
         }.distinctBy { it.id }
         val sources = result.optJSONArray("evidenceSources")
@@ -319,10 +320,10 @@ internal class NativeBrainService(
             val source = EvidenceSource(item.getString("id"), item.getString("title"), item.getString("source"))
             check(source.id.length in 1..64 && source.title.length in 1..160 && source.source.length in 1..512)
             // Evidence metadata must not disclose a locked note's title or source.
-            if (visibleNotes.orEmpty().none { it.id == source.id } ||
+            if (submittedNotes.none { it.id == source.id } ||
                 (0 until (evidence?.length() ?: 0)).none { evidence?.optString(it) == source.id }) null else source
         }.distinctBy { it.id }
-        val recalledSource = visibleNotes.orEmpty().firstOrNull { note ->
+        val recalledSource = submittedNotes.firstOrNull { note ->
             (0 until (evidence?.length() ?: 0)).any { evidence?.getString(it) == note.id }
                 && note.source.matches(Regex("https://fr\\.wikipedia\\.org/\\?curid=[1-9][0-9]*"))
         }?.let { note -> note.source.substringAfter("curid=").toIntOrNull()?.let { id ->

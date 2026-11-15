@@ -34,7 +34,7 @@ done
 temp="$(mktemp -d)"
 trap 'rm -rf -- "$temp"' EXIT
 aligned="$temp/aligned.apk"
-"$zipalign" -f -p 4 "$input" "$aligned"
+"$zipalign" -P 16 -f 4 "$input" "$aligned"
 
 # env: references variable NAMES only. Their VALUES are not printed or inserted into argv.
 "$apksigner" sign \
@@ -46,7 +46,7 @@ aligned="$temp/aligned.apk"
 
 fail() { rm -f -- "$output"; echo "FAIL: $*" >&2; exit 1; }
 verification="$("$apksigner" verify --verbose --print-certs "$output")" || fail "APK signature invalid"
-"$zipalign" -c -p 4 "$output" >/dev/null || fail "APK ZIP alignment invalid"
+"$zipalign" -c -P 16 4 "$output" >/dev/null || fail "APK ZIP alignment invalid"
 
 # Certificate SHA-256 is public metadata, unlike the private keystore and passwords.
 expected_cert="01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1"

@@ -1,8 +1,8 @@
 # Recette de livraison APK — Nexus Companion Android
 
-**Statut :** procédure de référence reproductible, basée sur les compilations et validations réellement effectuées. **La signature et l'installation de la v0.4.29 restent à valider** : ne pas les présenter comme terminées.
+**Statut :** procédure de référence reproductible, basée sur les compilations et validations réellement effectuées. **Un artefact v0.4.29 portant un bloc de signature APK v2 existe localement depuis le 15/11/2026 ; sa vérification cryptographique par `apksigner` et son installation restent à valider.** Ne pas confondre présence du bloc de signature et validation de la signature.
 
-**Projet :** `apps/companion-android` ; **application de production :** `fr.nexuscompanion.android`. Branche de travail actuelle : `fix/android-llm-memory-readiness-20261114`. La v0.4.28 (`versionCode=34`) est installée sur le téléphone ; la v0.4.29 (`versionCode=35`) est compilée, mais pas encore distribuée sous forme signée.
+**Projet :** `apps/companion-android` ; **application de production :** `fr.nexuscompanion.android`. Branche de travail actuelle : `fix/android-llm-memory-readiness-20261114`. La v0.4.28 (`versionCode=34`) est installée sur le téléphone ; la v0.4.29 (`versionCode=35`) est compilée ; un artefact signé est conservé localement, mais pas encore validé par `apksigner` ni testé sur téléphone.
 
 ## 0. Ingrédients — à réunir avant de commencer
 
@@ -50,7 +50,7 @@ Si les quatre variables de signature sont fournies **avant Gradle**, `app/build.
 Transférer **uniquement l'APK non signée** vers le poste de signature via un canal contrôlé, en vérifiant son SHA-256 et sa provenance. Ne jamais transférer la clé dans un stockage public. Sur le poste de signature, avec Android Build Tools 35 :
 
 ```bash
-zipalign -f -p 4 app-release-unsigned.apk nexus-aligned.apk
+zipalign -P 16 -f 4 app-release-unsigned.apk nexus-aligned.apk
 # Fournir les secrets à apksigner via son mécanisme sécurisé d'entrée,
 # sans mot de passe dans l'historique shell ou les logs.
 apksigner sign --ks /chemin/prive/nexus-companion-production.jks \
@@ -204,7 +204,7 @@ bash scripts/sign-nexus-companion.sh \
 
 **Décision de sécurité :** ne pas contourner le blocage des contrôles de sécurité ; signer seulement sur une machine de confiance avec des outils Android installés et la clé privée locale, par `scripts/sign-nexus-companion.sh`. Vérifier ensuite le certificat et la mise à jour sans désinstallation avant publication. Ne pas générer de nouvelle clé, ni exposer les identifiants sur GitHub ou Vercel Blob.
 
-**Statut release v0.4.29 :** code/tests et APK non signée disponibles ; **signature, diffusion et essai physique encore manquants**.
+**Statut de la tentative distante initiale :** code/tests et APK non signée disponibles ; la signature distante n'avait pas abouti. **Voir l'annexe D pour l'artefact signé reçu ensuite dans le conteneur local.**
 
 
 ### Solution locale Windows (Android Studio)
@@ -225,3 +225,21 @@ La recette d'origine a été retrouvée **dans la bibliothèque personnelle**, m
 **Limite de la session :** l'APK originale reste accessible dans le Blob mais n'est pas téléchargeable dans l'environnement de calcul local utilisé pour héberger la clé ; la conversion temporaire du fichier en texte dans un sandbox n'a pas débloqué cet accès. Le sandbox temporaire a été supprimé. Aucun fichier APK v0.4.29 signé ni test sur téléphone n'a été produit par cette tentative.
 
 **Ne pas demander au propriétaire de transmettre de nouveau l'APK ou les clés :** elles sont déjà localisées dans les environnements respectifs. Pour terminer, il faut réunir l'APK seule et le matériel de signature sur un **poste de confiance** avec les outils du SDK, lancer le script puis vérifier le certificat avant installation. Garder l'APK actuelle du téléphone et ses données.
+
+
+## Annexe D — artefact local v0.4.29 signé, inventorié le 15/11/2026
+
+L'APK source **non signée** et un artefact de sortie **signé** sont désormais présents dans l'environnement local de travail. La présente annexe **supplante uniquement les anciens constats d'absence de fichier signé**, sans modifier l'historique des tentatives précédentes.
+
+| Propriété | APK source | APK de sortie |
+| --- | --- | --- |
+| Nom | `nexus-companion-v0.4.29-unsigned-qugAyGydUZDVEvWPrjzmziOT0Ry034.apk` | `nexus-companion-v0.4.29-native-alpha-release.apk` |
+| Taille | 68 007 585 octets | **68 009 634 octets** |
+| SHA-256 | `bcb349b63f03f6310382832ce699f6c9ee51d35439fcd68597050f454c1f7131` | **`392b08d4e4be6372ca19675a43fc5c917f0778731a043887022bba38ed5b48b8`** |
+| Statut | Non signée | Bloc de signature APK v2 présent, ID `0x7109871a` |
+
+**Contrôles réellement effectués sur le fichier de sortie :** présence du fichier ; taille ; SHA-256 ; test d'intégrité des entrées ZIP sans erreur (105 entrées) ; lecture structurelle du bloc de signature APK v2. **Ce contrôle structurel ne vérifie pas cryptographiquement la signature, le certificat ni la compatibilité de mise à jour.** Le binaire officiel `apksigner` n'est pas disponible dans l'environnement local actuel. Aucune installation sur téléphone n'a été observée.
+
+**Étape de validation obligatoire avant publication :** exécuter `apksigner verify --verbose --print-certs` sur l'APK de sortie et comparer le certificat au SHA-256 de production `01445cd0f0f56688fba46bad32840ff85fbdee119cddbd2d3a19314d94c472d1` ; vérifier `fr.nexuscompanion.android`, `versionCode=35`, puis tester l'installation **par-dessus** l'APK existante, sans effacement des données. Vérifier la mémoire, la voix et le mode avion. Conserver les clés exclusivement dans le coffre privé.
+
+**Distribution :** fichier présent dans les artefacts de la conversation, **pas de lien public Vercel Blob confirmé** pour cette version signée. Ne pas indiquer « publiée » ni « testée sur téléphone ».

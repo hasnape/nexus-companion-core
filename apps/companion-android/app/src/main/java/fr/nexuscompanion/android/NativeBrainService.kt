@@ -275,15 +275,32 @@ internal class NativeBrainService(
         val recall = if (contextual) null else KnowledgePolicy.recallFor(message)
         val terms = JSONObject(brain().retrievalJson(resolvedQuery)).getJSONArray("terms")
         val queryTerms = (0 until terms.length()).map { terms.getString(it) }
+        var preferredIds: List<String> = emptyList()
         val notes = try {
             val selected = requireNotNull(budget)
-            val preferred = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
-            focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferred)
+            preferredIds = try { learning.preferredIds(queryTerms, library.list(), now) } catch (_: Exception) { emptyList() }
+            focusedNote?.let(::listOf) ?: if (contextual) previousNotes else library.contextFor(resolvedQuery, now, recall, queryTerms, selected.contextNotes, preferredIds)
         } catch (_: Exception) { null }
         // Filter BEFORE serializing notes for the shared brain or local generator.
         // Legacy notes are private until their owner explicitly shares them.
         val unlocked = privateAccess()
-        val visibleNotes = notes?.let { SelectiveMemoryAccess.accessible(it, unlocked) }
+        val accessibleNotes = notes?.let { SelectiveMemoryAccess.accessible(it, unlocked) }
+        // Continuations with multiple source notes have no unique referent.
+        // Ask which one, rather than mixing two people or projects into a fact.
+        if (contextual && accessibleNotes.orEmpty().size > 1 && focusedNote == null) {
+            clearConversation()
+            return Reply("J’ai plusieurs souvenirs sur ce sujet. Laquelle de ces notes veux-tu consulter ? Précise le nom ou le titre.", null, true, expectsAnswer = true)
+        }
+        val visibleNotes = if (!contextual && recall == null && focusedNote == null && accessibleNotes != null) {
+            when (val decision = MemoryRecallScope.forFact(queryTerms, accessibleNotes, preferredIds)) {
+                is MemoryRecallScope.Decision.Single -> listOf(decision.note)
+                MemoryRecallScope.Decision.NoMatch -> emptyList()
+                MemoryRecallScope.Decision.Ambiguous -> {
+                    clearConversation()
+                    return Reply("J’ai plusieurs souvenirs qui correspondent à ta question. Laquelle veux-tu consulter ? Précise la personne ou le titre pour éviter de mélanger les informations.", null, true, expectsAnswer = true)
+                }
+            }
+        } else accessibleNotes
         if (!unlocked && recall != null && !notes.isNullOrEmpty() && visibleNotes.isNullOrEmpty()) {
             return codeRequired()
         }
